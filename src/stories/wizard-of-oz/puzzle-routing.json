@@ -1,0 +1,8 @@
+{
+  "attackerKinds": {
+    "hero": ["add-1d", "sub-1d", "bigger"],
+    "scarecrow": ["pattern", "missing", "multiply"],
+    "tinman": ["bigger", "odd-out"],
+    "lion": ["add-2d", "sub-1d"]
+  }
+}

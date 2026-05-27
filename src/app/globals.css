@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Storybook palette — warm parchment, deep ink, character accents */
+  --color-paper: #fdf6e3;
+  --color-paper-deep: #f5e9c8;
+  --color-ink: #2b1d10;
+  --color-ink-soft: #5a4128;
+  --color-accent: #c97a2e;
+  --color-accent-deep: #7c4a1e;
+  --color-emerald: #2f8f5a;
+  --color-ruby: #b03333;
+
+  /* Character speech colors (CharacterSpeechBox uses these via data-speaker) */
+  --color-speaker-narrator: #5a4128;
+  --color-speaker-dorothy: #a8487f;
+  --color-speaker-scarecrow: #c9a23a;
+  --color-speaker-tinman: #6b8aa0;
+  --color-speaker-lion: #b8651b;
+  --color-speaker-wicked-witch: #4a2a4a;
+  --color-speaker-glinda: #d27ab0;
+
+  --font-storybook: var(--font-storybook), Georgia, "Times New Roman", serif;
+  --font-handwritten: var(--font-handwritten), "Caveat", cursive;
+
+  /* Three radius scales — squircle for cards/buttons, pill for chips */
+  --radius-card: 1rem;        /* 16px — squircle for cards */
+  --radius-card-lg: 1.25rem;  /* 20px — narration overlay, ending panel */
+  --radius-button: 0.875rem;  /* 14px squircle — modern, less Disney */
+  --radius-pill: 9999px;      /* stat chip + mute toggle */
+
+  /* Soft, neutral-tinted shadows — barely there, just enough to lift */
+  --shadow-soft: 0 1px 2px rgba(43, 29, 16, 0.05);
+  --shadow-card: 0 2px 8px -2px rgba(43, 29, 16, 0.08), 0 1px 2px rgba(43, 29, 16, 0.04);
+  --shadow-overlay: 0 16px 40px -16px rgba(43, 29, 16, 0.18), 0 4px 12px -6px rgba(43, 29, 16, 0.08);
+  --shadow-medal: 0 16px 36px -12px rgba(201, 122, 46, 0.32), 0 4px 10px -4px rgba(201, 122, 46, 0.16);
+
+  /* Tactile button shadow — offset to the right + bottom for "physical" feel */
+  --shadow-button: 3px 4px 10px -2px rgba(43, 29, 16, 0.2), 1px 2px 4px -1px rgba(43, 29, 16, 0.12);
+  --shadow-button-hover: 5px 7px 16px -3px rgba(43, 29, 16, 0.24), 2px 3px 6px -2px rgba(43, 29, 16, 0.14);
+  --shadow-button-pressed: 1px 1px 3px -1px rgba(43, 29, 16, 0.18);
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-storybook);
+}
+
+/* iOS: prevent rubber-band overscroll showing system bg when full-screen play */
+html {
+  overscroll-behavior: none;
+}
+
+/* Min input font-size 16px to prevent iOS auto-zoom on focus */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Tap highlight removal — story buttons handle their own feedback */
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom scrollbar — slim, paper-toned, blends with the storybook palette.
+   Inside @layer base so Tailwind's preflight reset does not override it. */
+@layer base {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(91 65 40 / 0.28) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(91 65 40 / 0.25);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(91 65 40 / 0.45);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}

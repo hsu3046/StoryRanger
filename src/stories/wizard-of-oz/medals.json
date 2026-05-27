@@ -1,0 +1,164 @@
+{
+  "medals": [
+    {
+      "id": "tornado_survivor",
+      "name": "Tornado Survivor",
+      "icon": "🌪️",
+      "description": "You rode the cyclone all the way to Oz.",
+      "trigger": {
+        "type": "scene",
+        "sceneId": "s03_munchkinland"
+      }
+    },
+    {
+      "id": "ruby_slippers",
+      "name": "Ruby Slippers",
+      "icon": "👠",
+      "description": "Glinda's gift now glitters on your feet.",
+      "trigger": {
+        "type": "branch",
+        "branchId": "take_slippers"
+      }
+    },
+    {
+      "id": "brain_for_scarecrow",
+      "name": "Brain for the Scarecrow",
+      "icon": "🌽",
+      "description": "You lifted the Scarecrow down from his pole.",
+      "trigger": {
+        "type": "branch",
+        "branchId": "help_scarecrow"
+      }
+    },
+    {
+      "id": "heart_for_tinman",
+      "name": "Heart for the Tin Man",
+      "icon": "❤️",
+      "description": "You oiled the Tin Man's rusted joints.",
+      "trigger": {
+        "type": "branch",
+        "branchId": "oil_tinman"
+      }
+    },
+    {
+      "id": "courage_for_lion",
+      "name": "Courage for the Lion",
+      "icon": "🦁",
+      "description": "You stood up to the great roaring beast — and made a friend.",
+      "trigger": {
+        "type": "branch",
+        "branchId": "befriend_lion"
+      }
+    },
+    {
+      "id": "yellow_brick_wanderer",
+      "name": "Yellow Brick Wanderer",
+      "icon": "🛤️",
+      "description": "You followed the road through fields and forests.",
+      "trigger": {
+        "type": "scene",
+        "sceneId": "s09_dark_forest"
+      }
+    },
+    {
+      "id": "field_of_flowers",
+      "name": "Field of Flowers",
+      "icon": "🌹",
+      "description": "You crossed the sleeping poppies and lived to remember it.",
+      "trigger": {
+        "type": "scene",
+        "sceneId": "s12_poppy_field_past"
+      }
+    },
+    {
+      "id": "emerald_city",
+      "name": "Emerald City",
+      "icon": "🏰",
+      "description": "You stood inside the shining green walls.",
+      "trigger": {
+        "type": "scene",
+        "sceneId": "s13_emerald_gate"
+      }
+    },
+    {
+      "id": "witchs_bane",
+      "name": "Witch's Bane",
+      "icon": "💧",
+      "description": "The Wicked Witch is no more.",
+      "trigger": {
+        "type": "scene",
+        "sceneId": "s17_witch_melts"
+      }
+    },
+    {
+      "id": "balloon_pilot",
+      "name": "Balloon Pilot",
+      "icon": "🎈",
+      "description": "You watched the great green balloon rise into the sky.",
+      "trigger": {
+        "type": "scene",
+        "sceneId": "s19_balloon_launch"
+      }
+    },
+    {
+      "id": "home_sweet_home",
+      "name": "Home Sweet Home",
+      "icon": "🏡",
+      "description": "Three clicks of the heels — and Kansas again.",
+      "trigger": {
+        "type": "ending",
+        "endingId": "home"
+      }
+    },
+    {
+      "id": "creative_hero",
+      "name": "Creative Hero",
+      "icon": "✨",
+      "description": "You told the story your own way, again and again.",
+      "trigger": {
+        "type": "free_input_count",
+        "min": 10
+      }
+    },
+    {
+      "id": "wolf-slayer",
+      "name": "Wolf Slayer",
+      "icon": "🐺",
+      "description": "You faced down the wolves of the forest.",
+      "trigger": {
+        "type": "encounter",
+        "encounterId": "forest-wolves"
+      }
+    },
+    {
+      "id": "kind-soul",
+      "name": "Kind Soul",
+      "icon": "🌟",
+      "description": "You showed kindness to a frightened wolf pup.",
+      "trigger": {
+        "type": "encounter",
+        "encounterId": "lost-wolf-pup"
+      }
+    },
+    {
+      "id": "friend-of-mice",
+      "name": "Friend of Mice",
+      "icon": "🐭",
+      "description": "The Field Mouse King counts you among his allies.",
+      "trigger": {
+        "type": "encounter",
+        "encounterId": "mouse-king-blessing"
+      }
+    },
+    {
+      "id": "kalidah-tamer",
+      "name": "Kalidah Tamer",
+      "icon": "🐅",
+      "description": "You outwitted the fearsome Kalidah.",
+      "trigger": {
+        "type": "encounter",
+        "encounterId": "kalidah-bridge"
+      }
+    }
+  ]
+}

@@ -1,0 +1,490 @@
+{
+  "id": "wizard-of-oz",
+  "title": "The Wonderful Wizard of Oz",
+  "language": "en",
+  "ageRange": [
+    6,
+    11
+  ],
+  "estimatedMinutes": 20,
+  "coverImage": "/stories/wizard-of-oz/cover.webp",
+  "startScene": "s01_kansas",
+  "scenes": {
+    "s01_kansas": {
+      "image": "/stories/wizard-of-oz/scenes/01-kansas-farm.webp",
+      "bgm": "kansas-calm",
+      "speaker": "narrator",
+      "narration": "The sky over the prairie turns a strange, sickly green. Aunt Em calls from the cellar door, '{{name}}! The cyclone — get down here!' But Toto is somewhere in the long grass, barking and barking.",
+      "branches": [
+        {
+          "id": "rescue_toto",
+          "label": "Run into the grass to find Toto",
+          "next": "s02_toto_rescue"
+        },
+        {
+          "id": "obey_aunt",
+          "label": "Run to the cellar where it is safe",
+          "next": "s02_cellar"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "Or what does {{name}} do?"
+    },
+    "s02_toto_rescue": {
+      "image": "/stories/wizard-of-oz/scenes/02a-toto-grass.webp",
+      "bgm": "tornado",
+      "speaker": "narrator",
+      "narration": "You scoop the little black dog into your arms just as the wind lifts everything — the fence, the wagon, the whole house — up into the spinning sky. Toto licks your cheek as Kansas falls away beneath you.",
+      "branches": [
+        {
+          "id": "_to_munchkin_with_toto",
+          "label": "Hold Toto tight and wait",
+          "next": "s02c_tornado"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s02_cellar": {
+      "image": "/stories/wizard-of-oz/scenes/02b-cellar-door.webp",
+      "bgm": "tornado",
+      "speaker": "narrator",
+      "narration": "You scramble for the cellar — but the wind is faster. The whole house tilts, lifts, and the floorboards groan. You hear Toto barking somewhere inside. The world spins, and spins, and spins.",
+      "branches": [
+        {
+          "id": "_to_munchkin_alone",
+          "label": "Hold on to anything you can",
+          "next": "s02c_tornado"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s02c_tornado": {
+      "image": "/stories/wizard-of-oz/scenes/02c-tornado.webp",
+      "bgm": "tornado",
+      "speaker": "narrator",
+      "narration": "The wind howls and the world spins! The little house lifts off the prairie and tumbles through the heart of the cyclone. Roof shingles, fence rails, even a startled crow whirl past the window. Everything blurs into green and grey — and then, with a sudden, gentle thump, the spinning stops.",
+      "branches": [
+        {
+          "id": "_through_the_storm",
+          "label": "Peek out the door",
+          "next": "s03_munchkinland"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s03_munchkinland": {
+      "image": "/stories/wizard-of-oz/scenes/03-munchkinland.webp",
+      "bgm": "munchkinland",
+      "speaker": "glinda",
+      "narration": "You step outside into a land of bright flowers and small, cheerful people. A beautiful witch in pink smiles. 'You are a hero! Your house has killed the Wicked Witch of the East. Look — only her silver shoes remain.'",
+      "branches": [
+        {
+          "id": "take_slippers",
+          "label": "Pick up the silver shoes and wear them",
+          "next": "s04_road",
+          "medalTrigger": "ruby_slippers"
+        },
+        {
+          "id": "refuse_slippers",
+          "label": "Leave the shoes — they aren't yours",
+          "next": "s04_road"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} say to Glinda?"
+    },
+    "s04_road": {
+      "image": "/stories/wizard-of-oz/scenes/04-yellow-road.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "Glinda points to a road of yellow bricks. 'Follow it to the Emerald City. The great Wizard of Oz can send you home.' The road soon splits. One path runs through a cornfield. The other curves toward an old orchard.",
+      "branches": [
+        {
+          "id": "go_cornfield",
+          "label": "Take the cornfield path",
+          "next": "s05_scarecrow"
+        },
+        {
+          "id": "go_orchard",
+          "label": "Take the orchard path",
+          "next": "s05_orchard"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "Or where does {{name}} walk?"
+    },
+    "s05_scarecrow": {
+      "image": "/stories/wizard-of-oz/scenes/05a-scarecrow-pole.webp",
+      "bgm": "yellow-road",
+      "speaker": "scarecrow",
+      "narration": "A floppy figure of straw is tied to a tall pole. 'Hello!' he calls down brightly. 'Could you maybe lift me off this thing? I would so dearly like to come along and find a brain.'",
+      "branches": [
+        {
+          "id": "help_scarecrow",
+          "label": "Lift him down — yes, come with us",
+          "next": "s06_after_scarecrow",
+          "medalTrigger": "brain_for_scarecrow",
+          "addsCompanion": "scarecrow"
+        },
+        {
+          "id": "ignore_scarecrow",
+          "label": "Walk past — there isn't time",
+          "next": "s06_after_scarecrow"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s05_orchard": {
+      "image": "/stories/wizard-of-oz/scenes/05b-orchard.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "The orchard trees twist their branches as you walk past. Apples shine red just out of reach. Around a bend, you find a man made of tin — frozen mid-step, completely rusted in place. His mouth opens. 'Oil… can…' he croaks.",
+      "branches": [
+        {
+          "id": "oil_tinman",
+          "label": "Find the oil can and free him",
+          "next": "s06_after_tinman",
+          "medalTrigger": "heart_for_tinman",
+          "addsCompanion": "tinman"
+        },
+        {
+          "id": "ignore_tinman",
+          "label": "Step around him — keep walking",
+          "next": "s06_after_tinman"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s06_after_scarecrow": {
+      "image": "/stories/wizard-of-oz/scenes/06-back-on-road.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "Soon the path bends and you hear a creaky, faint voice in the orchard ahead. 'Oil… can…' A man made of tin stands frozen mid-step, completely rusted.",
+      "branches": [
+        {
+          "id": "oil_tinman",
+          "label": "Find the oil can and free him",
+          "next": "s07_forest_edge",
+          "medalTrigger": "heart_for_tinman",
+          "addsCompanion": "tinman"
+        },
+        {
+          "id": "ignore_tinman",
+          "label": "Step around him — keep walking",
+          "next": "s07_forest_edge"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s06_after_tinman": {
+      "image": "/stories/wizard-of-oz/scenes/06-back-on-road.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "The road carries you onward through a cornfield. A floppy figure of straw is tied to a tall pole. 'Hello!' he calls down brightly. 'Could you maybe lift me off? I would so love to find a brain.'",
+      "branches": [
+        {
+          "id": "help_scarecrow",
+          "label": "Lift him down — yes, come with us",
+          "next": "s07_forest_edge",
+          "medalTrigger": "brain_for_scarecrow",
+          "addsCompanion": "scarecrow"
+        },
+        {
+          "id": "ignore_scarecrow",
+          "label": "Walk past — there isn't time",
+          "next": "s07_forest_edge"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s07_forest_edge": {
+      "image": "/stories/wizard-of-oz/scenes/07-forest-edge.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "The trees grow taller and darker. A great roar shakes the leaves. A huge lion leaps onto the road, his eyes wide and yellow.",
+      "branches": [
+        {
+          "id": "befriend_lion",
+          "label": "Stand your ground — and ask his name",
+          "next": "s08_party",
+          "medalTrigger": "courage_for_lion",
+          "addsCompanion": "lion"
+        },
+        {
+          "id": "flee_lion",
+          "label": "Back away slowly and walk on",
+          "next": "s08_party"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s08_party": {
+      "image": "/stories/wizard-of-oz/scenes/08-party-on-road.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "You walk on together — whoever has chosen to come. The road feels longer now, and quieter. Ahead, the trees thin, and you can see the green glow of a city on the far horizon.",
+      "branches": [
+        {
+          "id": "_to_dark_forest",
+          "label": "Keep walking toward the green light",
+          "next": "s09_dark_forest"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s09_dark_forest": {
+      "image": "/stories/wizard-of-oz/scenes/09-dark-forest.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "The forest darkens. Snarls echo between the trees — Kalidahs, beasts with the heads of tigers and the bodies of bears. They are coming closer. A wide ravine opens in the path.",
+      "branches": [
+        {
+          "id": "cross_log",
+          "label": "Push a fallen tree across the ravine",
+          "next": "s10_river"
+        },
+        {
+          "id": "roar_back",
+          "label": "Roar back at the Kalidahs",
+          "next": "s10_river"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "How do you get past?"
+    },
+    "s10_river": {
+      "image": "/stories/wizard-of-oz/scenes/10-river.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "You come to a wide river. The current is strong. Across the water is a meadow blazing with bright red flowers.",
+      "branches": [
+        {
+          "id": "build_raft",
+          "label": "Build a raft from branches",
+          "next": "s11_poppies"
+        },
+        {
+          "id": "wade_across",
+          "label": "Wade carefully across the shallows",
+          "next": "s11_poppies"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "How do you cross?"
+    },
+    "s11_poppies": {
+      "image": "/stories/wizard-of-oz/scenes/11-poppy-field.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "The red flowers are poppies — and their sweet smell makes your eyes heavy. Toto yawns. Your feet feel like stones. You cannot quite keep walking.",
+      "branches": [
+        {
+          "id": "push_through",
+          "label": "Push on with all your strength",
+          "next": "s12_poppy_field_past"
+        },
+        {
+          "id": "call_for_help",
+          "label": "Call for help from your friends",
+          "next": "s12_poppy_field_past"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s12_poppy_field_past": {
+      "image": "/stories/wizard-of-oz/scenes/12-past-poppies.webp",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "Field mice carry you, snoring, out of the poppies. When you wake, the green city shines closer than ever. You walk the last stretch with your eyes wide.",
+      "branches": [
+        {
+          "id": "_to_gates",
+          "label": "Approach the great green gates",
+          "next": "s13_emerald_gate"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s13_emerald_gate": {
+      "image": "/stories/wizard-of-oz/scenes/13-emerald-gate.webp",
+      "bgm": "emerald-city",
+      "speaker": "narrator",
+      "narration": "The gatekeeper buckles green-tinted spectacles over your eyes. 'No one looks at the Emerald City without these,' he says. The gate creaks open, and you step into a world of shimmering green walls and towers.",
+      "branches": [
+        {
+          "id": "go_to_throne",
+          "label": "Go meet the great Wizard",
+          "next": "s14_throne"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} say to the gatekeeper?"
+    },
+    "s14_throne": {
+      "image": "/stories/wizard-of-oz/scenes/14-throne-room.webp",
+      "bgm": "emerald-city",
+      "speaker": "narrator",
+      "narration": "A great green throne stands empty. A voice booms from nowhere: 'You may have your wishes, but FIRST — bring me the broomstick of the Wicked Witch of the West.' Your friends look at you with wide eyes.",
+      "branches": [
+        {
+          "id": "accept_quest",
+          "label": "Accept the quest",
+          "next": "s15_west_journey"
+        },
+        {
+          "id": "argue_quest",
+          "label": "Argue — there must be another way",
+          "next": "s15_west_journey"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} answer the Wizard?"
+    },
+    "s15_west_journey": {
+      "image": "/stories/wizard-of-oz/scenes/15-west-journey.webp",
+      "bgm": "witch-castle",
+      "speaker": "narrator",
+      "narration": "You travel west, past hills the color of slate. The sky turns gray. A flock of winged monkeys descends on great leathery wings, and carries you to the Witch's castle.",
+      "branches": [
+        {
+          "id": "_to_witch",
+          "label": "Face the Wicked Witch",
+          "next": "s16_witch_castle"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s16_witch_castle": {
+      "image": "/stories/wizard-of-oz/scenes/16-witch-castle.webp",
+      "bgm": "witch-castle",
+      "speaker": "wicked-witch",
+      "narration": "The Wicked Witch grins with green teeth. 'So — the little one who killed my sister. I will keep you as my servant and your dog as my dinner.' She raises a long bony finger. A bucket of water trembles on a shelf nearby.",
+      "branches": [
+        {
+          "id": "throw_water",
+          "label": "Grab the bucket and throw the water",
+          "next": "s17_witch_melts"
+        },
+        {
+          "id": "stand_with_friends",
+          "label": "Stand together with your friends",
+          "next": "s17_witch_melts"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s17_witch_melts": {
+      "image": "/stories/wizard-of-oz/scenes/17-witch-melts.webp",
+      "bgm": "witch-castle",
+      "speaker": "narrator",
+      "narration": "The Wicked Witch shrieks. 'I am melting! Melting!' And before your eyes she is gone — only a pile of black cloth and a tall pointed hat. The castle servants cheer. You are free.",
+      "branches": [
+        {
+          "id": "_back_to_emerald",
+          "label": "Return to the Emerald City",
+          "next": "s18_unmasked"
+        }
+      ],
+      "allowFreeInput": false
+    },
+    "s18_unmasked": {
+      "image": "/stories/wizard-of-oz/scenes/18-wizard-unmasked.webp",
+      "bgm": "emerald-city",
+      "speaker": "narrator",
+      "narration": "Behind the great green throne, Toto pulls back a curtain — and there stands a small, kind old man pulling levers. 'I am no great wizard,' he sighs. 'Only a man from a place called Omaha. But I will help you all the same.'",
+      "branches": [
+        {
+          "id": "_to_balloon",
+          "label": "Hear his plan to fly you home",
+          "next": "s19_balloon_launch"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} say to him?"
+    },
+    "s19_balloon_launch": {
+      "image": "/stories/wizard-of-oz/scenes/19-balloon-launch.webp",
+      "bgm": "emerald-city",
+      "speaker": "narrator",
+      "narration": "A great green balloon rises in the square. The Wizard waves. But just as you step toward it, Toto leaps after a stray kitten — and the ropes snap free. The balloon drifts up into the sky without you.",
+      "branches": [
+        {
+          "id": "ask_glinda",
+          "label": "Travel south to find Glinda",
+          "next": "s20_glinda"
+        },
+        {
+          "id": "give_up",
+          "label": "Sit down and cry",
+          "next": "s20_glinda"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} do?"
+    },
+    "s20_glinda": {
+      "image": "/stories/wizard-of-oz/scenes/20-glinda-south.webp",
+      "bgm": "munchkinland",
+      "speaker": "glinda",
+      "narration": "Glinda smiles softly. 'My dear — you have had the power all along. The silver shoes on your feet can carry you home. Click the heels three times, and speak your wish.'",
+      "branches": [
+        {
+          "id": "to_farewell",
+          "label": "Turn to your friends first",
+          "next": "s20a_farewell"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} say to {{their}} friends?"
+    },
+    "s20a_farewell": {
+      "image": "/stories/wizard-of-oz/scenes/20a-farewell.webp",
+      "bgm": "munchkinland",
+      "speaker": "narrator",
+      "narration": "The Scarecrow's straw arms wrap you up first — he is going back to rule the Emerald City. The Tin Man's metal cheek glistens with one careful tear. The Lion presses his great mane against your shoulder, brave at last. None of you wants to be the first to say it.",
+      "branches": [
+        {
+          "id": "hug_scarecrow",
+          "label": "Hug the Scarecrow one more time",
+          "next": "s21_home"
+        },
+        {
+          "id": "hug_tinman",
+          "label": "Press your hand to the Tin Man's heart",
+          "next": "s21_home"
+        },
+        {
+          "id": "hug_lion",
+          "label": "Bury your face in the Lion's mane",
+          "next": "s21_home"
+        },
+        {
+          "id": "all_at_once",
+          "label": "Pull them all into one last hug",
+          "next": "s21_home"
+        }
+      ],
+      "allowFreeInput": true,
+      "freeInputHint": "What does {{name}} whisper to them?"
+    },
+    "s21_home": {
+      "image": "/stories/wizard-of-oz/scenes/21-kansas-return.webp",
+      "bgm": "kansas-calm",
+      "speaker": "narrator",
+      "narration": "The wind rushes. The colors blur. And then — Aunt Em is hugging you tight on the porch of the gray Kansas farmhouse. Toto barks at your feet. 'My darling,' Aunt Em whispers. 'Where on earth did you come from?'",
+      "branches": [],
+      "allowFreeInput": false,
+      "ending": {
+        "id": "home",
+        "label": "Home Sweet Home"
+      }
+    }
+  }
+}

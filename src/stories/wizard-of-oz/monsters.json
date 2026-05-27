@@ -1,0 +1,155 @@
+{
+  "monsters": [
+    {
+      "id": "wolf",
+      "name": "Forest Wolf",
+      "type": "hostile",
+      "hits": 3,
+      "drops": ["wolf-fang"],
+      "size": "medium",
+      "puzzleKind": "add-1d"
+    },
+    {
+      "id": "wolf-alpha",
+      "name": "Pack Leader",
+      "type": "hostile",
+      "hits": 5,
+      "drops": ["wolf-pelt"],
+      "size": "large",
+      "puzzleKind": "add-2d"
+    },
+    {
+      "id": "wolf-pup",
+      "name": "Wolf Pup",
+      "type": "neutral",
+      "hits": 1,
+      "size": "small",
+      "notes": "Befriendable — gives 'lost-pup-trust' item if hero spares it."
+    },
+    {
+      "id": "crow-scout",
+      "name": "Crow Scout",
+      "type": "hostile",
+      "hits": 2,
+      "drops": ["feather-of-flight"],
+      "size": "tiny",
+      "puzzleKind": "bigger",
+      "airborne": true
+    },
+    {
+      "id": "crow-flock",
+      "name": "Crow Flock",
+      "type": "hostile",
+      "hits": 4,
+      "drops": ["feather-bundle"],
+      "size": "tiny",
+      "puzzleKind": "odd-out",
+      "airborne": true
+    },
+    {
+      "id": "kalidah",
+      "name": "Kalidah",
+      "type": "hostile",
+      "hits": 6,
+      "drops": ["kalidah-claw"],
+      "size": "large",
+      "puzzleKind": "multiply",
+      "notes": "Mini-boss. Encounter only in deep forest."
+    },
+    {
+      "id": "fighting-tree",
+      "name": "Fighting Tree",
+      "type": "hostile",
+      "hits": 5,
+      "drops": ["enchanted-acorn"],
+      "size": "large",
+      "puzzleKind": "missing"
+    },
+    {
+      "id": "hammerhead",
+      "name": "Hammerhead",
+      "type": "hostile",
+      "hits": 5,
+      "drops": ["stone-flake"],
+      "size": "medium",
+      "puzzleKind": "sub-1d"
+    },
+    {
+      "id": "winged-monkey",
+      "name": "Winged Monkey",
+      "type": "hostile",
+      "hits": 3,
+      "drops": ["monkey-feather"],
+      "size": "medium",
+      "puzzleKind": "add-1d",
+      "airborne": true
+    },
+    {
+      "id": "swamp-beast",
+      "name": "Swamp Beast",
+      "type": "hostile",
+      "hits": 6,
+      "drops": ["swamp-pearl"],
+      "size": "large",
+      "puzzleKind": "pattern"
+    },
+    {
+      "id": "cave-spider",
+      "name": "Crystal Cave Spider",
+      "type": "hostile",
+      "hits": 3,
+      "drops": ["silk-thread"],
+      "size": "small",
+      "puzzleKind": "sub-1d",
+      "airborne": true
+    },
+    {
+      "id": "bat-swarm",
+      "name": "Bat Swarm",
+      "type": "hostile",
+      "hits": 4,
+      "drops": ["bat-wing"],
+      "size": "medium",
+      "puzzleKind": "bigger",
+      "airborne": true
+    },
+    {
+      "id": "goblin-scout",
+      "name": "Goblin Scout",
+      "type": "hostile",
+      "hits": 2,
+      "drops": ["tarnished-coin"],
+      "size": "small",
+      "puzzleKind": "add-1d"
+    },
+    {
+      "id": "mouse-king",
+      "name": "Field Mouse King",
+      "type": "friendly",
+      "hits": 0,
+      "drops": ["mouse-call"],
+      "size": "tiny",
+      "notes": "Friendly NPC. Gifts mouse-call (1 free encounter escape)."
+    },
+    {
+      "id": "wicked-witch",
+      "name": "Wicked Witch of the West",
+      "type": "hostile",
+      "hits": 8,
+      "drops": ["witch-broom", "witch-hat"],
+      "size": "large",
+      "puzzleKind": "multiply",
+      "notes": "Main-story boss. The hardest puzzle category, longest fight."
+    },
+    {
+      "id": "wisp",
+      "name": "Will-o-Wisp",
+      "type": "neutral",
+      "hits": 2,
+      "drops": ["wisp-light"],
+      "size": "tiny",
+      "notes": "Reveals hidden paths. Can be befriended via riddle.",
+      "airborne": true
+    }
+  ]
+}

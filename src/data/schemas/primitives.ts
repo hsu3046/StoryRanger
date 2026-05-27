@@ -1,0 +1,48 @@
+/**
+ * Shared primitives for content schemas. Single source of allowed literals.
+ */
+
+import { z } from "zod";
+
+export const SpeakerIdSchema = z.enum([
+  "narrator",
+  "dorothy",
+  "scarecrow",
+  "tinman",
+  "lion",
+  "wicked-witch",
+  "glinda",
+  "wizard",
+]);
+
+export const CompanionIdSchema = z.enum(["scarecrow", "tinman", "lion"]);
+
+export const AttackerIdSchema = z.enum(["hero", "scarecrow", "tinman", "lion"]);
+
+export const SpriteSizeSchema = z.enum([
+  "tiny",
+  "small",
+  "medium",
+  "large",
+  "huge",
+]);
+
+export const PuzzleKindSchema = z.enum([
+  "add-1d",
+  "sub-1d",
+  "add-2d",
+  "multiply",
+  "pattern",
+  "odd-out",
+  "bigger",
+  "missing",
+]);
+
+export const TtsVoiceSchema = z.enum([
+  "alloy",
+  "echo",
+  "fable",
+  "onyx",
+  "nova",
+  "shimmer",
+]);
