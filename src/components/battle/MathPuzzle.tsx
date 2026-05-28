@@ -38,19 +38,35 @@ export function MathPuzzle({
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  // Initialise start time + tick the live timer
+  // Latch the latest props in refs so the timer effect doesn't have to
+  // depend on them. Parents typically pass inline arrows for `onSolved`,
+  // which means a new function on every render — if it were in deps, the
+  // effect (and its setInterval) would tear down + restart on every parent
+  // render, resetting `startRef.current` back to "now" and looking like the
+  // countdown is rewinding 2 seconds in. (Same problem for `pickedIdx`.)
+  const onSolvedRef = useRef(onSolved);
+  const pickedRef = useRef<number | null>(null);
+  useEffect(() => {
+    onSolvedRef.current = onSolved;
+  }, [onSolved]);
+  useEffect(() => {
+    pickedRef.current = pickedIdx;
+  }, [pickedIdx]);
+
+  // Initialise start time + tick the live timer. Empty deps — we only
+  // want one timer per mount of this puzzle.
   useEffect(() => {
     startRef.current = Date.now();
     const id = setInterval(() => {
       const ms = Date.now() - startRef.current;
       setElapsedMs(ms);
-      if (ms >= HARD_TIMEOUT_MS && pickedIdx === null) {
+      if (ms >= HARD_TIMEOUT_MS && pickedRef.current === null) {
         setPickedIdx(-1); // sentinel for "time up"
-        onSolved(false, ms);
+        onSolvedRef.current(false, ms);
       }
     }, 100);
     return () => clearInterval(id);
-  }, [onSolved, pickedIdx]);
+  }, []);
 
   function pick(i: number) {
     if (pickedIdx !== null) return;
@@ -77,22 +93,29 @@ export function MathPuzzle({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className="pointer-events-auto fixed left-1/2 top-1/2 z-[60] flex w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper/85 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur sm:p-8"
+      className="pointer-events-auto fixed left-1/2 top-1/2 z-[60] flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper/85 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur sm:p-8"
     >
-      {/* Header */}
+      {/* Header — one line: "{actor} attacks {monster}" or
+          "Defend! {monster}". */}
       <header className="flex items-center justify-between gap-3">
-        <div className="flex flex-col">
-          <p className="font-handwritten text-base text-accent-deep">
-            {mode === "defend"
-              ? "Defend!"
-              : attackerLabel
-                ? `${attackerLabel} attacks`
-                : "Solve to attack"}
-          </p>
-          <p className="text-lg font-semibold text-ink">
-            {mode === "defend" ? `${targetName} strikes` : targetName}
-          </p>
-        </div>
+        <p className="font-handwritten text-2xl text-accent-deep sm:text-3xl">
+          {mode === "defend" ? (
+            <>
+              Defend!{" "}
+              <span className="font-semibold text-ink">{targetName}</span>
+            </>
+          ) : attackerLabel ? (
+            <>
+              {attackerLabel} attacks{" "}
+              <span className="font-semibold text-ink">{targetName}</span>
+            </>
+          ) : (
+            <>
+              Solve to attack{" "}
+              <span className="font-semibold text-ink">{targetName}</span>
+            </>
+          )}
+        </p>
         <div className="flex items-center gap-2.5">
           {streak >= 3 && (
             <span className="rounded-pill bg-ruby/15 px-3 py-1 text-sm font-semibold text-ruby">

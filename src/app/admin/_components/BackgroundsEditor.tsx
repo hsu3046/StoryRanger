@@ -110,7 +110,7 @@ export function BackgroundsEditor({
             {backgrounds.length}
           </span>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → backgrounds.json
+            backgrounds.json
           </code>
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">

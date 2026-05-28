@@ -98,10 +98,15 @@ export function AssetThumb({
 
   const hasCustomRing = !!ringColor;
   const ringPx = ringWidth ?? (hasCustomRing ? 3 : 1);
-  const ringClass = hasCustomRing ? "" : "ring-1 ring-ink-soft/10";
-  const wrapperStyle: React.CSSProperties = hasCustomRing
-    ? { boxShadow: `0 0 0 ${ringPx}px ${ringColor}` }
-    : {};
+  // ringWidth === 0 explicitly disables both the default ink ring and any
+  // custom-color ring. Useful when the thumbnail sits inside another
+  // bordered control (chip pills, etc.) and a doubled outline looks busy.
+  const noRing = ringWidth === 0;
+  const ringClass = noRing || hasCustomRing ? "" : "ring-1 ring-ink-soft/10";
+  const wrapperStyle: React.CSSProperties =
+    hasCustomRing && !noRing
+      ? { boxShadow: `0 0 0 ${ringPx}px ${ringColor}` }
+      : {};
 
   return (
     <div

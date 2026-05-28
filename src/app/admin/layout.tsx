@@ -22,9 +22,9 @@ export default function AdminLayout({
     .map((id) => ({ id }));
 
   return (
-    <div className="flex h-dvh w-dvw overflow-hidden bg-paper-deep/30 text-ink">
+    <div className="flex h-dvh w-full overflow-hidden bg-paper text-ink">
       <AdminSidebar stories={stories} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto bg-paper-deep/40">{children}</main>
     </div>
   );
 }

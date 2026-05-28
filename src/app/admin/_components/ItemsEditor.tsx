@@ -105,7 +105,7 @@ export function ItemsEditor({ storyId, initial, missingRefs = [] }: Props) {
             {items.length}
           </span>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → items.json
+            items.json
           </code>
           {missingRefs.length > 0 && (
             <span

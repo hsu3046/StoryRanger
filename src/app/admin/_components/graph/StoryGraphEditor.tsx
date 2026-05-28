@@ -4,19 +4,37 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
+import {
+  CaretDown,
+  Copy,
+  PencilSimple,
+  Play,
+  Sparkle,
+  TrashSimple,
+  TreeStructure,
+  X,
+} from "@phosphor-icons/react";
 import {
   Background,
+  ControlButton,
   Controls,
+  MarkerType,
   ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  type Connection,
   type Edge,
   type Node,
-  type NodeChange,
   type NodeMouseHandler,
   type EdgeMouseHandler,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -27,10 +45,17 @@ import {
   type BranchT,
   type EncounterDefT,
   type ItemDefT,
+  type MedalT,
   type MonsterStatsT,
   type SceneT,
   type StoryT,
 } from "@/data/schemas";
+import type {
+  CharactersFile,
+  CompanionId,
+  MedalsFile,
+  Story,
+} from "@/types/story";
 import {
   saveEncountersAction,
   saveScenesAction,
@@ -38,7 +63,8 @@ import {
 import { AssetThumb } from "../AssetThumb";
 import { SceneNode, type SceneNodeData } from "./SceneNode";
 import { BranchEdge, type BranchEdgeData } from "./BranchEdge";
-import { computeLayout } from "./layout";
+import { computeLayout, computeLayoutConnected } from "./layout";
+import { ScenePreviewModal } from "./ScenePreviewModal";
 
 interface Props {
   storyId: string;
@@ -49,23 +75,49 @@ interface Props {
   items: ItemDefT[];
   /** Background catalog used in the scene/encounter `bg` dropdowns. */
   backgrounds: BackgroundMetaT[];
+  /** Medal catalog used by the medal-id dropdowns. */
+  medals: MedalT[];
+  /** Scene image options — `value` = full path, `label` = short stem. */
+  sceneImages: { value: string; label: string }[];
+  /** BGM track keys discovered under /public/stories/<id>/audio/bgm/. */
+  bgmOptions: string[];
+  /** Runtime types passed straight through to the preview modal's
+   *  StoryPlayer (the editor uses schema types `StoryT` for editing; the
+   *  player wants the runtime `Story`/`MedalsFile`/`CharactersFile`). */
+  runtimeStory: Story;
+  runtimeMedalsFile: MedalsFile;
+  runtimeCharactersFile: CharactersFile;
 }
 
 const nodeTypes = { scene: SceneNode };
 const edgeTypes = { branch: BranchEdge };
+// Module-level constants for ReactFlow props — passing inline literals
+// (e.g. `proOptions={{ hideAttribution: true }}`) creates a fresh object
+// on every render, which React Flow can't shallow-compare, leading to
+// internal recomputation churn during drag.
+const proOptions = { hideAttribution: true } as const;
 
 type Selection =
   | { kind: "scene"; sceneId: string }
   | { kind: "branch"; sceneId: string; branchId: string }
   | null;
 
-export function StoryGraphEditor({
+// `useNodesState`/`useEdgesState`/`useReactFlow` require a ReactFlowProvider
+// ancestor. The exported `StoryGraphEditor` below wraps this inner component
+// so callers don't have to think about it.
+function StoryGraphEditorInner({
   storyId,
   initialStory,
   initialEncounters,
   monsters,
   items,
   backgrounds,
+  medals,
+  sceneImages,
+  bgmOptions,
+  runtimeStory,
+  runtimeMedalsFile,
+  runtimeCharactersFile,
 }: Props) {
   const router = useRouter();
   const [story, setStory] = useState<StoryT>(initialStory);
@@ -74,6 +126,13 @@ export function StoryGraphEditor({
   const [selection, setSelection] = useState<Selection>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Per-scene preview modal target. Set by the Demo button in Scene /
+  // Branch Inspector. null → modal closed.
+  const [previewSceneId, setPreviewSceneId] = useState<string | null>(null);
+  // Held in a ref (not state) because we only need it inside event handlers
+  // — putting it in state would re-render on init for no rendering reason.
+  const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const flowWrapperRef = useRef<HTMLDivElement | null>(null);
   // Manual node positions. Initialised from dagre auto-layout; overridden
   // by drag-to-move and persisted to localStorage so layouts stick across
   // reloads. "Auto-layout" button re-runs dagre.
@@ -92,7 +151,6 @@ export function StoryGraphEditor({
           { x: number; y: number }
         >;
         // Merge — saved positions win; new scenes still get dagre default
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot hydration
         setPositions((prev) => ({ ...prev, ...saved }));
       }
     } catch {
@@ -101,24 +159,40 @@ export function StoryGraphEditor({
     setPosHydrated(true);
   }, [positionKey]);
 
-  useEffect(() => {
-    if (!posHydrated) return;
-    try {
-      window.localStorage.setItem(positionKey, JSON.stringify(positions));
-    } catch {
-      /* swallow storage quota */
-    }
-  }, [positions, positionKey, posHydrated]);
+  // Persist positions to localStorage — called from event handlers
+  // (drag-end, auto-layout, addScene), NOT from a `positions`-effect.
+  // Writing on every `positions` change would run `JSON.stringify` +
+  // synchronous `localStorage.setItem` on every drag frame (~60 Hz),
+  // blocking the main thread and causing visible flicker across the
+  // whole editor.
+  const persistPositions = useCallback(
+    (next: Record<string, { x: number; y: number }>) => {
+      if (!posHydrated) return;
+      try {
+        window.localStorage.setItem(positionKey, JSON.stringify(next));
+      } catch {
+        /* swallow storage quota */
+      }
+    },
+    [positionKey, posHydrated],
+  );
 
   // New scenes get their default position assigned in `addScene` directly,
   // so we don't need an effect to sync. Inline fallback in the node builder
   // covers the unlikely case of a scene appearing without a recorded
   // position (e.g. external file edit while admin is open).
 
-  const encounterSet = useMemo(
-    () => new Set(encounters.map((e) => e.trigger.afterScene)),
-    [encounters],
-  );
+  // Count of encounters attached per (sceneId, branchId) — drives the ⚔
+  // chip on BranchEdge so authors can see at a glance which branches roll
+  // a battle.
+  const encounterCountByBranch = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of encounters) {
+      const key = `${e.trigger.sceneId}__${e.trigger.branchId}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [encounters]);
 
   const dirty = useMemo(
     () =>
@@ -127,35 +201,45 @@ export function StoryGraphEditor({
     [initialStory, story, initialEncounters, encounters],
   );
 
-  // Build React Flow graph from story. Positions come from `positions`
-  // state (drag-aware + localStorage-persisted), not recomputed every
-  // render.
-  const { nodes, edges } = useMemo(() => {
-    const nodes: Node[] = Object.entries(story.scenes).map(
-      ([id, scene]) => {
-        const data: SceneNodeData = {
-          sceneId: id,
-          scene,
-          isStart: id === story.startScene,
-          hasEncounter: encounterSet.has(id),
-        };
-        return {
-          id,
-          type: "scene",
-          position: positions[id] ?? { x: 0, y: 0 },
-          data: data as unknown as Record<string, unknown>,
-          draggable: true,
-          selected:
-            selection?.kind === "scene" && selection.sceneId === id,
-        };
-      },
-    );
+  // Per-scene `data` objects — memo'd separately from `positions` so
+  // dragging (which fires position changes every frame) doesn't churn the
+  // SceneNode `data` prop identity. Without this, every drag frame would
+  // hand each SceneNode a brand-new `data` object → React.memo bails →
+  // every node re-renders → AssetThumb img remounts → flicker.
+  const sceneDataById = useMemo(() => {
+    const map: Record<string, SceneNodeData> = {};
+    for (const [id, scene] of Object.entries(story.scenes)) {
+      map[id] = {
+        sceneId: id,
+        scene,
+        isStart: id === story.startScene,
+        storyId,
+      };
+    }
+    return map;
+  }, [story.scenes, story.startScene, storyId]);
+
+  // ─── Source-of-truth: story + positions + selection → Node[] / Edge[] ───
+  //
+  // Building these as memos is fine — they only rebuild when the *content*
+  // actually changes (story edit, selection change, scene added). They do
+  // NOT rebuild during drag, because drag mutates React Flow's internal
+  // node state via `useNodesState` below, NOT our `positions` state.
+  const sourceNodes: Node[] = useMemo(() => {
+    return Object.entries(story.scenes).map(([id]) => ({
+      id,
+      type: "scene",
+      position: positions[id] ?? { x: 0, y: 0 },
+      data: sceneDataById[id] as unknown as Record<string, unknown>,
+      draggable: true,
+      selected: selection?.kind === "scene" && selection.sceneId === id,
+    }));
+  }, [story.scenes, sceneDataById, selection, positions]);
+
+  const sourceEdges: Edge[] = useMemo(() => {
     // First pass — group branches by (source, target) so we can assign
     // parallel-edge indices for label offsetting.
-    type Pending = {
-      sourceId: string;
-      branch: BranchT;
-    };
+    type Pending = { sourceId: string; branch: BranchT };
     const groups = new Map<string, Pending[]>();
     for (const [sourceId, scene] of Object.entries(story.scenes)) {
       for (const b of scene.branches) {
@@ -166,8 +250,7 @@ export function StoryGraphEditor({
         groups.set(key, arr);
       }
     }
-
-    const edges: Edge[] = [];
+    const out: Edge[] = [];
     for (const arr of groups.values()) {
       arr.forEach(({ sourceId, branch: b }, parallelIdx) => {
         const edgeId = `${sourceId}__${b.id}`;
@@ -175,46 +258,92 @@ export function StoryGraphEditor({
           branch: b,
           parallelIdx,
           parallelCount: arr.length,
+          encounterCount:
+            encounterCountByBranch.get(`${sourceId}__${b.id}`) ?? 0,
+          storyId,
         };
-        edges.push({
+        const isSelected =
+          selection?.kind === "branch" &&
+          selection.sceneId === sourceId &&
+          selection.branchId === b.id;
+        out.push({
           id: edgeId,
           source: sourceId,
           target: b.next,
           type: "branch",
           data: data as unknown as Record<string, unknown>,
-          selected:
-            selection?.kind === "branch" &&
-            selection.sceneId === sourceId &&
-            selection.branchId === b.id,
+          selected: isSelected,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 18,
+            height: 18,
+            color: isSelected ? "#7a4f0e" : "rgba(91,65,40,0.55)",
+          },
         });
       });
     }
-    return { nodes, edges };
-  }, [story, encounterSet, selection, positions]);
+    return out;
+  }, [story.scenes, encounterCountByBranch, selection, storyId]);
 
-  // Drag handler — fold React Flow's position changes back into our
-  // `positions` state, which then re-renders the nodes via the useMemo
-  // below. We deliberately ignore non-position changes (selection etc.
-  // are managed via onNodeClick / onEdgeClick / onPaneClick instead).
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
-    let touched = false;
-    setPositions((prev) => {
-      const next = { ...prev };
-      for (const c of changes) {
-        if (c.type === "position" && c.position) {
-          next[c.id] = { x: c.position.x, y: c.position.y };
-          touched = true;
-        }
-      }
-      return touched ? next : prev;
-    });
+  // React Flow internal state — the actual props handed to <ReactFlow>.
+  // The `onNodesChange` returned here handles ALL change kinds (position
+  // every drag frame, dimensions, select, etc.) entirely inside React
+  // Flow's store. During drag, our React tree does not re-render at all
+  // — only the dragged node's transform updates internally.
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(sourceNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(sourceEdges);
+
+  // Push from source-of-truth into RF state only when the memo's identity
+  // actually changes. Refs (vs deps) so this fires once per real change,
+  // not once per render. Without this guard, React Flow's internal node
+  // state would be overwritten on every render and lose drag positions.
+  const lastSourceNodesRef = useRef(sourceNodes);
+  const lastSourceEdgesRef = useRef(sourceEdges);
+  useEffect(() => {
+    if (lastSourceNodesRef.current !== sourceNodes) {
+      lastSourceNodesRef.current = sourceNodes;
+      setNodes(sourceNodes);
+    }
+    if (lastSourceEdgesRef.current !== sourceEdges) {
+      lastSourceEdgesRef.current = sourceEdges;
+      setEdges(sourceEdges);
+    }
+  }, [sourceNodes, sourceEdges, setNodes, setEdges]);
+
+  // Commit drag position to our persistent `positions` state + localStorage
+  // — fires ONCE per drag, not 60×/sec like the old per-frame path did.
+  const handleNodeDragStop = useCallback(
+    (_evt: React.MouseEvent | MouseEvent, node: Node) => {
+      setPositions((prev) => {
+        const next = { ...prev, [node.id]: { x: node.position.x, y: node.position.y } };
+        persistPositions(next);
+        return next;
+      });
+    },
+    [persistPositions],
+  );
+
+  const onInit = useCallback((instance: ReactFlowInstance) => {
+    rfInstanceRef.current = instance;
   }, []);
 
   function runAutoLayout() {
-    if (!confirm("Auto-layout all scenes? This overrides any manual positions.")) {
+    if (
+      !confirm(
+        "Auto-layout connected scenes? Disconnected scenes keep their current position.",
+      )
+    ) {
       return;
     }
-    setPositions(computeLayout(story.scenes));
+    // Only re-place scenes that participate in an edge. Orphans (drafts
+    // the author parked off to the side) keep their coordinates — merge
+    // the new connected-only layout on top of the existing positions.
+    const layouted = computeLayoutConnected(story.scenes);
+    setPositions((prev) => {
+      const next = { ...prev, ...layouted };
+      persistPositions(next);
+      return next;
+    });
   }
 
   function addScene() {
@@ -245,11 +374,29 @@ export function StoryGraphEditor({
       ...prev,
       scenes: { ...prev.scenes, [id]: newScene },
     }));
-    // Place near canvas origin so the user can immediately find + drag it.
-    setPositions((prev) => ({
-      ...prev,
-      [id]: { x: 80, y: 80 },
-    }));
+    // Drop the new scene at the current viewport centre (minus half the
+    // SceneNode box so the node sits centred, not anchored top-left).
+    // SceneNode is 280×240 — see SceneNode.tsx. Falls back to canvas
+    // origin if the ReactFlow instance isn't ready yet (shouldn't happen
+    // after the editor has mounted, but be defensive).
+    const NODE_W = 280;
+    const NODE_H = 240;
+    let pos = { x: 80, y: 80 };
+    const rf = rfInstanceRef.current;
+    const wrapper = flowWrapperRef.current;
+    if (rf && wrapper) {
+      const rect = wrapper.getBoundingClientRect();
+      const centre = rf.screenToFlowPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      });
+      pos = { x: centre.x - NODE_W / 2, y: centre.y - NODE_H / 2 };
+    }
+    setPositions((prev) => {
+      const next = { ...prev, [id]: pos };
+      persistPositions(next);
+      return next;
+    });
     setSelection({ kind: "scene", sceneId: id });
   }
 
@@ -287,64 +434,176 @@ export function StoryGraphEditor({
     }));
   }
 
+  function deleteScene(sceneId: string) {
+    if (sceneId === story.startScene) {
+      alert(
+        `Cannot delete "${sceneId}" — it is the start scene. Change the start scene first.`,
+      );
+      return;
+    }
+    // Find anything that would be orphaned and warn before destructive delete.
+    const inboundBranches: string[] = [];
+    for (const [sid, s] of Object.entries(story.scenes)) {
+      for (const b of s.branches) {
+        if (b.next === sceneId) inboundBranches.push(`${sid}.${b.id}`);
+      }
+    }
+    const triggeredEncounters = encounters.filter(
+      (e) => e.trigger.sceneId === sceneId,
+    );
+    const warnings: string[] = [];
+    if (inboundBranches.length > 0) {
+      warnings.push(
+        `${inboundBranches.length} branch(es) point here and will be left dangling: ${inboundBranches.slice(0, 3).join(", ")}${inboundBranches.length > 3 ? "…" : ""}`,
+      );
+    }
+    if (triggeredEncounters.length > 0) {
+      warnings.push(
+        `${triggeredEncounters.length} encounter(s) trigger from this scene and will be deleted.`,
+      );
+    }
+    const msg = [
+      `Delete scene "${sceneId}"?`,
+      ...warnings.map((w) => `\n• ${w}`),
+    ].join("");
+    if (!confirm(msg)) return;
+
+    setStory((prev) => {
+      const { [sceneId]: _removed, ...rest } = prev.scenes;
+      void _removed;
+      return { ...prev, scenes: rest };
+    });
+    if (triggeredEncounters.length > 0) {
+      setEncounters((prev) =>
+        prev.filter((e) => e.trigger.sceneId !== sceneId),
+      );
+    }
+    setSelection(null);
+  }
+
+  /** Clone the scene under a new id. Everything else (image, bgm, speaker,
+   *  narration, branches, reward, ending, dialogueCharacters) is deep-copied
+   *  verbatim. New id is `{sourceId}_2`, `_3`, ... — first unused suffix.
+   *
+   *  Encounters cascade too: every encounter tied to a branch of the
+   *  source scene is cloned with `trigger.sceneId` rewritten to the new
+   *  scene id (branchId stays — branch ids are scoped to their parent
+   *  scene's `branches` array). New encounter id follows the existing
+   *  `{sceneId}__{branchId}-battle[-N]` pattern so duplicates don't
+   *  collide with the originals. */
+  function duplicateScene(sceneId: string) {
+    const src = story.scenes[sceneId];
+    if (!src) return;
+    let suffix = 2;
+    let newId = `${sceneId}_${suffix}`;
+    while (story.scenes[newId]) {
+      suffix += 1;
+      newId = `${sceneId}_${suffix}`;
+    }
+    // Deep clone via JSON to detach all nested refs (branches, reward, etc).
+    const cloned = JSON.parse(JSON.stringify(src)) as SceneT;
+    setStory((prev) => ({
+      ...prev,
+      scenes: {
+        ...prev.scenes,
+        [newId]: cloned,
+      },
+    }));
+
+    // Cascade encounters tied to branches of the source scene.
+    const sourceEncounters = encounters.filter(
+      (e) => e.trigger.sceneId === sceneId,
+    );
+    if (sourceEncounters.length > 0) {
+      // Build a fresh id-collision check that includes both the existing
+      // catalog AND any duplicates we mint in this same pass.
+      const existingIds = new Set(encounters.map((e) => e.id));
+      const cloned: EncounterDefT[] = [];
+      for (const e of sourceEncounters) {
+        let baseId = `${newId}__${e.trigger.branchId}-battle`;
+        let i = 0;
+        while (existingIds.has(baseId)) {
+          i += 1;
+          baseId = `${newId}__${e.trigger.branchId}-battle-${i}`;
+        }
+        existingIds.add(baseId);
+        cloned.push({
+          ...(JSON.parse(JSON.stringify(e)) as EncounterDefT),
+          id: baseId,
+          trigger: { ...e.trigger, sceneId: newId },
+        });
+      }
+      setEncounters((prev) => [...prev, ...cloned]);
+    }
+
+    // Drop the duplicate near the source on the canvas so it doesn't land
+    // at the origin and stack on top of other nodes.
+    const srcPos = positions[sceneId] ?? { x: 0, y: 0 };
+    setPositions((prev) => {
+      const next = {
+        ...prev,
+        [newId]: { x: srcPos.x + 60, y: srcPos.y + 60 },
+      };
+      persistPositions(next);
+      return next;
+    });
+    setSelection({ kind: "scene", sceneId: newId });
+  }
+
   function deleteBranch(sceneId: string, branchId: string) {
-    if (!confirm(`Delete branch "${branchId}" from ${sceneId}?`)) return;
+    // Cascade — encounters live on (sceneId, branchId), so any tied to
+    // this branch would become dangling refs after the delete. Surface
+    // them in the confirm prompt and remove together.
+    const triggeredEncounters = encounters.filter(
+      (e) => e.trigger.sceneId === sceneId && e.trigger.branchId === branchId,
+    );
+    const msg = [
+      `Delete branch "${branchId}" from ${sceneId}?`,
+      ...(triggeredEncounters.length > 0
+        ? [
+            `\n• ${triggeredEncounters.length} encounter(s) trigger on this branch and will be deleted: ${triggeredEncounters
+              .map((e) => e.id)
+              .slice(0, 3)
+              .join(", ")}${triggeredEncounters.length > 3 ? "…" : ""}`,
+          ]
+        : []),
+    ].join("");
+    if (!confirm(msg)) return;
     updateScene(sceneId, (s) => ({
       ...s,
       branches: s.branches.filter((b) => b.id !== branchId),
     }));
+    if (triggeredEncounters.length > 0) {
+      setEncounters((prev) =>
+        prev.filter(
+          (e) =>
+            !(e.trigger.sceneId === sceneId && e.trigger.branchId === branchId),
+        ),
+      );
+    }
     setSelection({ kind: "scene", sceneId });
   }
 
-  function addEncounterForScene(
-    sceneId: string,
-    kind: "battle" | "story",
-  ) {
-    // Generate a non-colliding id from the scene + kind.
-    let baseId = `${sceneId}-${kind}`;
+  function addEncounterForBranch(sceneId: string, branchId: string) {
+    // Generate a non-colliding id from the (scene, branch) pair.
+    let baseId = `${sceneId}__${branchId}-battle`;
     let suffix = 0;
     while (encounters.some((e) => e.id === baseId)) {
       suffix += 1;
-      baseId = `${sceneId}-${kind}-${suffix}`;
+      baseId = `${sceneId}__${branchId}-battle-${suffix}`;
     }
-    const newEnc: EncounterDefT =
-      kind === "battle"
-        ? {
-            id: baseId,
-            title: "New Battle",
-            trigger: {
-              afterScene: sceneId,
-              chance: 0.7,
-              once: true,
-            },
-            intro: {
-              bg: "forest-clearing",
-              narration: "(intro narration)",
-            },
-            body: { kind: "battle", monsterIds: [] },
-            rewards: {},
-            outro: {
-              victory: "(victory line)",
-            },
-          }
-        : {
-            id: baseId,
-            title: "New Story Encounter",
-            trigger: {
-              afterScene: sceneId,
-              chance: 0.8,
-              once: true,
-            },
-            intro: {
-              bg: "forest-clearing",
-              narration: "(intro narration)",
-            },
-            body: { kind: "story", outcome: "auto-victory" },
-            rewards: {},
-            outro: {
-              victory: "(victory line)",
-            },
-          };
+    const newEnc: EncounterDefT = {
+      id: baseId,
+      title: "New Battle",
+      trigger: { sceneId, branchId, count: 1 },
+      intro: {
+        bg: "forest-clearing",
+        narration: "(intro narration)",
+      },
+      body: { kind: "battle", monsterIds: [] },
+      rewards: {},
+      outro: { victory: "(victory line)" },
+    };
     setEncounters((prev) => [...prev, newEnc]);
   }
 
@@ -380,6 +639,38 @@ export function StoryGraphEditor({
     setSelection({ kind: "branch", sceneId, branchId: newId });
   }
 
+  /** Drag-to-connect handler. Adds a branch from `source` → `target`. */
+  const onConnect = useCallback(
+    (conn: Connection) => {
+      const { source, target } = conn;
+      if (!source || !target) return;
+      // No self-loops — disorienting in the graph and not useful as a real
+      // narrative choice.
+      if (source === target) return;
+      if (!story.scenes[source] || !story.scenes[target]) return;
+      const newId = `branch_${Math.random().toString(36).slice(2, 7)}`;
+      setStory((prev) => ({
+        ...prev,
+        scenes: {
+          ...prev.scenes,
+          [source]: {
+            ...prev.scenes[source],
+            branches: [
+              ...prev.scenes[source].branches,
+              {
+                id: newId,
+                label: "New choice",
+                next: target,
+              } satisfies BranchT,
+            ],
+          },
+        },
+      }));
+      setSelection({ kind: "branch", sceneId: source, branchId: newId });
+    },
+    [story.scenes],
+  );
+
   function save() {
     setError(null);
     const parsedStory = StorySchema.safeParse(story);
@@ -399,7 +690,7 @@ export function StoryGraphEditor({
     }
     // Referential integrity:
     //   - every branch.next must point to an existing scene
-    //   - every encounter.trigger.afterScene must point to an existing scene
+    //   - every encounter.trigger.(sceneId, branchId) must resolve
     const sceneIds = new Set(Object.keys(story.scenes));
     for (const [sid, s] of Object.entries(story.scenes)) {
       for (const b of s.branches) {
@@ -412,9 +703,16 @@ export function StoryGraphEditor({
       }
     }
     for (const enc of encounters) {
-      if (!sceneIds.has(enc.trigger.afterScene)) {
+      const srcScene = story.scenes[enc.trigger.sceneId];
+      if (!srcScene) {
         setError(
-          `encounter "${enc.id}" triggers after missing scene "${enc.trigger.afterScene}"`,
+          `encounter "${enc.id}" triggers from missing scene "${enc.trigger.sceneId}"`,
+        );
+        return;
+      }
+      if (!srcScene.branches.some((b) => b.id === enc.trigger.branchId)) {
+        setError(
+          `encounter "${enc.id}" triggers on missing branch "${enc.trigger.branchId}" of scene "${enc.trigger.sceneId}"`,
         );
         return;
       }
@@ -469,7 +767,6 @@ export function StoryGraphEditor({
     if (!selection) return;
     const sceneExists = !!story.scenes[selection.sceneId];
     if (!sceneExists) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- recover from stale selection
       setSelection(null);
       return;
     }
@@ -496,7 +793,7 @@ export function StoryGraphEditor({
             {Object.keys(story.scenes).length}
           </span>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → scenes.json + encounters.json
+            scenes.json + encounters.json
           </code>
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
@@ -513,15 +810,6 @@ export function StoryGraphEditor({
             className="rounded-pill bg-accent-deep px-3 py-1 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-50"
           >
             + Scene
-          </button>
-          <button
-            type="button"
-            onClick={runAutoLayout}
-            disabled={isPending}
-            className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep disabled:opacity-50"
-            title="Re-run dagre auto-layout (clears manual positions)"
-          >
-            Auto-layout
           </button>
           <button
             type="button"
@@ -549,23 +837,35 @@ export function StoryGraphEditor({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Canvas */}
-        <div className="relative flex-1">
+        <div ref={flowWrapperRef} className="relative flex-1">
           <ReactFlow
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeDragStop={handleNodeDragStop}
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
+            onConnect={onConnect}
+            onInit={onInit}
             fitView
             minZoom={0.2}
             maxZoom={1.5}
-            proOptions={{ hideAttribution: true }}
+            proOptions={proOptions}
           >
             <Background gap={24} size={1} color="rgba(91,65,40,0.15)" />
-            <Controls showInteractive={false} />
+            <Controls showInteractive={false}>
+              <ControlButton
+                onClick={runAutoLayout}
+                title="Auto-layout (re-run dagre — overrides manual positions)"
+                aria-label="Auto-layout"
+              >
+                <TreeStructure size={14} weight="bold" />
+              </ControlButton>
+            </Controls>
           </ReactFlow>
         </div>
 
@@ -576,24 +876,24 @@ export function StoryGraphEditor({
             <div className="flex-1 overflow-y-auto p-4">
               {selection?.kind === "scene" && selectedScene && (
                 <SceneInspector
+                  storyId={storyId}
                   storyScenes={story.scenes}
+                  characters={runtimeCharactersFile.characters}
                   sceneId={selectedScene.id}
                   scene={selectedScene.scene}
-                  encounters={encounters.filter(
-                    (e) => e.trigger.afterScene === selectedScene.id,
-                  )}
-                  monsters={monsters}
+                  isStart={selectedScene.id === story.startScene}
                   items={items}
-                  backgrounds={backgrounds}
+                  medals={medals}
+                  sceneImages={sceneImages}
+                  bgmOptions={bgmOptions}
                   onChange={(mut) => updateScene(selectedScene.id, mut)}
                   onAddBranch={() => addBranch(selectedScene.id)}
-                  onAddEncounter={(kind) =>
-                    addEncounterForScene(selectedScene.id, kind)
+                  onDuplicate={() => duplicateScene(selectedScene.id)}
+                  onDelete={() => deleteScene(selectedScene.id)}
+                  onDeleteBranch={(branchId) =>
+                    deleteBranch(selectedScene.id, branchId)
                   }
-                  onUpdateEncounter={(encId, mut) =>
-                    updateEncounter(encId, mut)
-                  }
-                  onDeleteEncounter={(encId) => deleteEncounter(encId)}
+                  onPreview={() => setPreviewSceneId(selectedScene.id)}
                 />
               )}
 
@@ -601,10 +901,21 @@ export function StoryGraphEditor({
                 selectedScene &&
                 selectedBranch && (
                   <BranchInspector
+                    storyId={storyId}
                     storyScenes={story.scenes}
                     sceneId={selectedScene.id}
                     branch={selectedBranch}
                     sourceScene={selectedScene.scene}
+                    encounters={encounters.filter(
+                      (e) =>
+                        e.trigger.sceneId === selectedScene.id &&
+                        e.trigger.branchId === selectedBranch.id,
+                    )}
+                    monsters={monsters}
+                    backgrounds={backgrounds}
+                    medals={medals}
+                    bgmOptions={bgmOptions}
+                    characters={runtimeCharactersFile.characters}
                     onChange={(mut) =>
                       updateBranch(
                         selectedScene.id,
@@ -615,86 +926,152 @@ export function StoryGraphEditor({
                     onDelete={() =>
                       deleteBranch(selectedScene.id, selectedBranch.id)
                     }
+                    onAddEncounter={() =>
+                      addEncounterForBranch(
+                        selectedScene.id,
+                        selectedBranch.id,
+                      )
+                    }
+                    onUpdateEncounter={(encId, mut) =>
+                      updateEncounter(encId, mut)
+                    }
+                    onDeleteEncounter={(encId) => deleteEncounter(encId)}
+                    onPreview={() => setPreviewSceneId(selectedScene.id)}
                   />
                 )}
             </div>
           </aside>
         )}
       </div>
+      <ScenePreviewModal
+        story={runtimeStory}
+        medals={runtimeMedalsFile}
+        characters={runtimeCharactersFile}
+        sceneId={previewSceneId}
+        onClose={() => setPreviewSceneId(null)}
+      />
     </div>
+  );
+}
+
+export function StoryGraphEditor(props: Props) {
+  return (
+    <ReactFlowProvider>
+      <StoryGraphEditorInner {...props} />
+    </ReactFlowProvider>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────
 
 function SceneInspector({
+  storyId,
   storyScenes,
   sceneId,
   scene,
-  encounters,
-  monsters,
+  isStart,
   items,
-  backgrounds,
+  medals,
+  characters,
+  sceneImages,
+  bgmOptions,
   onChange,
   onAddBranch,
-  onAddEncounter,
-  onUpdateEncounter,
-  onDeleteEncounter,
+  onDuplicate,
+  onDelete,
+  onDeleteBranch,
+  onPreview,
 }: {
+  storyId: string;
   storyScenes: Record<string, SceneT>;
   sceneId: string;
   scene: SceneT;
-  encounters: EncounterDefT[];
-  monsters: MonsterStatsT[];
+  /** Whether this scene is the story's start scene — disables Delete. */
+  isStart: boolean;
   items: ItemDefT[];
-  backgrounds: BackgroundMetaT[];
+  medals: MedalT[];
+  /** Character catalog — chips display `name` instead of raw `id`. */
+  characters: { id: string; name: string }[];
+  sceneImages: { value: string; label: string }[];
+  bgmOptions: string[];
   onChange: (mut: (s: SceneT) => SceneT) => void;
   onAddBranch: () => void;
-  onAddEncounter: (kind: "battle" | "story") => void;
-  onUpdateEncounter: (
-    encId: string,
-    mut: (e: EncounterDefT) => EncounterDefT,
-  ) => void;
-  onDeleteEncounter: (encId: string) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onPreview: () => void;
+  /** Per-branch quick-delete from the inline branch list — needed for
+   *  the dangling-branch cleanup case where the user removed the target
+   *  scene first and the now-orphan branch only shows up here (no edge
+   *  to click on in the graph). */
+  onDeleteBranch: (branchId: string) => void;
 }) {
-  void storyScenes;
   return (
     <div className="flex flex-col gap-3">
-      <header>
-        <p className="font-handwritten text-base text-accent-deep">Scene</p>
-        <code className="text-sm text-ink">{sceneId}</code>
+      <header className="flex items-center justify-between gap-2">
+        <div>
+          <p className="font-handwritten text-base text-accent-deep">Scene</p>
+          <code className="text-sm text-ink">{sceneId}</code>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onPreview}
+            title="Play this scene in a preview modal"
+            aria-label="Preview scene"
+            className="flex h-6 w-6 items-center justify-center rounded-pill bg-emerald/20 text-emerald hover:bg-emerald/30"
+          >
+            <Play size={12} weight="fill" />
+          </button>
+          <button
+            type="button"
+            onClick={onDuplicate}
+            title="Duplicate this scene under a new id (_2, _3, …)"
+            aria-label="Duplicate scene"
+            className="flex h-6 w-6 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+          >
+            <Copy size={12} weight="bold" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isStart}
+            title={
+              isStart
+                ? "Start scene cannot be deleted"
+                : "Delete this scene"
+            }
+            aria-label="Delete scene"
+            className="flex h-6 w-6 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <TrashSimple size={12} weight="bold" />
+          </button>
+        </div>
       </header>
 
       <ScenePreviewImage path={scene.image} alt={sceneId} />
 
-      <Field label="Image path">
-        <input
+      <Field label="Image">
+        <SelectWithCustom
           value={scene.image}
-          onChange={(e) => onChange((s) => ({ ...s, image: e.target.value }))}
-          className={inputCls}
+          options={sceneImages}
+          placeholder="(no scene images found on disk)"
+          onChange={(v) => onChange((s) => ({ ...s, image: v }))}
         />
       </Field>
 
-      <Field label="BGM key">
-        <input
+      <Field label="BGM">
+        <SelectWithCustom
           value={scene.bgm}
-          onChange={(e) => onChange((s) => ({ ...s, bgm: e.target.value }))}
-          className={inputCls}
+          options={bgmOptions}
+          placeholder="(no BGM tracks found on disk)"
+          onChange={(v) => onChange((s) => ({ ...s, bgm: v }))}
         />
       </Field>
 
-      <Field label="Speaker">
-        <select
+      <Field label="Narrator">
+        <SelectWithCustom
           value={scene.speaker}
-          onChange={(e) =>
-            onChange((s) => ({
-              ...s,
-              speaker: e.target.value as SceneT["speaker"],
-            }))
-          }
-          className={inputCls}
-        >
-          {[
+          options={[
             "narrator",
             "dorothy",
             "scarecrow",
@@ -703,12 +1080,16 @@ function SceneInspector({
             "wicked-witch",
             "glinda",
             "wizard",
-          ].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+            "aunt-em",
+            "toto",
+          ]}
+          onChange={(v) =>
+            onChange((s) => ({
+              ...s,
+              speaker: v as SceneT["speaker"],
+            }))
+          }
+        />
       </Field>
 
       <Field label="Narration">
@@ -718,41 +1099,25 @@ function SceneInspector({
             onChange((s) => ({ ...s, narration: e.target.value }))
           }
           rows={5}
+          placeholder="e.g. {{name}} pauses at the gate. {{They}} grip {{their}} pack tighter — {{themself}} alone now."
           className={inputCls}
         />
       </Field>
 
-      <Field label="Free input">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!scene.allowFreeInput}
-            onChange={(e) =>
-              onChange((s) => ({
-                ...s,
-                allowFreeInput: e.target.checked || undefined,
-              }))
-            }
-          />
-          <span className="text-sm text-ink-soft">Allow LLM free input</span>
-        </label>
-      </Field>
+      <DialogueCharactersEditor
+        storyId={storyId}
+        characters={characters}
+        scene={scene}
+        onChange={onChange}
+      />
 
-      {scene.allowFreeInput && (
-        <Field label="Free input hint">
-          <input
-            value={scene.freeInputHint ?? ""}
-            onChange={(e) =>
-              onChange((s) => ({
-                ...s,
-                freeInputHint: e.target.value || undefined,
-              }))
-            }
-            className={inputCls}
-            placeholder="What does {{name}} do?"
-          />
-        </Field>
-      )}
+      <RewardEditor
+        label="Reward"
+        items={items}
+        medals={medals}
+        reward={scene.reward}
+        onChange={(reward) => onChange((s) => ({ ...s, reward }))}
+      />
 
       <Field label="Ending">
         <label className="flex items-center gap-2">
@@ -798,105 +1163,80 @@ function SceneInspector({
         )}
       </Field>
 
-      <div className="rounded-card bg-paper-deep/30 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase text-ink-soft">
-            Branches ({scene.branches.length})
-          </p>
-          <button
-            type="button"
-            onClick={onAddBranch}
-            className="rounded-pill bg-accent-deep px-2 py-0.5 text-xs text-paper hover:opacity-90"
-          >
-            + Add
-          </button>
-        </div>
-        <ul className="flex flex-col gap-1">
-          {scene.branches.map((b) => (
-            <li
-              key={b.id}
-              className="rounded-card bg-paper px-2 py-1 text-xs ring-1 ring-ink-soft/10"
-            >
-              <code className="text-ink">{b.id}</code>{" "}
-              <span className="text-ink-soft">→ {b.next}</span>
-              <p className="text-ink-soft/70">{b.label}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <button
+        type="button"
+        onClick={onAddBranch}
+        className="self-start rounded-pill bg-accent-deep px-3 py-1 text-xs font-semibold text-paper hover:opacity-90"
+      >
+        + Add branch
+      </button>
 
-      {/* Side encounters attached to this scene */}
-      <div className="rounded-card bg-paper-deep/30 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase text-ink-soft">
-            Encounters ({encounters.length})
-          </p>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => onAddEncounter("battle")}
-              className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs font-semibold text-ruby hover:bg-ruby/25"
-              title="Add new battle encounter triggered after this scene"
-            >
-              + Battle
-            </button>
-            <button
-              type="button"
-              onClick={() => onAddEncounter("story")}
-              className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-deep hover:bg-accent/25"
-              title="Add new story encounter triggered after this scene"
-            >
-              + Story
-            </button>
-          </div>
-        </div>
-        {encounters.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-ink-soft/60">
-            No encounters trigger after this scene.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {encounters.map((enc) => (
-              <EncounterCard
-                key={enc.id}
-                encounter={enc}
-                monsters={monsters}
-                items={items}
-                backgrounds={backgrounds}
-                onChange={(mut) => onUpdateEncounter(enc.id, mut)}
-                onDelete={() => onDeleteEncounter(enc.id)}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      {scene.branches.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {scene.branches.map((b) => {
+            const missingTarget = !storyScenes[b.next];
+            return (
+              <li
+                key={b.id}
+                className={`flex items-center justify-between gap-2 rounded-card px-2 py-1 text-xs ring-1 ${
+                  missingTarget
+                    ? "bg-ruby/10 ring-ruby/30"
+                    : "bg-paper ring-ink-soft/10"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-ink">{b.label}</p>
+                  <p className="text-[10px] text-ink-soft/70">
+                    <code>{b.id}</code>{" "}
+                    <span
+                      className={missingTarget ? "text-ruby" : undefined}
+                      title={
+                        missingTarget
+                          ? `Target scene "${b.next}" no longer exists — this branch is dangling. Use the delete button to clean it up.`
+                          : undefined
+                      }
+                    >
+                      → {missingTarget ? `⚠ ${b.next}` : b.next}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onDeleteBranch(b.id)}
+                  title={`Delete branch "${b.id}"`}
+                  aria-label={`Delete branch ${b.id}`}
+                  className="shrink-0 rounded-pill bg-ruby/15 px-1.5 py-0.5 text-[10px] text-ruby hover:bg-ruby/25"
+                >
+                  ✕
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
 
 function EncounterCard({
+  storyId,
   encounter,
   monsters,
-  items,
   backgrounds,
+  medals,
   onChange,
   onDelete,
 }: {
+  storyId: string;
   encounter: EncounterDefT;
   monsters: MonsterStatsT[];
-  items: ItemDefT[];
   backgrounds: BackgroundMetaT[];
+  medals: MedalT[];
   onChange: (mut: (e: EncounterDefT) => EncounterDefT) => void;
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-
-  const bodyKindLabel =
-    encounter.body.kind === "battle"
-      ? `⚔ battle (${encounter.body.monsterIds.length} monster${encounter.body.monsterIds.length === 1 ? "" : "s"})`
-      : `📖 story${
-          encounter.body.choices ? ` (${encounter.body.choices.length} choices)` : ""
-        }`;
+  const count = encounter.trigger.count ?? 1;
 
   return (
     <li className="rounded-card bg-paper ring-1 ring-ink-soft/10">
@@ -906,27 +1246,31 @@ function EncounterCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex-1 text-left"
         >
-          <code className="text-xs text-ink">{encounter.id}</code>
-          <p className="text-[11px] text-ink-soft">{encounter.title}</p>
-          <p className="text-[10px] text-ink-soft/70">
-            {bodyKindLabel} · chance {encounter.trigger.chance}
-            {encounter.trigger.once ? " · once" : ""}
+          <p className="text-xs font-semibold text-ink">
+            {encounter.title}
+            {count > 1 && (
+              <span className="ml-1 font-normal text-ink-soft">× {count}</span>
+            )}
           </p>
         </button>
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="rounded-pill bg-paper-deep/60 px-2 py-0.5 text-[10px] hover:bg-paper-deep"
+            title={expanded ? "Hide details" : "Edit encounter"}
+            aria-label={expanded ? "Hide details" : "Edit encounter"}
+            className="flex h-5 w-5 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
           >
-            {expanded ? "Hide" : "Edit"}
+            <PencilSimple size={10} weight="bold" />
           </button>
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-pill bg-ruby/15 px-2 py-0.5 text-[10px] text-ruby hover:bg-ruby/25"
+            title="Delete encounter"
+            aria-label="Delete encounter"
+            className="flex h-5 w-5 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25"
           >
-            Delete
+            <TrashSimple size={10} weight="bold" />
           </button>
         </div>
       </div>
@@ -942,44 +1286,26 @@ function EncounterCard({
               className={inputClsSm}
             />
           </MiniField>
-          <div className="grid grid-cols-2 gap-2">
-            <MiniField label="Chance (0–1)">
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.05}
-                value={encounter.trigger.chance}
-                onChange={(e) => {
-                  const v = Math.max(0, Math.min(1, Number(e.target.value)));
-                  onChange((x) => ({
-                    ...x,
-                    trigger: { ...x.trigger, chance: v },
-                  }));
-                }}
-                className={inputClsSm}
-              />
-            </MiniField>
-            <MiniField label="Once / repeats">
-              <label className="flex h-7 items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={!!encounter.trigger.once}
-                  onChange={(e) =>
-                    onChange((x) => ({
-                      ...x,
-                      trigger: {
-                        ...x.trigger,
-                        once: e.target.checked || undefined,
-                      },
-                    }))
-                  }
-                />
-                <span className="text-ink-soft">once per save</span>
-              </label>
-            </MiniField>
-          </div>
-          <MiniField label="Intro background">
+          <MiniField label="Number of battles">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={count}
+              onChange={(e) => {
+                const v = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                onChange((x) => ({
+                  ...x,
+                  trigger: {
+                    ...x.trigger,
+                    count: v === 1 ? undefined : v,
+                  },
+                }));
+              }}
+              className={inputClsSm}
+            />
+          </MiniField>
+          <MiniField label="Background">
             <select
               value={encounter.intro.bg}
               onChange={(e) =>
@@ -1005,7 +1331,7 @@ function EncounterCard({
               ))}
             </select>
           </MiniField>
-          <MiniField label="Intro narration">
+          <MiniField label="Narration">
             <textarea
               value={encounter.intro.narration}
               onChange={(e) =>
@@ -1014,101 +1340,94 @@ function EncounterCard({
                   intro: { ...x.intro, narration: e.target.value },
                 }))
               }
-              rows={2}
+              rows={5}
               className={inputClsSm}
             />
           </MiniField>
 
-          {encounter.body.kind === "battle" ? (
-            <MiniField label="Monsters (multi-select)">
-              <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-button bg-paper-deep/40 p-1.5">
-                {monsters.map((m) => {
-                  const count = encounter.body.kind === "battle"
-                    ? encounter.body.monsterIds.filter((id) => id === m.id).length
-                    : 0;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        onChange((x) => {
-                          if (x.body.kind !== "battle") return x;
-                          // Click adds, shift-click… not handled. Simple add.
-                          return {
-                            ...x,
-                            body: {
-                              ...x.body,
-                              monsterIds: [...x.body.monsterIds, m.id],
-                            },
-                          };
-                        });
-                      }}
-                      className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
-                        count > 0
-                          ? "bg-accent-deep text-paper"
-                          : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
-                      }`}
-                      title={`Click to add. Currently × ${count}.`}
-                    >
-                      {m.id}
-                      {count > 1 && (
-                        <span className="ml-1">×{count}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {encounter.body.monsterIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange((x) => {
-                      if (x.body.kind !== "battle") return x;
-                      // Pop last — quick undo
-                      return {
+          <MiniField label="Monsters">
+            <div className="flex max-h-48 flex-wrap gap-1 overflow-y-auto">
+              {monsters.map((m) => {
+                const monsterCount = encounter.body.monsterIds.filter(
+                  (id) => id === m.id,
+                ).length;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      onChange((x) => ({
                         ...x,
                         body: {
                           ...x.body,
-                          monsterIds: x.body.monsterIds.slice(0, -1),
+                          monsterIds: [...x.body.monsterIds, m.id],
                         },
-                      };
-                    });
-                  }}
-                  className="mt-1 self-end rounded-pill bg-ruby/15 px-2 py-0.5 text-[10px] text-ruby hover:bg-ruby/25"
-                >
-                  ← Remove last
-                </button>
-              )}
-            </MiniField>
-          ) : (
-            <p className="text-[10px] text-ink-soft/70">
-              Story-type body. Choice + puzzle authoring lives on the
-              <code className="ml-1">Encounters</code> page.
-            </p>
-          )}
+                      }));
+                    }}
+                    className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[10px] transition-colors ${
+                      monsterCount > 0
+                        ? "bg-accent-deep text-paper"
+                        : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                    }`}
+                    title={`Click to add. Currently × ${monsterCount}.`}
+                  >
+                    <AssetThumb
+                      base={`/stories/${storyId}/monsters/${m.id}`}
+                      alt={m.name}
+                      className="h-5 w-5"
+                      shape="circle"
+                      fit="cover"
+                      ringWidth={0}
+                    />
+                    <span>{m.name}</span>
+                    {monsterCount > 1 && <span>×{monsterCount}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {encounter.body.monsterIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange((x) => ({
+                    ...x,
+                    body: {
+                      ...x.body,
+                      monsterIds: x.body.monsterIds.slice(0, -1),
+                    },
+                  }));
+                }}
+                className="mt-1 self-end rounded-pill bg-ruby/15 px-2 py-0.5 text-[10px] text-ruby hover:bg-ruby/25"
+              >
+                ← Remove last
+              </button>
+            )}
+          </MiniField>
 
-          <MiniField label="Reward items (multi-select)">
-            <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto rounded-button bg-paper-deep/40 p-1.5">
-              {items.map((it) => {
-                const on = encounter.rewards.victoryItems?.includes(it.id);
+          <MiniField label="Reward items">
+            <p className="rounded-button bg-paper-deep/30 px-2 py-1.5 text-[11px] italic text-ink-soft/70">
+              Battle drops are sourced from each monster&apos;s{" "}
+              <code>drops</code> field — edit per monster on the Monsters
+              page.
+            </p>
+          </MiniField>
+
+          <MiniField label="Medal (optional)">
+            <div className="flex flex-wrap gap-1">
+              {medals.map((m) => {
+                const on = encounter.rewards.medalId === m.id;
                 return (
                   <button
-                    key={it.id}
+                    key={m.id}
                     type="button"
                     onClick={() =>
-                      onChange((x) => {
-                        const set = new Set(x.rewards.victoryItems ?? []);
-                        if (set.has(it.id)) set.delete(it.id);
-                        else set.add(it.id);
-                        return {
-                          ...x,
-                          rewards: {
-                            ...x.rewards,
-                            victoryItems:
-                              set.size > 0 ? Array.from(set) : undefined,
-                          },
-                        };
-                      })
+                      onChange((x) => ({
+                        ...x,
+                        rewards: {
+                          ...x.rewards,
+                          medalId: on ? undefined : m.id,
+                        },
+                      }))
                     }
                     className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
                       on
@@ -1116,31 +1435,14 @@ function EncounterCard({
                         : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
                     }`}
                   >
-                    {it.icon ?? "🎁"} {it.id}
+                    {m.icon} {m.name}
                   </button>
                 );
               })}
             </div>
           </MiniField>
 
-          <MiniField label="Medal id (optional)">
-            <input
-              value={encounter.rewards.medalId ?? ""}
-              onChange={(e) =>
-                onChange((x) => ({
-                  ...x,
-                  rewards: {
-                    ...x.rewards,
-                    medalId: e.target.value || undefined,
-                  },
-                }))
-              }
-              className={inputClsSm}
-              placeholder="e.g. wolf-slayer"
-            />
-          </MiniField>
-
-          <MiniField label="Outro on victory">
+          <MiniField label="Narration on victory">
             <textarea
               value={encounter.outro.victory}
               onChange={(e) =>
@@ -1149,7 +1451,7 @@ function EncounterCard({
                   outro: { ...x.outro, victory: e.target.value },
                 }))
               }
-              rows={2}
+              rows={5}
               className={inputClsSm}
             />
           </MiniField>
@@ -1179,22 +1481,56 @@ function MiniField({
 const inputClsSm =
   "w-full rounded-button bg-paper-deep/40 px-2 py-1 text-xs text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";
 
+const COMPANION_OPTIONS: { id: CompanionId }[] = [
+  { id: "scarecrow" },
+  { id: "tinman" },
+  { id: "lion" },
+];
+
 function BranchInspector({
+  storyId,
   storyScenes,
   sceneId,
   branch,
   sourceScene,
+  encounters,
+  monsters,
+  backgrounds,
+  medals,
+  characters,
+  bgmOptions,
   onChange,
   onDelete,
+  onAddEncounter,
+  onUpdateEncounter,
+  onDeleteEncounter,
+  onPreview,
 }: {
+  storyId: string;
   storyScenes: Record<string, SceneT>;
   sceneId: string;
   branch: BranchT;
   sourceScene: SceneT;
+  encounters: EncounterDefT[];
+  monsters: MonsterStatsT[];
+  backgrounds: BackgroundMetaT[];
+  medals: MedalT[];
+  /** Character catalog — Add-companion chips show `name` not raw id. */
+  characters: { id: string; name: string }[];
+  bgmOptions: string[];
   onChange: (mut: (b: BranchT) => BranchT) => void;
   onDelete: () => void;
+  onAddEncounter: () => void;
+  onUpdateEncounter: (
+    encId: string,
+    mut: (e: EncounterDefT) => EncounterDefT,
+  ) => void;
+  onDeleteEncounter: (encId: string) => void;
+  /** Play the source scene in the preview modal — branches don't exist
+   *  standalone so "play this branch" means "play the scene the branch
+   *  is presented on, then click through". */
+  onPreview: () => void;
 }) {
-  const sceneIds = Object.keys(storyScenes);
   const targetScene = storyScenes[branch.next];
 
   return (
@@ -1202,17 +1538,28 @@ function BranchInspector({
       <header className="flex items-center justify-between">
         <div>
           <p className="font-handwritten text-base text-accent-deep">Branch</p>
-          <p className="text-xs text-ink-soft">
-            from <code>{sceneId}</code>
-          </p>
+          <code className="text-xs text-ink-soft">{branch.id}</code>
         </div>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs text-ruby hover:bg-ruby/25"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onPreview}
+            title="Play the source scene in a preview modal"
+            aria-label="Preview branch"
+            className="flex h-6 w-6 items-center justify-center rounded-pill bg-emerald/20 text-emerald hover:bg-emerald/30"
+          >
+            <Play size={12} weight="fill" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Delete branch"
+            aria-label="Delete branch"
+            className="flex h-6 w-6 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25"
+          >
+            <TrashSimple size={12} weight="bold" />
+          </button>
+        </div>
       </header>
 
       {/* From → To scene image preview pair */}
@@ -1247,12 +1594,6 @@ function BranchInspector({
         </div>
       </div>
 
-      <Field label="ID">
-        <code className="block rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink">
-          {branch.id}
-        </code>
-      </Field>
-
       <Field label="Label">
         <input
           value={branch.label}
@@ -1261,81 +1602,463 @@ function BranchInspector({
         />
       </Field>
 
-      <Field label="Next scene">
-        <select
-          value={branch.next}
-          onChange={(e) => onChange((b) => ({ ...b, next: e.target.value }))}
-          className={inputCls}
-        >
-          {sceneIds.map((sid) => (
-            <option key={sid} value={sid}>
-              {sid}
-            </option>
-          ))}
-        </select>
+      <Field label="Add companion">
+        <div className="flex flex-wrap gap-1">
+          {COMPANION_OPTIONS.map((c) => {
+            const on = branch.addsCompanion === c.id;
+            const name = characters.find((ch) => ch.id === c.id)?.name ?? c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() =>
+                  onChange((b) => ({
+                    ...b,
+                    addsCompanion: on ? undefined : c.id,
+                  }))
+                }
+                className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
+                  on
+                    ? "bg-accent-deep text-paper"
+                    : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                }`}
+              >
+                <AssetThumb
+                  base={`/stories/${storyId}/dialogue/${c.id}`}
+                  alt={name}
+                  className="h-5 w-5"
+                  shape="circle"
+                  fit="cover"
+                  ringWidth={0}
+                />
+                {name}
+              </button>
+            );
+          })}
+        </div>
       </Field>
 
-      <Field label="Adds companion">
-        <select
-          value={branch.addsCompanion ?? ""}
-          onChange={(e) =>
-            onChange((b) => ({
-              ...b,
-              addsCompanion: (e.target.value ||
-                undefined) as BranchT["addsCompanion"],
-            }))
-          }
-          className={inputCls}
-        >
-          <option value="">(none)</option>
-          <option value="scarecrow">scarecrow</option>
-          <option value="tinman">tinman</option>
-          <option value="lion">lion</option>
-        </select>
-      </Field>
-
-      <Field label="Medal trigger (id, optional)">
-        <input
-          value={branch.medalTrigger ?? ""}
-          onChange={(e) =>
-            onChange((b) => ({
-              ...b,
-              medalTrigger: e.target.value || null,
-            }))
-          }
-          className={inputCls}
-          placeholder="e.g. ruby_slippers"
-        />
-      </Field>
+      <BranchOutcomeEditor
+        storyId={storyId}
+        sourceScene={sourceScene}
+        branch={branch}
+        targetScene={targetScene}
+        onChange={onChange}
+      />
 
       <Field label="BGM override (optional)">
-        <input
+        <SelectWithCustom
           value={branch.bgmOverride ?? ""}
-          onChange={(e) =>
+          options={bgmOptions}
+          allowEmpty="(none — uses target scene's bgm)"
+          onChange={(v) =>
             onChange((b) => ({
               ...b,
-              bgmOverride: e.target.value || undefined,
+              bgmOverride: v || undefined,
             }))
           }
-          className={inputCls}
-          placeholder="(none — uses target scene's bgm)"
         />
       </Field>
+
+      {/* Encounters rolled when the player takes THIS branch.
+          The gating puzzle is conceptually one of these — it lives in
+          `branch.puzzle` (not the encounters JSON) but renders as a card
+          here alongside battle encounters. */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase text-ink-soft">
+            Encounters ({encounters.length + (branch.puzzle ? 1 : 0)})
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onAddEncounter()}
+              className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs font-semibold text-ruby hover:bg-ruby/25"
+              title="Add a battle that may roll when this branch is taken"
+            >
+              + Battle
+            </button>
+            <button
+              type="button"
+              disabled={!!branch.puzzle}
+              onClick={() =>
+                onChange((b) => ({
+                  ...b,
+                  puzzle: b.puzzle ?? DEFAULT_BRANCH_PUZZLE,
+                  onFailMode: b.onFailMode ?? "retry",
+                }))
+              }
+              className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
+              title={
+                branch.puzzle
+                  ? "This branch already has a gating puzzle"
+                  : "Add a gating puzzle players must solve to take this branch"
+              }
+            >
+              + Puzzle
+            </button>
+          </div>
+        </div>
+        {encounters.length === 0 && !branch.puzzle ? (
+          <p className="px-1 py-2 text-xs text-ink-soft/60">
+            No encounters trigger on this branch.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {branch.puzzle && (
+              <BranchPuzzleCard
+                branch={branch}
+                onChange={onChange}
+                onRemove={() =>
+                  onChange((b) => ({
+                    ...b,
+                    puzzle: undefined,
+                    onFailMode: undefined,
+                  }))
+                }
+              />
+            )}
+            {encounters.map((enc) => (
+              <EncounterCard
+                key={enc.id}
+                storyId={storyId}
+                encounter={enc}
+                monsters={monsters}
+                backgrounds={backgrounds}
+                medals={medals}
+                onChange={(mut) => onUpdateEncounter(enc.id, mut)}
+                onDelete={() => onDeleteEncounter(enc.id)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Outcome narration editor. Shows a textarea + a "Generate" button that
+ * asks the LLM to draft a one-line outcome line from the branch label
+ * and the next scene's narration. The author can keep, edit, or clear it.
+ */
+function BranchOutcomeEditor({
+  storyId,
+  sourceScene,
+  branch,
+  targetScene,
+  onChange,
+}: {
+  storyId: string;
+  sourceScene: SceneT;
+  branch: BranchT;
+  targetScene: SceneT | undefined;
+  onChange: (mut: (b: BranchT) => BranchT) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function generate() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/branch-outcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyId,
+          branchLabel: branch.label,
+          sourceNarration: sourceScene.narration,
+          nextNarration: targetScene?.narration ?? "",
+        }),
+      });
+      if (!res.ok) throw new Error(`branch-outcome ${res.status}`);
+      const data = (await res.json()) as { outcome: string };
+      onChange((b) => ({ ...b, outcome: data.outcome }));
+    } catch (err) {
+      console.warn("[branch-outcome] generate failed", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Field
+      label="Narration"
+      hint="Shown after this branch is picked"
+    >
+      <textarea
+        value={branch.outcome ?? ""}
+        onChange={(e) =>
+          onChange((b) => ({
+            ...b,
+            outcome: e.target.value || undefined,
+          }))
+        }
+        rows={5}
+        placeholder="e.g. {{name}} nods and steps through. {{They}} feel {{their}} pack settle on {{their}} shoulders. (leave empty for no outcome line)"
+        className={inputCls}
+      />
+      <div className="mt-1 flex justify-end">
+        <button
+          type="button"
+          onClick={generate}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-pill bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:opacity-50"
+        >
+          <Sparkle size={12} weight="fill" />
+          {loading ? "Generating…" : "Ask AI"}
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+/** Default puzzle shape used when the author clicks "+ Puzzle". */
+const DEFAULT_BRANCH_PUZZLE = {
+  kind: "sequence" as const,
+  title: "Repeat the pattern",
+  symbols: ["🔵", "🟡", "🔴"],
+  sequence: [0, 1, 2],
+};
+
+function BranchPuzzleCard({
+  branch,
+  onChange,
+  onRemove,
+}: {
+  branch: BranchT;
+  onChange: (mut: (b: BranchT) => BranchT) => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const puzzle = branch.puzzle;
+  if (!puzzle) return null;
+  return (
+    <li className="rounded-card bg-paper ring-1 ring-ink-soft/10">
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 text-left"
+        >
+          <code className="text-xs text-ink">puzzle</code>
+          <p className="text-[11px] text-ink-soft">{puzzle.title}</p>
+          <p className="text-[10px] text-ink-soft/70">
+            🧩 pattern memory · {puzzle.symbols.length} symbol
+            {puzzle.symbols.length === 1 ? "" : "s"} · {puzzle.sequence.length} step
+            {puzzle.sequence.length === 1 ? "" : "s"}
+          </p>
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? "Hide details" : "Edit puzzle"}
+            aria-label={expanded ? "Hide details" : "Edit puzzle"}
+            className="flex h-5 w-5 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+          >
+            <PencilSimple size={10} weight="bold" />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Remove puzzle"
+            aria-label="Remove puzzle"
+            className="flex h-5 w-5 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25"
+          >
+            <TrashSimple size={10} weight="bold" />
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="border-t border-ink-soft/10 p-3">
+          <div className="flex flex-col gap-2">
+          <input
+            value={puzzle.title}
+            onChange={(e) =>
+              onChange((b) =>
+                b.puzzle
+                  ? { ...b, puzzle: { ...b.puzzle, title: e.target.value } }
+                  : b,
+              )
+            }
+            className={inputCls}
+            placeholder="puzzle title (in-world framing)"
+          />
+          <input
+            value={puzzle.symbols.join(" ")}
+            onChange={(e) =>
+              onChange((b) =>
+                b.puzzle
+                  ? {
+                      ...b,
+                      puzzle: {
+                        ...b.puzzle,
+                        symbols: e.target.value
+                          .split(/\s+/)
+                          .filter((s) => s.length > 0),
+                      },
+                    }
+                  : b,
+              )
+            }
+            className={inputCls}
+            placeholder="symbols (space-separated emojis)"
+          />
+          <input
+            value={puzzle.sequence.join(",")}
+            onChange={(e) =>
+              onChange((b) =>
+                b.puzzle
+                  ? {
+                      ...b,
+                      puzzle: {
+                        ...b.puzzle,
+                        sequence: e.target.value
+                          .split(",")
+                          .map((s) => Number(s.trim()))
+                          .filter((n) => Number.isFinite(n)),
+                      },
+                    }
+                  : b,
+              )
+            }
+            className={inputCls}
+            placeholder="sequence as indices (e.g. 0,1,2,1)"
+          />
+          <label className="flex items-center gap-2 text-xs">
+            <span className="text-ink-soft">On fail:</span>
+            <select
+              value={branch.onFailMode ?? "retry"}
+              onChange={(e) =>
+                onChange((b) => ({
+                  ...b,
+                  onFailMode: e.target.value as "retry" | "skip",
+                }))
+              }
+              className={inputCls}
+            >
+              <option value="retry">Retry until solved</option>
+              <option value="skip">Skip — proceed without reward</option>
+            </select>
+          </label>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function RewardEditor({
+  label,
+  items,
+  medals,
+  reward,
+  onChange,
+}: {
+  label: string;
+  items: ItemDefT[];
+  medals: MedalT[];
+  reward?: { items?: string[]; medalId?: string };
+  onChange: (reward: { items?: string[]; medalId?: string } | undefined) => void;
+}) {
+  const itemSet = new Set(reward?.items ?? []);
+  function commit(next: { items?: string[]; medalId?: string }) {
+    const cleaned: { items?: string[]; medalId?: string } = {};
+    if (next.items && next.items.length > 0) cleaned.items = next.items;
+    if (next.medalId) cleaned.medalId = next.medalId;
+    onChange(Object.keys(cleaned).length > 0 ? cleaned : undefined);
+  }
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase text-ink-soft">
+        {label}
+      </p>
+      <div className="flex flex-col gap-2">
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase text-ink-soft/70">
+            Item
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {items.map((it) => {
+              const on = itemSet.has(it.id);
+              return (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => {
+                    const set = new Set(reward?.items ?? []);
+                    if (set.has(it.id)) set.delete(it.id);
+                    else set.add(it.id);
+                    commit({
+                      items: set.size > 0 ? [...set] : undefined,
+                      medalId: reward?.medalId,
+                    });
+                  }}
+                  className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
+                    on
+                      ? "bg-accent-deep text-paper"
+                      : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                  }`}
+                >
+                  {it.icon ?? "🎁"} {it.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase text-ink-soft/70">
+            Medal
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {medals.map((m) => {
+              const on = reward?.medalId === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    commit({
+                      items: reward?.items,
+                      medalId: on ? undefined : m.id,
+                    });
+                  }}
+                  className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
+                    on
+                      ? "bg-accent-deep text-paper"
+                      : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                  }`}
+                >
+                  {m.icon} {m.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 function Field({
   label,
+  hint,
   children,
 }: {
   label: string;
+  /** Optional smaller text rendered under the label. */
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        {label}
+      <label className="flex flex-col text-xs font-semibold uppercase tracking-wide text-ink-soft">
+        <span>{label}</span>
+        {hint && (
+          <span className="text-[10px] font-normal normal-case text-ink-soft/70">
+            {hint}
+          </span>
+        )}
       </label>
       {children}
     </div>
@@ -1346,6 +2069,148 @@ const inputCls =
   "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";
 
 // ─────────────────────────────────────────────────────────────────
+
+/** Speaker IDs that can hold a dialogue persona — narrator + hero are
+ *  excluded because narrator never talks and the hero IS the player. */
+const DIALOGUE_ABLE_IDS = [
+  "scarecrow",
+  "tinman",
+  "lion",
+  "glinda",
+  "wicked-witch",
+  "wizard",
+  "aunt-em",
+  "toto",
+] as const;
+
+/**
+ * Multi-select editor for `Scene.dialogueCharacters`. Tap a chip to
+ * toggle whether that character is available on the dialogue rail for
+ * this scene (in addition to active companions + the scene speaker).
+ */
+function DialogueCharactersEditor({
+  storyId,
+  characters,
+  scene,
+  onChange,
+}: {
+  storyId: string;
+  characters: { id: string; name: string }[];
+  scene: SceneT;
+  onChange: (mut: (s: SceneT) => SceneT) => void;
+}) {
+  const selected = new Set(scene.dialogueCharacters ?? []);
+  // Lookup by id → name. Falls back to id when a character isn't in the
+  // catalog yet (newly-added id, or DIALOGUE_ABLE_IDS gets ahead of
+  // characters.json).
+  const nameById = new Map(characters.map((c) => [c.id, c.name]));
+  function toggle(id: (typeof DIALOGUE_ABLE_IDS)[number]) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange((s) => ({
+      ...s,
+      dialogueCharacters:
+        next.size > 0 ? (Array.from(next) as SceneT["dialogueCharacters"]) : undefined,
+    }));
+  }
+  return (
+    <Field label="Interactive Character">
+      <div className="flex flex-wrap gap-1">
+        {DIALOGUE_ABLE_IDS.map((id) => {
+          const on = selected.has(id);
+          const name = nameById.get(id) ?? id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => toggle(id)}
+              className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
+                on
+                  ? "bg-accent-deep text-paper"
+                  : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+              }`}
+            >
+              <AssetThumb
+                base={`/stories/${storyId}/dialogue/${id}`}
+                alt={name}
+                className="h-5 w-5"
+                shape="circle"
+                fit="cover"
+                ringWidth={0}
+              />
+              {name}
+            </button>
+          );
+        })}
+      </div>
+    </Field>
+  );
+}
+
+type SelectOption = string | { value: string; label: string };
+
+/**
+ * Native select styled to match the other admin inputs. The default
+ * browser dropdown arrow is replaced with a Phosphor chevron pinned
+ * slightly inside the right edge.
+ *
+ * - `options` accepts strings or `{value, label}` objects so callers can
+ *   show a short label (e.g. file basename) while keeping the full path
+ *   as the stored value.
+ * - If `value` is not in `options`, it is surfaced as a top "(custom)"
+ *   entry so we never silently drop existing data.
+ * - `allowEmpty` adds a top sentinel for the empty value
+ *   (e.g. `(no medal)` on optional fields).
+ */
+function SelectWithCustom({
+  value,
+  options,
+  onChange,
+  placeholder,
+  allowEmpty,
+}: {
+  value: string;
+  options: SelectOption[];
+  onChange: (v: string) => void;
+  placeholder?: string;
+  allowEmpty?: string;
+}) {
+  const normalized = options.map((o) =>
+    typeof o === "string" ? { value: o, label: o } : o,
+  );
+  const knownValues = new Set(normalized.map((o) => o.value));
+  const showCustom = !!value && !knownValues.has(value);
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${inputCls} appearance-none pr-9`}
+      >
+        {allowEmpty !== undefined && (
+          <option value="">{allowEmpty}</option>
+        )}
+        {normalized.length === 0 && !allowEmpty && placeholder && (
+          <option value="" disabled>
+            {placeholder}
+          </option>
+        )}
+        {showCustom && <option value={value}>{value} (custom)</option>}
+        {normalized.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <CaretDown
+        size={14}
+        weight="bold"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+      />
+    </div>
+  );
+}
 
 /**
  * Scene image preview — uses the shared AssetThumb so the extension
@@ -1361,14 +2226,86 @@ function ScenePreviewImage({
   alt: string;
   small?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const height = small ? "h-16" : "h-32";
   return (
-    <AssetThumb
-      base={path}
-      alt={alt}
-      className={`${height} w-full`}
-      shape="square"
-      fit="cover"
-    />
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Open ${alt} preview`}
+        className={`${height} w-full overflow-hidden rounded-card transition-opacity hover:opacity-90`}
+      >
+        <AssetThumb
+          base={path}
+          alt={alt}
+          className="h-full w-full"
+          shape="square"
+          fit="cover"
+        />
+      </button>
+      {open && <ImageLightbox path={path} alt={alt} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/**
+ * Fullscreen image preview portal. Click backdrop or press ESC to close.
+ * Uses the same extension fallback chain as the inline thumbnails so the
+ * lightbox can never disagree with what the small preview was showing.
+ */
+function ImageLightbox({
+  path,
+  alt,
+  onClose,
+}: {
+  path: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  if (typeof window === "undefined") return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-ink/85"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close preview"
+        className="absolute right-4 top-4 z-[91] flex h-9 w-9 items-center justify-center rounded-pill bg-paper/85 text-ink shadow-button ring-1 ring-ink-soft/20 hover:bg-paper"
+      >
+        <X size={16} weight="bold" />
+      </button>
+      <div
+        className="relative max-h-[92vh] max-w-[92vw]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <AssetThumb
+          base={path}
+          alt={alt}
+          className="max-h-[92vh] max-w-[92vw]"
+          shape="square"
+          fit="contain"
+        />
+      </div>
+    </div>,
+    document.body,
   );
 }

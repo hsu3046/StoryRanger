@@ -20,8 +20,16 @@ export async function POST(req: Request) {
   }
 
   if (!hasOpenAIKey()) {
+    console.warn("[tts] OPENAI_API_KEY not set — returning 503");
     return NextResponse.json({ error: "no_api_key" }, { status: 503 });
   }
+
+  console.log("[tts] request", {
+    model: TTS_MODEL,
+    voice: body.voice,
+    speed: body.voiceSpeed,
+    textLen: body.text.length,
+  });
 
   try {
     const client = getOpenAI();
@@ -33,8 +41,8 @@ export async function POST(req: Request) {
       response_format: "mp3",
     });
 
-    // OpenAI SDK returns a Response — stream the body straight back.
     const buffer = Buffer.from(await audio.arrayBuffer());
+    console.log("[tts] ✓", { bytes: buffer.length });
     return new NextResponse(buffer, {
       status: 200,
       headers: {
@@ -44,6 +52,10 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("[tts] OpenAI error", err);
-    return NextResponse.json({ error: "tts_failed" }, { status: 502 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: "tts_failed", detail: msg },
+      { status: 502 },
+    );
   }
 }

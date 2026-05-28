@@ -77,7 +77,7 @@ export function HomeOnboarding() {
   }
 
   return (
-    <main className="relative h-dvh w-dvw overflow-hidden bg-ink">
+    <main className="fixed inset-0 z-0 overflow-hidden bg-ink">
       {/* Full-bleed cover */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -214,7 +214,7 @@ export function HomeOnboarding() {
               exit={{ opacity: 0, scale: 0.97, y: 6 }}
               transition={{ type: "spring", stiffness: 260, damping: 22 }}
               onSubmit={handleSubmit}
-              className="fixed left-1/2 top-1/2 z-40 flex w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur sm:p-7"
+              className="fixed left-1/2 top-1/2 z-40 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur sm:p-7"
             >
               <header className="flex flex-col items-center gap-1">
                 <p className="font-handwritten text-xl text-accent-deep">

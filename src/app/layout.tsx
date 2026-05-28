@@ -46,7 +46,12 @@ export default function RootLayout({
       className={`${lora.variable} ${caveat.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-paper text-ink font-storybook">
+      {/* Body bg is set to ink (dark) instead of paper so any sliver the
+          StoryPlayer's `w-dvw` fails to cover on iPad Safari (occasional
+          1-2px viewport reporting quirk) blends with the cinematic black
+          frame instead of flashing a cream margin. Page-level surfaces
+          set their own bg-paper where needed. */}
+      <body className="min-h-full flex flex-col bg-ink text-ink font-storybook">
         {children}
       </body>
     </html>

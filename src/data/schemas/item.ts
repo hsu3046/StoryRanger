@@ -11,7 +11,7 @@ export const ItemCategorySchema = z.enum([
   "tool", // potentially usable (mouse-call, wisp-light)
   "consumable", // future use
   "keepsake", // emotional value (lost-pup-trust)
-  "key-item", // story-critical (ruby-slippers, witch-broom)
+  "key-item", // story-critical (silver-shoes, witch-broom)
 ]);
 
 export const ItemRaritySchema = z

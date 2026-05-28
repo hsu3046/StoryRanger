@@ -105,6 +105,7 @@ export function CharactersEditor({ storyId, initial, assetMap }: Props) {
       voice: "alloy",
       voiceSpeed: 1.0,
       color: "#777777",
+      size: "medium",
     };
     setCharacters((prev) => [...prev, placeholder]);
     setSelectedIdx(characters.length);
@@ -376,6 +377,25 @@ function CharacterForm({
             placeholder="#aabbcc"
           />
         </div>
+      </Field>
+
+      <Field label="Sprite size">
+        <select
+          value={character.size}
+          onChange={(e) =>
+            onChange((c) => ({
+              ...c,
+              size: e.target.value as CharacterT["size"],
+            }))
+          }
+          className={inputCls}
+        >
+          <option value="tiny">tiny — pet-scale (Toto)</option>
+          <option value="small">small</option>
+          <option value="medium">medium — Dorothy / Scarecrow / Tin Man</option>
+          <option value="large">large — Lion / Wizard</option>
+          <option value="huge">huge — boss-scale</option>
+        </select>
       </Field>
     </div>
   );

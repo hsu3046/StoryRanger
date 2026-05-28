@@ -38,7 +38,7 @@ export function AdminPageHeader({
         )}
         {filePath && (
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → {filePath}
+            {filePath}
           </code>
         )}
         {subtitle && (

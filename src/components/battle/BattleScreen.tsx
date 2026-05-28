@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { GearSix, Sword } from "@phosphor-icons/react";
+import { GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
 
 import {
   attackerName,
@@ -21,7 +21,7 @@ import {
 } from "@/lib/battle-engine";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { MONSTERS } from "@/data/monsters";
-import { prettyItem } from "@/data/items";
+import { itemIcon, prettyItem } from "@/data/items";
 import { characterSize, sizeScale } from "@/lib/sprite-size";
 
 import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
@@ -29,12 +29,27 @@ import { HitsBar } from "./HpBar";
 import { MathPuzzle } from "./MathPuzzle";
 import { DamageNumber, type FloatingEffect } from "./DamageNumber";
 
-import type { CompanionId, PartyHp, SpeakerId } from "@/types/story";
+import type {
+  Character,
+  CompanionId,
+  PartyHp,
+  SpeakerId,
+} from "@/types/story";
 
 interface Props {
   setup: SetupArgs;
   storyId: string;
   characterImageBase: (id: SpeakerId | CompanionId) => string;
+  /** Character roster — used for per-character sprite sizing (Toto small,
+   *  Lion large, etc.). Passed in rather than imported from a specific
+   *  story file so the battle component stays story-agnostic. */
+  characters: readonly Character[];
+  /** Optional saved BattleState — when present, mounts mid-fight instead
+   *  of running `setupBattle(setup)`. Used by the refresh-resume flow. */
+  initialState?: BattleState;
+  /** Fires on every engine state mutation so the parent can persist the
+   *  live BattleState alongside PlayState. */
+  onStateChange?: (state: BattleState) => void;
   onComplete: (result: {
     outcome: "victory" | "defeat" | "escaped";
     rewards: string[];
@@ -58,14 +73,33 @@ export function BattleScreen({
   setup,
   storyId,
   characterImageBase,
+  characters,
+  initialState,
+  onStateChange,
   onComplete,
   onOpenSettings,
 }: Props) {
-  const [state, setState] = useState<BattleState>(() => setupBattle(setup));
+  const [state, setState] = useState<BattleState>(
+    () => initialState ?? setupBattle(setup),
+  );
   const [effects, setEffects] = useState<FloatingEffect[]>([]);
   const prevHitsRef = useRef<number[]>([]);
-  const prevLivesRef = useRef<number>(setup.partyHp.hero ?? setup.partyMaxHp.hero ?? 3);
+  // Anchor the lives baseline to the actual mounted state, not to setup —
+  // when resuming mid-battle from a saved initialState the hero may already
+  // be wounded, and using setup HP would spawn a spurious hurt FX on mount.
+  const prevLivesRef = useRef<number>(state.heroLives);
   const effectIdRef = useRef(0);
+
+  // Bubble every BattleState change up to the parent so the live state is
+  // persisted alongside PlayState. Refresh-resume reads this back as the
+  // `initialState` prop on the next mount.
+  useEffect(() => {
+    onStateChange?.(state);
+    // We intentionally do NOT depend on `onStateChange` itself — parents
+    // typically pass an inline arrow, which would re-fire this effect on
+    // every render and waste work. Only the engine state matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   // Attack/hurt motion FX — short-lived flags consumed by SpriteLayer.
   const [attackingAttacker, setAttackingAttacker] = useState<AttackerId | null>(
@@ -86,9 +120,24 @@ export function BattleScreen({
     setTimeout(() => setAttackingAttacker(null), 380);
   }
 
+  /** Tracks who was the active attacker on the previous render so we can
+   *  distinguish a real combat update from a free `switch` action. */
+  const prevActiveRef = useRef<AttackerId>(state.activeAttacker);
+
   // Diff the engine state vs the previous render to spawn floating
   // numbers above the target whose HP/hits changed.
   useEffect(() => {
+    // A character-switch shouldn't trigger damage / DODGE / hurt FX —
+    // the heroLives change is purely because we swapped to a different
+    // attacker's HP, not because someone took damage. Reset refs to the
+    // new active's baseline and bail out.
+    if (prevActiveRef.current !== state.activeAttacker) {
+      prevActiveRef.current = state.activeAttacker;
+      prevLivesRef.current = state.heroLives;
+      prevHitsRef.current = state.monsters.map((m) => m.hitsRemaining);
+      return;
+    }
+
     const newEffects: FloatingEffect[] = [];
     const prev = prevHitsRef.current;
     const lastTone = state.log[state.log.length - 1]?.tone;
@@ -287,7 +336,7 @@ export function BattleScreen({
     base: characterImageBase(id),
     position:
       (HERO_POSITIONS[arr.length]?.[i] as StagePosition) ?? "far-left",
-    scale: sizeScale(characterSize(id)),
+    scale: sizeScale(characterSize(id, characters)),
     // Keep all sprite z values BELOW the UI layer (z-50). Active gets the
     // top sprite slot so they read as "in front" of the rest of the party.
     z: id === activeHeroSlot ? 25 : 10 + (arr.length - i),
@@ -337,7 +386,7 @@ export function BattleScreen({
         : null;
 
   return (
-    <div className="fixed inset-0 z-50 h-dvh w-dvw overflow-hidden bg-ink">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-ink">
       <ComposedScene
         storyId={storyId}
         bg={setup.bg}
@@ -345,7 +394,8 @@ export function BattleScreen({
         monsters={monsterLayers}
       />
 
-      {/* Top bar — Party HP row (each member always visible) + Round + Settings */}
+      {/* Top bar — Party HP (left) | Monster chips | Settings (right).
+          One row, justify-between so monsters bunch near the gear. */}
       <header
         className="absolute inset-x-0 top-0 z-50 flex items-start justify-between gap-3 px-4 sm:px-6"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
@@ -363,40 +413,29 @@ export function BattleScreen({
             setState((s) => chooseHeroAction(s, { kind: "switch", to }))
           }
         />
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 rounded-pill bg-paper/85 px-3 py-1.5 ring-1 ring-ink-soft/10 backdrop-blur">
-            <span className="font-handwritten text-sm text-accent-deep">
-              Round
-            </span>
-            <span className="text-sm font-semibold tabular-nums text-ink">
-              {state.round}
-            </span>
-          </div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-start justify-end gap-2">
+          {state.monsters.map((m, i) => (
+            <HitsBar
+              key={`${m.monsterId}-${i}`}
+              label={m.name}
+              hitsRemaining={m.hitsRemaining}
+              maxHits={m.maxHits}
+              defeated={m.defeated}
+              portraitBase={`/stories/${storyId}/monsters/${m.monsterId}`}
+            />
+          ))}
           {onOpenSettings && (
             <button
               type="button"
               onClick={onOpenSettings}
               aria-label="Open settings"
-              className="flex h-11 w-11 items-center justify-center rounded-pill bg-paper/85 text-ink-soft ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper hover:text-ink active:scale-90"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-paper/15 text-ink-soft/80 ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper/40 hover:text-ink active:scale-90"
             >
               <GearSix size={22} weight="duotone" />
             </button>
           )}
         </div>
       </header>
-
-      {/* Monster hit pips */}
-      <div className="pointer-events-none absolute inset-x-0 top-16 z-50 flex flex-wrap items-start justify-end gap-2 px-3 sm:px-6">
-        {state.monsters.map((m, i) => (
-          <HitsBar
-            key={`${m.monsterId}-${i}`}
-            label={m.name}
-            hitsRemaining={m.hitsRemaining}
-            maxHits={m.maxHits}
-            defeated={m.defeated}
-          />
-        ))}
-      </div>
 
       {/* Floating combat effects — damage numbers / miss labels */}
       <AnimatePresence>
@@ -514,74 +553,97 @@ function PartyHpRow({
   fallenAttackers: AttackerId[];
   onSwitch: (to: AttackerId) => void;
 }) {
+  // Show "Tap to switch" hint under the row whenever any other party
+  // member is selectable — i.e. we're in hero-choose, the player has
+  // companions, and at least one of them is clickable.
+  const hasSwitchTarget =
+    canSwap &&
+    party.some(
+      (id) =>
+        id !== active && !fallenAttackers.includes(id) && canAct(id),
+    );
   return (
-    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-      {party.map((id) => {
-        const fallen = fallenAttackers.includes(id);
-        const selected = id === active;
-        const clickable = canSwap && !fallen && canAct(id) && !selected;
-        const imageBase =
-          id === "hero" ? characterImageBase("dorothy") : characterImageBase(id);
-        const hp = partyLives[id] ?? 0;
-        const maxHp = partyMaxLives[id] ?? 3;
-        return (
-          <button
-            key={id}
-            type="button"
-            disabled={!clickable}
-            onClick={() => onSwitch(id)}
-            className={`flex h-11 items-center gap-1.5 rounded-pill px-1.5 ring-1 backdrop-blur transition-all active:scale-95 ${
-              selected
-                ? "bg-accent-deep text-paper ring-accent shadow-button"
-                : fallen
-                  ? "bg-paper-deep/40 text-ink-soft/30 ring-ink-soft/10 opacity-60 grayscale"
-                  : "bg-paper/85 text-ink ring-ink-soft/10 hover:bg-paper"
-            } ${!clickable ? "cursor-default" : ""}`}
-          >
-            <span className="relative">
-              <span
-                className="block h-8 w-8 overflow-hidden rounded-full"
-                style={{
-                  backgroundImage: `url(${imageBase}.webp)`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center top",
-                }}
-              />
-              {fallen && (
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        {party.map((id) => {
+          const fallen = fallenAttackers.includes(id);
+          const selected = id === active;
+          const clickable = canSwap && !fallen && canAct(id) && !selected;
+          const imageBase =
+            id === "hero" ? characterImageBase("dorothy") : characterImageBase(id);
+          const hp = partyLives[id] ?? 0;
+          const maxHp = partyMaxLives[id] ?? 3;
+          return (
+            <button
+              key={id}
+              type="button"
+              disabled={!clickable}
+              onClick={() => onSwitch(id)}
+              className={`flex h-11 items-center gap-1.5 rounded-pill px-1.5 ring-1 backdrop-blur transition-all active:scale-95 ${
+                selected
+                  ? "bg-accent-deep text-paper ring-accent shadow-button"
+                  : fallen
+                    ? "bg-paper-deep/40 text-ink-soft/30 ring-ink-soft/10 opacity-60 grayscale"
+                    : "bg-paper/85 text-ink ring-ink-soft/10 hover:bg-paper"
+              } ${!clickable ? "cursor-default" : ""}`}
+            >
+              <span className="relative">
                 <span
-                  aria-hidden
-                  className="absolute inset-0 flex items-center justify-center text-base"
-                >
-                  💀
-                </span>
-              )}
-            </span>
-            <span className="flex flex-col items-start gap-0.5 pr-1.5">
-              <span className="text-xs font-semibold leading-none">
-                {id === "hero" ? "Me" : prettyCompShort(id as CompanionId)}
+                  className="block h-8 w-8 overflow-hidden rounded-full"
+                  style={{
+                    backgroundImage: `url(${imageBase}.webp)`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center top",
+                  }}
+                />
+                {fallen && (
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 flex items-center justify-center text-ruby"
+                  >
+                    <XIcon size={20} weight="bold" />
+                  </span>
+                )}
               </span>
-              {!fallen && (
-                <span className="flex items-center gap-0.5">
-                  {Array.from({ length: maxHp }).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`block h-1.5 w-1.5 rounded-full ${
-                        i < hp
-                          ? selected
-                            ? "bg-paper"
-                            : "bg-ruby"
-                          : selected
-                            ? "bg-paper/30"
-                            : "bg-ink-soft/25"
-                      }`}
-                    />
-                  ))}
+              <span className="flex flex-col items-start gap-0.5 pr-1.5">
+                <span className="text-xs font-semibold leading-none">
+                  {id === "hero" ? "Me" : prettyCompShort(id as CompanionId)}
                 </span>
-              )}
-            </span>
-          </button>
-        );
-      })}
+                {!fallen && (
+                  <span className="flex items-center gap-0.5">
+                    {Array.from({ length: maxHp }).map((_, i) => (
+                      <span
+                        key={i}
+                        className={`block h-1.5 w-1.5 rounded-full ${
+                          i < hp
+                            ? selected
+                              ? "bg-paper"
+                              : "bg-ruby"
+                            : selected
+                              ? "bg-paper/30"
+                              : "bg-ink-soft/25"
+                        }`}
+                      />
+                    ))}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {hasSwitchTarget && (
+        <span
+          className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-paper"
+          style={{
+            textShadow:
+              "0 2px 4px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.95)",
+          }}
+          aria-hidden
+        >
+          Tap to switch
+        </span>
+      )}
     </div>
   );
 }
@@ -593,56 +655,31 @@ function ActionRow({
   monsters: { monsterId: string; name: string; index: number }[];
   onAction: (a: HeroAction) => void;
 }) {
-  const [pickingTarget, setPickingTarget] = useState(false);
-
-  if (pickingTarget) {
+  // Single target → one big "Attack" button. Multiple targets → render
+  // one "Attack <name>" button per monster so the player picks in one tap.
+  if (monsters.length === 1) {
     return (
-      <div className="flex flex-col items-center gap-2">
-        <p
-          className="text-sm font-semibold text-paper"
-          style={{ textShadow: "0 2px 6px rgba(0,0,0,0.7)" }}
-        >
-          Attack which?
-        </p>
-        <div className="flex flex-wrap justify-center gap-2">
-          {monsters.map((m) => (
-            <button
-              key={`${m.monsterId}-${m.index}`}
-              type="button"
-              onClick={() => {
-                onAction({ kind: "attack", targetIdx: m.index });
-                setPickingTarget(false);
-              }}
-              className="inline-flex min-h-12 items-center justify-center rounded-pill bg-paper/80 px-5 text-base font-semibold text-ink shadow-button ring-1 ring-ink-soft/15 backdrop-blur transition-all hover:bg-paper/95 active:scale-95"
-            >
-              {m.name}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setPickingTarget(false)}
-            className="inline-flex min-h-12 items-center justify-center rounded-pill bg-paper-deep/50 px-5 text-base text-ink-soft ring-1 ring-ink-soft/15 backdrop-blur transition-all active:scale-95"
-          >
-            Back
-          </button>
-        </div>
+      <div className="flex justify-center">
+        <BattleActionButton
+          icon={<Sword size={22} weight="duotone" />}
+          label="Attack"
+          onClick={() =>
+            onAction({ kind: "attack", targetIdx: monsters[0].index })
+          }
+        />
       </div>
     );
   }
-
   return (
-    <div className="flex justify-center">
-      <BattleActionButton
-        icon={<Sword size={22} weight="duotone" />}
-        label="Attack"
-        onClick={() => {
-          if (monsters.length === 1) {
-            onAction({ kind: "attack", targetIdx: monsters[0].index });
-          } else {
-            setPickingTarget(true);
-          }
-        }}
-      />
+    <div className="flex flex-wrap justify-center gap-2">
+      {monsters.map((m) => (
+        <BattleActionButton
+          key={`${m.monsterId}-${m.index}`}
+          icon={<Sword size={22} weight="duotone" />}
+          label={`Attack ${m.name}`}
+          onClick={() => onAction({ kind: "attack", targetIdx: m.index })}
+        />
+      ))}
     </div>
   );
 }
@@ -660,7 +697,7 @@ function BattleActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-pill bg-paper/75 px-7 text-lg font-semibold text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/90 hover:-translate-y-0.5 hover:shadow-button-hover hover:ring-accent/50 active:translate-y-0 active:scale-[0.98] active:shadow-button-pressed sm:min-w-44"
+      className="group inline-flex min-h-14 min-w-56 items-center justify-center gap-2 rounded-pill bg-paper/75 px-10 text-lg font-semibold text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/90 hover:-translate-y-0.5 hover:shadow-button-hover hover:ring-accent/50 active:translate-y-0 active:scale-[0.98] active:shadow-button-pressed sm:min-w-64"
     >
       <span className="text-accent-deep">{icon}</span>
       <span>{label}</span>
@@ -691,7 +728,7 @@ function TerminalPanel({
         : "Glinda's blessing carries you to safety.";
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 rounded-card-lg bg-paper/80 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur">
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 rounded-card-lg bg-paper/55 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur">
       <p className="font-handwritten text-3xl text-accent-deep">{title}</p>
       <p className="text-base text-ink-soft">{subtitle}</p>
       {rewards.length > 0 && (
@@ -700,11 +737,12 @@ function TerminalPanel({
           {countItems(rewards).map(({ id, count }) => (
             <span
               key={id}
-              className="rounded-pill bg-paper-deep/80 px-2.5 py-0.5 text-xs font-semibold text-ink ring-1 ring-ink-soft/15"
+              className="inline-flex items-center gap-1 rounded-pill bg-paper-deep/80 px-2.5 py-0.5 text-xs font-semibold text-ink ring-1 ring-ink-soft/15"
             >
-              {prettyItem(id)}
+              <span aria-hidden>{itemIcon(id)}</span>
+              <span>{prettyItem(id)}</span>
               {count > 1 && (
-                <span className="ml-1 text-ink-soft">×{count}</span>
+                <span className="ml-0.5 text-ink-soft">×{count}</span>
               )}
             </span>
           ))}
@@ -713,7 +751,7 @@ function TerminalPanel({
       <button
         type="button"
         onClick={onContinue}
-        className="mt-1 inline-flex min-h-12 items-center justify-center rounded-pill bg-accent-deep px-8 text-base font-semibold text-paper shadow-button transition-all active:scale-[0.98]"
+        className="mt-1 inline-flex min-h-14 min-w-56 items-center justify-center rounded-pill bg-accent-deep px-10 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-64"
       >
         Continue
       </button>

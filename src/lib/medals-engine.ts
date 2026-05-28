@@ -39,8 +39,8 @@ function matchesTrigger(
       return ctx.tookBranchId === t.branchId;
     case "scene":
       return ctx.enteredSceneId === t.sceneId;
-    case "free_input_count":
-      return state.freeInputCount >= t.min;
+    case "dialogue_count":
+      return state.dialogueCount >= t.min;
     case "ending":
       return ctx.reachedEndingId === t.endingId;
     case "encounter":

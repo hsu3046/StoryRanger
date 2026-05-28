@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Backpack, Trophy, X } from "@phosphor-icons/react";
 import type { MedalsFile } from "@/types/story";
-import { prettyItem } from "@/data/items";
+import { itemIcon, prettyItem } from "@/data/items";
 import { MedalShelf } from "./MedalShelf";
 
 interface Props {
@@ -40,7 +40,7 @@ export function MedalShelfModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 cursor-pointer bg-ink/25 backdrop-blur-sm"
+            className="fixed inset-0 z-[90] cursor-pointer bg-ink/25 backdrop-blur-sm"
           />
           <motion.div
             key="treasures-card"
@@ -48,28 +48,12 @@ export function MedalShelfModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 6 }}
             transition={{ type: "spring", stiffness: 240, damping: 22 }}
-            className="pointer-events-auto fixed left-1/2 top-1/2 z-50 flex max-h-[88dvh] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-card-lg bg-paper/95 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur"
+            className="pointer-events-auto fixed left-1/2 top-1/2 z-[100] flex max-h-[88dvh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-card-lg bg-paper/95 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur"
           >
             <header className="flex items-center justify-between gap-3">
-              <div className="flex flex-col">
-                <p className="font-handwritten text-xl text-accent-deep">
-                  Your Treasures
-                </p>
-                <p className="text-sm text-ink-soft">
-                  <span className="font-semibold text-ink tabular-nums">
-                    {inventory.length}
-                  </span>{" "}
-                  item{inventory.length === 1 ? "" : "s"} ·{" "}
-                  <span className="font-semibold text-ink tabular-nums">
-                    {earned.length}
-                  </span>
-                  <span className="text-ink-soft/70">
-                    {" / "}
-                    {catalog.medals.length}
-                  </span>{" "}
-                  medals
-                </p>
-              </div>
+              <p className="font-handwritten text-xl text-accent-deep">
+                Your Collections
+              </p>
               <button
                 type="button"
                 onClick={onClose}
@@ -98,6 +82,9 @@ export function MedalShelfModal({
                         key={id}
                         className="inline-flex items-center gap-1.5 rounded-pill bg-paper-deep/70 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/10"
                       >
+                        <span className="text-base leading-none" aria-hidden>
+                          {itemIcon(id)}
+                        </span>
                         <span>{prettyItem(id)}</span>
                         {count > 1 && (
                           <span className="rounded-pill bg-accent/20 px-1.5 text-xs text-accent-deep">

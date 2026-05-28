@@ -11,9 +11,9 @@
       }
     },
     {
-      "id": "ruby_slippers",
-      "name": "Ruby Slippers",
-      "icon": "👠",
+      "id": "silver_shoes",
+      "name": "Silver Shoes",
+      "icon": "👟",
       "description": "Glinda's gift now glitters on your feet.",
       "trigger": {
         "type": "branch",
@@ -116,7 +116,7 @@
       "icon": "✨",
       "description": "You told the story your own way, again and again.",
       "trigger": {
-        "type": "free_input_count",
+        "type": "dialogue_count",
         "min": 10
       }
     },

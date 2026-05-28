@@ -13,7 +13,9 @@ export type SpeakerId =
   | "lion"
   | "wicked-witch"
   | "glinda"
-  | "wizard";
+  | "wizard"
+  | "aunt-em"
+  | "toto";
 
 export type CompanionId = "scarecrow" | "tinman" | "lion";
 
@@ -33,12 +35,22 @@ export interface Branch {
   label: string;
   /** Next scene to transition to when picked. */
   next: string;
-  /** Optional medal earned by this choice. */
-  medalTrigger?: string | null;
   /** Optional companion gained (added to party). */
   addsCompanion?: CompanionId;
   /** Optional BGM override for this transition. */
   bgmOverride?: string;
+  /** Optional mini-puzzle. Narrative challenge only — actual rewards
+   *  belong to the next scene's `reward`. */
+  puzzle?: {
+    kind: "sequence";
+    title: string;
+    symbols: string[];
+    sequence: number[];
+  };
+  /** What to do when the puzzle fails. */
+  onFailMode?: "retry" | "skip";
+  /** Narration shown after the branch resolves, before scene transition. */
+  outcome?: string;
 }
 
 export interface Scene {
@@ -52,15 +64,20 @@ export interface Scene {
   narration: string;
   /** Available choices. Empty array means terminal scene (ending). */
   branches: Branch[];
-  /** If true, free typing input is offered alongside choices. */
-  allowFreeInput?: boolean;
-  /** Hint text inside the free input box (e.g. "What does Dorothy do?"). */
-  freeInputHint?: string;
   /** Optional tag for ending scenes (used for medal triggers + UI). */
   ending?: {
     id: string;
     label: string;
   };
+  /** One-shot reward granted on first entry. */
+  reward?: {
+    items?: string[];
+    medalId?: string;
+    moodBoost?: { companionId: CompanionId; delta: number }[];
+  };
+  /** Extra dialogue-able characters present in this scene (added to
+   *  the dialogue rail on top of party companions + the scene speaker). */
+  dialogueCharacters?: SpeakerId[];
 }
 
 export interface Story {
@@ -85,11 +102,12 @@ export interface Story {
 export type MedalTrigger =
   | { type: "branch"; branchId: string }
   | { type: "scene"; sceneId: string }
-  | { type: "free_input_count"; min: number }
   | { type: "ending"; endingId: string }
   /** Awarded directly via an encounter's `rewards.medalId`. Never auto-fires
    *  through `checkNewMedals` — the encounter result pushes the id itself. */
-  | { type: "encounter"; encounterId: string };
+  | { type: "encounter"; encounterId: string }
+  /** Awarded after N companion dialogues completed (replaces free_input). */
+  | { type: "dialogue_count"; min: number };
 
 export interface Medal {
   id: string;
@@ -113,6 +131,9 @@ export interface Character {
   voiceSpeed: number;
   /** Hex color for the speech box label. */
   color: string;
+  /** Stage display size — feeds the SpriteLayer height the same way
+   *  monsters do. */
+  size: "tiny" | "small" | "medium" | "large" | "huge";
 }
 
 export interface CharactersFile {
@@ -133,6 +154,47 @@ export type CompanionMoods = Partial<Record<CompanionId, number>>;
 export type PartyHp = Partial<Record<AttackerId, number>>;
 
 /**
+ * Active overlay between or during scenes. Persisted alongside PlayState
+ * so a page refresh resumes on the exact same overlay (puzzle, outcome,
+ * encounter) rather than skipping past it.
+ *
+ *  - "puzzle"   — branch picked, puzzle gating open. Engine state still
+ *                 at sourceSceneId. branch.puzzle re-derived from catalog.
+ *  - "outcome"  — branch resolved, engine state at destination already.
+ *                 items/medalId is a SNAPSHOT for chip display only — the
+ *                 actual grant was applied to inventory/medals at takeBranch
+ *                 time, so we don't re-apply on hydration.
+ *  - "encounter"— battle queue. `queue[0]` is the active battle; `battle`
+ *                 carries the live BattleState (HP, phase, round, etc.) so
+ *                 a refresh resumes mid-fight. `battle` is undefined while
+ *                 the EncounterFlow alert splash plays (it'll re-create on
+ *                 mount).
+ */
+export type InteractionState =
+  | {
+      kind: "puzzle";
+      sourceSceneId: string;
+      branchId: string;
+      attemptKey: number;
+    }
+  | {
+      kind: "outcome";
+      sourceSceneId: string;
+      branchId: string;
+      items: string[];
+      medalId?: string;
+    }
+  | {
+      kind: "encounter";
+      /** Remaining encounter ids; index 0 is the active one. */
+      queue: string[];
+      /** Persisted battle state — undefined during the alert splash.
+       *  Typed as `unknown` here to avoid a types↔lib circular import on
+       *  BattleState; consumers in `@/components/battle` cast at the boundary. */
+      battle?: unknown;
+    };
+
+/**
  * Persisted play state — single slot per story in localStorage.
  */
 export interface PlayState {
@@ -141,7 +203,9 @@ export interface PlayState {
   currentSceneId: string;
   earnedMedals: string[];
   companions: CompanionId[];
-  freeInputCount: number;
+  /** Completed companion dialogue sessions — drives the dialogue_count
+   *  medal. Increments once per dialogue close (not per turn). */
+  dialogueCount: number;
   /** Branch ids taken so far, for "the Lion remembers you helped" continuity. */
   branchHistory: string[];
   /** v2.0 — companion friendship 0..10 (default 5 on join). */
@@ -159,18 +223,14 @@ export interface PlayState {
   fallenAttackers?: AttackerId[];
   /** v2.0 — encounters already completed (for `once` trigger gating). */
   completedEncounters?: string[];
+  /** Scenes whose `reward` was already auto-granted on first entry —
+   *  prevents double-grant on revisit. */
+  completedSceneRewards?: string[];
+  /** Active overlay state (puzzle / outcome / encounter). Persisted so a
+   *  refresh resumes on the exact same overlay rather than skipping past. */
+  interaction?: InteractionState;
   /** ISO timestamp of last update. */
   updatedAt: string;
-}
-
-/**
- * LLM JSON response shape for /api/narrate.
- */
-export interface NarrateResponse {
-  narration: string;
-  speaker: SpeakerId;
-  nextSceneId: string;
-  medalTrigger: string | null;
 }
 
 /**
@@ -192,6 +252,9 @@ export interface DialogueRequest {
 
 export interface DialogueResponse {
   reply: string;
+  /** Optional one-line action / body language note shown above the reply
+   *  ("leans against the tree, sighing"). */
+  action?: string | null;
   /** -3..+3 — how this turn shifts the character's mood toward the hero. */
   moodDelta: number;
   /** If the character chooses to share a gameplay hint. */
@@ -200,19 +263,7 @@ export interface DialogueResponse {
   itemGift: string | null;
   /** Set true when the character is wrapping up the conversation. */
   endsConversation: boolean;
+  /** Up to 3 short suggested next-replies for the hero (~3-8 words each). */
+  suggestions: string[];
 }
 
-/**
- * Request payload sent to /api/narrate.
- */
-export interface NarrateRequest {
-  storyId: string;
-  sceneId: string;
-  freeInput: string;
-  /** The hero playing — name + gender drive pronouns in the LLM response. */
-  hero: Hero;
-  /** Currently available branch candidates (LLM must pick one's `next`). */
-  branchCandidates: Array<{ id: string; label: string; next: string }>;
-  /** Companions following the player (for continuity in narration). */
-  companions: CompanionId[];
-}

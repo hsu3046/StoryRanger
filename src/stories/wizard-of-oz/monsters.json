@@ -5,7 +5,9 @@
       "name": "Forest Wolf",
       "type": "hostile",
       "hits": 3,
-      "drops": ["wolf-fang"],
+      "drops": [
+        "wolf-fang"
+      ],
       "size": "medium",
       "puzzleKind": "add-1d"
     },
@@ -14,7 +16,9 @@
       "name": "Pack Leader",
       "type": "hostile",
       "hits": 5,
-      "drops": ["wolf-pelt"],
+      "drops": [
+        "wolf-pelt"
+      ],
       "size": "large",
       "puzzleKind": "add-2d"
     },
@@ -31,7 +35,9 @@
       "name": "Crow Scout",
       "type": "hostile",
       "hits": 2,
-      "drops": ["feather-of-flight"],
+      "drops": [
+        "feather-of-flight"
+      ],
       "size": "tiny",
       "puzzleKind": "bigger",
       "airborne": true
@@ -41,7 +47,9 @@
       "name": "Crow Flock",
       "type": "hostile",
       "hits": 4,
-      "drops": ["feather-bundle"],
+      "drops": [
+        "feather-bundle"
+      ],
       "size": "tiny",
       "puzzleKind": "odd-out",
       "airborne": true
@@ -51,7 +59,9 @@
       "name": "Kalidah",
       "type": "hostile",
       "hits": 6,
-      "drops": ["kalidah-claw"],
+      "drops": [
+        "kalidah-claw"
+      ],
       "size": "large",
       "puzzleKind": "multiply",
       "notes": "Mini-boss. Encounter only in deep forest."
@@ -61,7 +71,9 @@
       "name": "Fighting Tree",
       "type": "hostile",
       "hits": 5,
-      "drops": ["enchanted-acorn"],
+      "drops": [
+        "enchanted-acorn"
+      ],
       "size": "large",
       "puzzleKind": "missing"
     },
@@ -70,8 +82,10 @@
       "name": "Hammerhead",
       "type": "hostile",
       "hits": 5,
-      "drops": ["stone-flake"],
-      "size": "medium",
+      "drops": [
+        "stone-flake"
+      ],
+      "size": "huge",
       "puzzleKind": "sub-1d"
     },
     {
@@ -79,7 +93,9 @@
       "name": "Winged Monkey",
       "type": "hostile",
       "hits": 3,
-      "drops": ["monkey-feather"],
+      "drops": [
+        "monkey-feather"
+      ],
       "size": "medium",
       "puzzleKind": "add-1d",
       "airborne": true
@@ -89,7 +105,9 @@
       "name": "Swamp Beast",
       "type": "hostile",
       "hits": 6,
-      "drops": ["swamp-pearl"],
+      "drops": [
+        "swamp-pearl"
+      ],
       "size": "large",
       "puzzleKind": "pattern"
     },
@@ -98,8 +116,10 @@
       "name": "Crystal Cave Spider",
       "type": "hostile",
       "hits": 3,
-      "drops": ["silk-thread"],
-      "size": "small",
+      "drops": [
+        "silk-thread"
+      ],
+      "size": "tiny",
       "puzzleKind": "sub-1d",
       "airborne": true
     },
@@ -108,7 +128,9 @@
       "name": "Bat Swarm",
       "type": "hostile",
       "hits": 4,
-      "drops": ["bat-wing"],
+      "drops": [
+        "bat-wing"
+      ],
       "size": "medium",
       "puzzleKind": "bigger",
       "airborne": true
@@ -118,7 +140,9 @@
       "name": "Goblin Scout",
       "type": "hostile",
       "hits": 2,
-      "drops": ["tarnished-coin"],
+      "drops": [
+        "tarnished-coin"
+      ],
       "size": "small",
       "puzzleKind": "add-1d"
     },
@@ -127,7 +151,9 @@
       "name": "Field Mouse King",
       "type": "friendly",
       "hits": 0,
-      "drops": ["mouse-call"],
+      "drops": [
+        "mouse-call"
+      ],
       "size": "tiny",
       "notes": "Friendly NPC. Gifts mouse-call (1 free encounter escape)."
     },
@@ -136,7 +162,10 @@
       "name": "Wicked Witch of the West",
       "type": "hostile",
       "hits": 8,
-      "drops": ["witch-broom", "witch-hat"],
+      "drops": [
+        "witch-broom",
+        "witch-hat"
+      ],
       "size": "large",
       "puzzleKind": "multiply",
       "notes": "Main-story boss. The hardest puzzle category, longest fight."
@@ -146,10 +175,12 @@
       "name": "Will-o-Wisp",
       "type": "neutral",
       "hits": 2,
-      "drops": ["wisp-light"],
+      "drops": [
+        "wisp-light"
+      ],
       "size": "tiny",
-      "notes": "Reveals hidden paths. Can be befriended via riddle.",
-      "airborne": true
+      "airborne": true,
+      "notes": "Reveals hidden paths. Can be befriended via riddle."
     }
   ]
 }

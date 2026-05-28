@@ -21,7 +21,10 @@ import { Howl, Howler } from "howler";
  * stops by Howl and cancel them on every `playBgm` for the same Howl.
  */
 
-const BGM_VOLUME = 0.45;
+// BGM sits well below narration so the voice reads clearly over the music.
+// 0.18 lands narration ~15 dB above BGM — closer to pure audiobook balance,
+// BGM still felt as ambience.
+const BGM_VOLUME = 0.18;
 const SFX_VOLUME = 0.7;
 const CROSSFADE_MS = 1400;
 const FADE_OUT_MS = 600;

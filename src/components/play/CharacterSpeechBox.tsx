@@ -1,4 +1,5 @@
 import type { SpeakerId } from "@/types/story";
+import { Typewriter } from "./Typewriter";
 
 interface Props {
   speaker: SpeakerId;
@@ -6,17 +7,30 @@ interface Props {
   characterColor: string;
   narration: string;
   variant?: "page" | "overlay";
+  /** Fires when the typewriter finishes (or the user taps to skip). The
+   *  parent uses this to gate revealing the choice buttons. */
+  onTypingDone?: () => void;
 }
 
 /**
  * Subtle dark stroke + drop shadow so light text reads clearly on top of
- * the cinematic scene image without any background card.
+ * the cinematic scene image without any background card. Kept lean
+ * (single shadow + thin stroke) — multiple shadow layers + a thick stroke
+ * tank perf on older iPads and cause the typewriter glyphs to jitter as
+ * each new character is painted.
  */
 const OVERLAY_TEXT_STYLE: React.CSSProperties = {
-  textShadow:
-    "0 5px 18px rgba(20, 12, 4, 0.85), 0 3px 6px rgba(20, 12, 4, 0.95)",
-  WebkitTextStroke: "2.5px rgba(20, 12, 4, 0.7)",
+  textShadow: "0 3px 10px rgba(20, 12, 4, 0.9)",
+  WebkitTextStroke: "1.5px rgba(20, 12, 4, 0.7)",
   paintOrder: "stroke fill",
+  // Lock kerning + ligature decisions to a single layout pass. Without
+  // these, the browser re-runs ligature/kerning analysis on every
+  // character append from the typewriter, nudging earlier glyphs by a
+  // subpixel and showing up as horizontal jitter — especially on iOS
+  // Safari with our serif font's pair kerning.
+  fontKerning: "none",
+  fontVariantLigatures: "none",
+  textRendering: "optimizeSpeed",
 };
 
 export function CharacterSpeechBox({
@@ -25,17 +39,23 @@ export function CharacterSpeechBox({
   characterColor,
   narration,
   variant = "page",
+  onTypingDone,
 }: Props) {
   const isNarrator = speaker === "narrator";
   const isOverlay = variant === "overlay";
 
   if (isOverlay) {
+    // `text-balance` is intentionally OMITTED on the <p> below — it
+    // makes the browser recompute line breaks every time the typewriter
+    // appends a character, which shifts earlier glyphs left/right by a
+    // subpixel and reads as horizontal jitter. Plain `wrap` is stable
+    // across mid-animation content changes.
     return (
       <p
-        className="text-2xl sm:text-3xl leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-balance text-center"
+        className="text-2xl sm:text-3xl leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-center"
         style={OVERLAY_TEXT_STYLE}
       >
-        {narration}
+        <Typewriter text={narration} skipOnClick onDone={onTypingDone} />
       </p>
     );
   }
@@ -59,7 +79,7 @@ export function CharacterSpeechBox({
         </div>
       )}
       <p className="text-xl sm:text-2xl leading-relaxed text-ink whitespace-pre-line">
-        {narration}
+        <Typewriter text={narration} skipOnClick onDone={onTypingDone} />
       </p>
     </div>
   );

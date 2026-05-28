@@ -9,41 +9,41 @@ import type {
   Branch,
   CharactersFile,
   CompanionId,
-  DialogueMessage,
   DialogueResponse,
+  InteractionState,
   Medal,
   MedalsFile,
-  NarrateResponse,
   PlayState,
   Scene,
   SpeakerId,
   Story,
 } from "@/types/story";
+import type { BattleState } from "@/lib/battle-engine";
 import {
-  applyNarrateResponse,
   DEFAULT_MAX_HP,
   newPlayState,
   takeBranch,
 } from "@/lib/story-engine";
+import { PatternPuzzle } from "../encounter/PatternPuzzle";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { formatNarration } from "@/lib/narrative";
 import { getAudio, SFX } from "@/lib/audio-engine";
+import { prefetchNarration } from "@/lib/tts-prefetch";
 
 import { Backpack, GearSix } from "@phosphor-icons/react";
 
 import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
 import { ChoiceButton } from "./ChoiceButton";
-import { FreeInput } from "./FreeInput";
 import { SettingsModal } from "./SettingsModal";
 import { MedalToast } from "../medals/MedalToast";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
 import { NarrationAudio } from "../audio/NarrationAudio";
-import { CompanionRail } from "../dialogue/CompanionRail";
-import { DialogueModal } from "../dialogue/DialogueModal";
+import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
 import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow";
 import { trimDialogueHistory } from "@/lib/dialogue-personas";
-import { pickEncounterFor } from "@/lib/encounter-engine";
+import { buildEncounterQueue } from "@/lib/encounter-engine";
+import { getEncounter } from "@/data/encounters";
 import type { EncounterDef } from "@/types/encounter";
 
 /**
@@ -63,37 +63,123 @@ function characterImagePath(
   return `/stories/${storyId}/${folder}/${filename}`;
 }
 
+/**
+ * Dialogue portrait path — 1024×1024 head-shots used in the rail.
+ * Lives in a dedicated `/dialogue/` folder so the artist can paint these
+ * with a different framing than the in-scene sprites. Dorothy maps to
+ * `hero` to stay consistent with the rest of the asset tree.
+ */
+function dialoguePortraitPath(
+  storyId: string,
+  id: SpeakerId | CompanionId,
+): string {
+  const filename = id === "dorothy" ? "hero" : id;
+  return `/stories/${storyId}/dialogue/${filename}`;
+}
+
 interface Props {
   story: Story;
   medals: MedalsFile;
   characters: CharactersFile;
+  /** localStorage slot for persistence. Defaults to "play" (live game). */
+  slot?: string;
+  /** When true, any encounter that mounts auto-resolves as a victory with
+   *  zero damage / zero rewards. */
+  skipBattles?: boolean;
+  /** Fires on every PlayState mutation. */
+  onStateChange?: (state: PlayState) => void;
+  /** Optional React node rendered as a floating bar above the scene. */
+  extraTopBar?: React.ReactNode;
+  /** When set, ignore any saved state in `slot` and start a fresh
+   *  PlayState at this scene. State is NOT persisted in this mode —
+   *  intended for the admin per-scene preview modal. */
+  initialSceneId?: string;
 }
 
-interface NarrationOverride {
-  text: string;
-  speaker: SpeakerId;
-  /** Scene this override belongs to — cleared when the player moves on. */
-  appliesToSceneId: string;
-}
-
-export function StoryPlayer({ story, medals, characters }: Props) {
-  const [state, setState] = useState<PlayState>(() => newPlayState(story));
+export function StoryPlayer({
+  story,
+  medals,
+  characters,
+  slot = "play",
+  skipBattles,
+  onStateChange,
+  extraTopBar,
+  initialSceneId,
+}: Props) {
+  const previewMode = !!initialSceneId;
+  const [state, setState] = useState<PlayState>(() => {
+    const fresh = newPlayState(story);
+    if (initialSceneId && story.scenes[initialSceneId]) {
+      return { ...fresh, currentSceneId: initialSceneId };
+    }
+    return fresh;
+  });
   const [medalQueue, setMedalQueue] = useState<Medal[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const [narrationOverride, setNarrationOverride] =
-    useState<NarrationOverride | null>(null);
-  const [isNarrating, setIsNarrating] = useState(false);
   const [muted, setMuted] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [dialogueWith, setDialogueWith] = useState<SpeakerId | null>(null);
-  const [pendingEncounter, setPendingEncounter] =
-    useState<EncounterDef | null>(null);
-  const router = useRouter();
-
-  function openDialogueWith(id: SpeakerId) {
-    setDialogueWith(id);
+  /** True while a SceneDialogueLayer bubble is open — hides the
+   *  underlying narration + branch UI to avoid visual overlap. */
+  const [dialogueActive, setDialogueActive] = useState(false);
+  /** Gates the choice-button entrance animation. Flips true when the
+   *  narration typewriter finishes (or user taps to skip), and resets
+   *  whenever the displayed narration changes (new scene / outcome). */
+  const [narrationDone, setNarrationDone] = useState(false);
+  // All overlay state (puzzle / outcome / encounter+battle) now lives in
+  // `state.interaction` so a page refresh resumes on the exact same
+  // overlay rather than skipping past. Helpers below re-derive the rich
+  // view-model (Branch, EncounterDef, Medal) from catalogs on demand.
+  function setInteraction(next: InteractionState | undefined) {
+    setState((s) => ({
+      ...s,
+      interaction: next,
+      updatedAt: new Date().toISOString(),
+    }));
   }
+
+  const pendingPuzzle = useMemo(() => {
+    const i = state.interaction;
+    if (!i || i.kind !== "puzzle") return null;
+    const branch = story.scenes[i.sourceSceneId]?.branches.find(
+      (b) => b.id === i.branchId,
+    );
+    if (!branch?.puzzle) return null;
+    return { branch, puzzle: branch.puzzle, attemptKey: i.attemptKey };
+  }, [state.interaction, story.scenes]);
+
+  const pendingOutcome = useMemo(() => {
+    const i = state.interaction;
+    if (!i || i.kind !== "outcome") return null;
+    const branch = story.scenes[i.sourceSceneId]?.branches.find(
+      (b) => b.id === i.branchId,
+    );
+    if (!branch?.outcome) return null;
+    const medal = i.medalId
+      ? medals.medals.find((m) => m.id === i.medalId) ?? null
+      : null;
+    return {
+      branch,
+      sourceSceneId: i.sourceSceneId,
+      text: branch.outcome,
+      items: i.items,
+      medal,
+    };
+  }, [state.interaction, story.scenes, medals.medals]);
+
+  const pendingEncounter: EncounterDef | null = useMemo(() => {
+    const i = state.interaction;
+    if (!i || i.kind !== "encounter") return null;
+    const headId = i.queue[0];
+    return headId ? getEncounter(headId) : null;
+  }, [state.interaction]);
+
+  const persistedBattleState: BattleState | undefined = useMemo(() => {
+    const i = state.interaction;
+    if (!i || i.kind !== "encounter") return undefined;
+    return i.battle as BattleState | undefined;
+  }, [state.interaction]);
+  const router = useRouter();
 
   function handleApplyDialogueTurn(
     targetId: SpeakerId,
@@ -101,21 +187,24 @@ export function StoryPlayer({ story, medals, characters }: Props) {
     userText: string,
   ) {
     setState((prev) => {
-      const currentMood =
-        (prev.companionMoods?.[targetId as CompanionId] ?? 5);
+      const currentMood = prev.companionMoods?.[targetId as CompanionId] ?? 5;
       const nextMood = Math.max(
         0,
         Math.min(10, currentMood + (resp.moodDelta ?? 0)),
       );
 
-      const turns: DialogueMessage[] = [
-        ...(prev.dialogueHistory?.[targetId] ?? []),
-        { role: "hero", text: userText },
-        { role: "character", text: resp.reply },
-      ];
+      // First-turn greeting has empty heroText — don't push that empty
+      // hero turn into history, only the character's opener.
+      const baseHistory = prev.dialogueHistory?.[targetId] ?? [];
+      const turns = userText
+        ? [
+            ...baseHistory,
+            { role: "hero" as const, text: userText },
+            { role: "character" as const, text: resp.reply },
+          ]
+        : [...baseHistory, { role: "character" as const, text: resp.reply }];
       const trimmed = trimDialogueHistory(turns, 12);
 
-      // Inventory keeps duplicates so the bag UI can show ×N counts.
       const inventory = resp.itemGift
         ? [...(prev.inventory ?? []), resp.itemGift]
         : prev.inventory;
@@ -134,24 +223,54 @@ export function StoryPlayer({ story, medals, characters }: Props) {
         updatedAt: new Date().toISOString(),
       };
     });
-
-    if (resp.endsConversation) {
-      // Give the user 2.5s to read the final line then auto-close.
-      setTimeout(() => setDialogueWith(null), 2500);
-    }
   }
 
-  // One-shot hydration from localStorage.
+  function handleDialogueClose() {
+    setState((prev) => {
+      const nextState: PlayState = {
+        ...prev,
+        dialogueCount: prev.dialogueCount + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      // Check dialogue-count medals.
+      const earned: Medal[] = [];
+      const already = new Set(nextState.earnedMedals);
+      for (const m of medals.medals) {
+        if (already.has(m.id)) continue;
+        if (
+          m.trigger.type === "dialogue_count" &&
+          nextState.dialogueCount >= m.trigger.min
+        ) {
+          earned.push(m);
+        }
+      }
+      if (earned.length > 0) {
+        setMedalQueue((q) => [...q, ...earned]);
+        getAudio().playSfx(SFX.MEDAL);
+        return {
+          ...nextState,
+          earnedMedals: [...nextState.earnedMedals, ...earned.map((m) => m.id)],
+        };
+      }
+      return nextState;
+    });
+  }
+
+  // One-shot hydration from localStorage. Preview mode skips loading saved
+  // state (the parent passed an explicit starting scene); mute preference
+  // still applies so the per-scene preview respects the player's choice.
   useEffect(() => {
-    const saved = loadState(story.id);
-    if (saved && story.scenes[saved.currentSceneId]) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
-      setState(saved);
+    if (!previewMode) {
+      const saved = loadState(story.id, slot);
+      if (saved && story.scenes[saved.currentSceneId]) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
+        setState(saved);
+      }
     }
     const savedMute = window.localStorage.getItem("storyranger:muted") === "1";
     if (savedMute) setMuted(true);
     setHydrated(true);
-  }, [story]);
+  }, [story, slot, previewMode]);
 
   // Persist mute preference + propagate to audio engine
   useEffect(() => {
@@ -161,7 +280,18 @@ export function StoryPlayer({ story, medals, characters }: Props) {
   }, [muted, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveState(state);
+    // Preview mode is ephemeral — never write to localStorage so closing
+    // and re-opening the modal always starts fresh at the chosen scene.
+    if (hydrated && !previewMode) saveState(state, slot);
+  }, [state, hydrated, slot, previewMode]);
+
+  // Surface every state change to the parent (Demo uses this to push undo
+  // snapshots). Skip the initial render — only mutations matter.
+  useEffect(() => {
+    if (hydrated) onStateChange?.(state);
+    // We intentionally omit `onStateChange` from deps so an inline arrow
+    // from the parent doesn't re-fire this effect on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, hydrated]);
 
   // Drive BGM by current scene. Auto-crossfades between scenes.
@@ -185,22 +315,140 @@ export function StoryPlayer({ story, medals, characters }: Props) {
   }, [characters]);
 
   function handleChoose(branch: Branch) {
-    setNarrationOverride(null);
+    // Branch puzzle gates the reward. Stage it on `interaction` — engine
+    // state stays on the source scene until the puzzle resolves, so a
+    // refresh re-mounts the same puzzle.
+    if (branch.puzzle) {
+      setInteraction({
+        kind: "puzzle",
+        sourceSceneId: state.currentSceneId,
+        branchId: branch.id,
+        attemptKey: 0,
+      });
+      return;
+    }
+    commitBranch(branch, { skipReward: false });
+  }
+
+  /** Apply the branch transition. `skipReward` lets the caller suppress
+   *  reward grant (used when a puzzle fails in `skip` mode).
+   *
+   *  When the branch defines an `outcome`, we still apply the engine
+   *  state immediately (so rewards/medals are realised) but pause UI on
+   *  an "outcome page": same scene art, outcome narration, reward chips
+   *  inline. Tap anywhere fires `continueFromOutcome()` and the scene
+   *  transition proceeds. */
+  function commitBranch(branch: Branch, opts: { skipReward: boolean }) {
     const audio = getAudio();
     audio.playSfx(SFX.PAGE_TURN);
     if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
-    const result = takeBranch(state, branch, story, medals);
-    setState(result.state);
+
+    const prevSceneId = state.currentSceneId;
+
+    const result = takeBranch(state, branch, story, medals, opts);
     if (result.earnedMedals.length > 0) {
       setMedalQueue((q) => [...q, ...result.earnedMedals]);
       audio.playSfx(SFX.MEDAL);
     }
-    // v2.0 — roll for a side encounter after entering the new main scene
-    const enc = pickEncounterFor(result.state.currentSceneId, result.state);
-    if (enc) setPendingEncounter(enc);
+
+    // Outcome path: pause on the outgoing scene art with the branch
+    // outcome text + reward chips. Engine state already advanced; the
+    // outcome interaction holds the UI until Continue is tapped.
+    if (branch.outcome && !opts.skipReward) {
+      const newItems = result.sceneReward?.items ?? [];
+      const medalId = result.sceneReward?.medalId;
+      setState({
+        ...result.state,
+        interaction: {
+          kind: "outcome",
+          sourceSceneId: prevSceneId,
+          branchId: branch.id,
+          items: newItems,
+          medalId: medalId ?? undefined,
+        },
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // No outcome → immediate transition + build encounter pool.
+    const queue = buildEncounterQueue(prevSceneId, branch.id, result.state);
+    setState({
+      ...result.state,
+      interaction:
+        queue.length > 0
+          ? { kind: "encounter", queue: queue.map((e) => e.id) }
+          : undefined,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  function continueFromOutcome() {
+    if (!pendingOutcome) return;
+    const { sourceSceneId, branch } = pendingOutcome;
+    // Build the encounter pool for the branch we just traversed and let
+    // the regular flow consume it before the destination scene narrates.
+    const queue = buildEncounterQueue(sourceSceneId, branch.id, state);
+    setInteraction(
+      queue.length > 0
+        ? { kind: "encounter", queue: queue.map((e) => e.id) }
+        : undefined,
+    );
+  }
+
+  function handlePuzzleResolved(correct: boolean) {
+    if (!pendingPuzzle) return;
+    const { branch } = pendingPuzzle;
+    if (correct) {
+      setInteraction(undefined);
+      commitBranch(branch, { skipReward: false });
+      return;
+    }
+    // Fail handling depends on branch.onFailMode.
+    if (branch.onFailMode === "retry") {
+      setState((s) =>
+        s.interaction?.kind === "puzzle"
+          ? {
+              ...s,
+              interaction: {
+                ...s.interaction,
+                attemptKey: s.interaction.attemptKey + 1,
+              },
+              updatedAt: new Date().toISOString(),
+            }
+          : s,
+      );
+      return;
+    }
+    // "skip" (or unset → skip default): proceed without reward.
+    setInteraction(undefined);
+    commitBranch(branch, { skipReward: true });
+  }
+
+  /** Persist live BattleState changes from the active EncounterFlow into
+   *  the interaction slice so a refresh resumes mid-fight. */
+  function handleBattleStateChange(battle: BattleState) {
+    setState((s) => {
+      if (s.interaction?.kind !== "encounter") return s;
+      return {
+        ...s,
+        interaction: { ...s.interaction, battle },
+        updatedAt: new Date().toISOString(),
+      };
+    });
   }
 
   function applyEncounterResult(res: EncounterResult) {
+    // Whole-party defeat → game over. The BattleScreen's TerminalPanel
+    // already showed the defeat message; on Continue we wipe the save
+    // for this slot and send the player back to the title screen so
+    // they can start over. Demo mode follows the same flow (the demo
+    // bar's Reset already gives a "Start over" path).
+    if (res.outcome === "defeat") {
+      clearState(story.id, slot);
+      router.push("/");
+      return;
+    }
     setState((prev) => {
       const completed = Array.from(
         new Set([...(prev.completedEncounters ?? []), res.encounterId]),
@@ -230,13 +478,28 @@ export function StoryPlayer({ story, medals, characters }: Props) {
           : prev.currentSceneId
         : prev.currentSceneId;
 
-      // Battle encounters return updated party HP; story encounters pass null.
-      const partyHp = res.partyHp ?? prev.partyHp ?? {};
+      // All encounters are battles now → partyHp always returned.
+      const partyHp = res.partyHp;
       const fallenAttackers = res.fallenAttackers.length
         ? Array.from(
             new Set([...(prev.fallenAttackers ?? []), ...res.fallenAttackers]),
           )
         : prev.fallenAttackers;
+
+      // Pop the head of the queue. Reset `battle` so the next battle
+      // re-plays its alert splash and starts fresh. Clear interaction
+      // entirely when the queue empties. If somehow this fires while
+      // interaction is a non-encounter (shouldn't happen, but in case of
+      // a transient state race) preserve it rather than nuking unrelated
+      // overlay state.
+      let nextInteraction: InteractionState | undefined = prev.interaction;
+      if (prev.interaction?.kind === "encounter") {
+        const nextQueue = prev.interaction.queue.slice(1);
+        nextInteraction =
+          nextQueue.length > 0
+            ? { kind: "encounter", queue: nextQueue }
+            : undefined;
+      }
 
       return {
         ...prev,
@@ -247,6 +510,7 @@ export function StoryPlayer({ story, medals, characters }: Props) {
         companionMoods,
         partyHp,
         fallenAttackers,
+        interaction: nextInteraction,
         updatedAt: new Date().toISOString(),
       };
     });
@@ -257,72 +521,100 @@ export function StoryPlayer({ story, medals, characters }: Props) {
       if (m) setMedalQueue((q) => [...q, m]);
       getAudio().playSfx(SFX.MEDAL);
     }
-    setPendingEncounter(null);
-  }
-
-  async function handleFreeInput(text: string) {
-    if (isNarrating) return;
-    setIsNarrating(true);
-    getAudio().playSfx(SFX.SEND);
-    try {
-      const res = await fetch("/api/narrate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storyId: story.id,
-          sceneId: state.currentSceneId,
-          freeInput: text,
-          hero: state.hero,
-          companions: state.companions,
-        }),
-      });
-      if (!res.ok) throw new Error(`narrate ${res.status}`);
-      const data = (await res.json()) as NarrateResponse;
-      const result = applyNarrateResponse(state, data, story, medals);
-      setNarrationOverride({
-        text: data.narration,
-        speaker: data.speaker,
-        appliesToSceneId: data.nextSceneId,
-      });
-      setState(result.state);
-      if (result.earnedMedals.length > 0) {
-        setMedalQueue((q) => [...q, ...result.earnedMedals]);
-        getAudio().playSfx(SFX.MEDAL);
-      }
-    } catch (err) {
-      console.warn("[narrate] request failed", err);
-      setNarrationOverride({
-        text: "Dorothy pauses, as if the wind has muffled her voice. Try a different idea.",
-        speaker: currentScene.speaker,
-        appliesToSceneId: state.currentSceneId,
-      });
-    } finally {
-      setIsNarrating(false);
-    }
   }
 
   function handleReset() {
-    clearState(story.id);
+    clearState(story.id, slot);
     setState(newPlayState(story));
     setMedalQueue([]);
-    setNarrationOverride(null);
   }
+
+  // Demo "skip battles" auto-resolve. When a battle would mount and
+  // skipBattles is on, fire victory immediately so the storyline walk
+  // doesn't stall on combat. We still grant the encounter's medal/mood
+  // so the medal flow is exercised end-to-end.
+  //
+  // Triggering state inside an effect is intentional here — pendingEncounter
+  // becomes truthy as a *consequence* of the engine state advancing, so we
+  // need to observe it before short-circuiting the battle UI.
+  useEffect(() => {
+    if (!skipBattles || !pendingEncounter) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional auto-resolve of the just-mounted encounter
+    applyEncounterResult({
+      encounterId: pendingEncounter.id,
+      outcome: "victory",
+      partyHp: state.partyHp ?? { hero: DEFAULT_MAX_HP.hero },
+      fallenAttackers: [],
+      itemsGained: [],
+      medalId: pendingEncounter.rewards.medalId,
+      moodBoost: pendingEncounter.rewards.moodBoost,
+    });
+    // Only react to skipBattles toggling or a new pendingEncounter
+    // appearing — we don't want every state.partyHp tick to retrigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skipBattles, pendingEncounter?.id]);
 
   const speaker = characterMap[currentScene.speaker];
   const isEnding = !!currentScene.ending;
 
-  const overrideActive =
-    !!narrationOverride &&
-    narrationOverride.appliesToSceneId === state.currentSceneId;
+  // Warm the TTS cache while the player listens to the current scene.
+  // For every branch on the current scene, fire-and-forget prefetches for
+  // (a) the branch's outcome line (spoken by the current narrator) and
+  // (b) the destination scene's narration (spoken by that scene's speaker).
+  // First-time visit to either becomes an IndexedDB cache hit on click,
+  // skipping the OpenAI roundtrip that the user perceived as "slow start".
+  useEffect(() => {
+    if (!hydrated || muted) return;
+    const currentVoice = speaker?.voice;
+    const currentSpeed = speaker?.voiceSpeed ?? 1;
+    for (const branch of currentScene.branches ?? []) {
+      if (branch.outcome && currentVoice) {
+        void prefetchNarration(
+          formatNarration(branch.outcome, state.hero),
+          currentVoice,
+          currentSpeed,
+        );
+      }
+      const nextScene = story.scenes[branch.next];
+      if (!nextScene) continue;
+      const nextSpeaker = characterMap[nextScene.speaker];
+      if (!nextSpeaker) continue;
+      void prefetchNarration(
+        formatNarration(nextScene.narration, state.hero),
+        nextSpeaker.voice,
+        nextSpeaker.voiceSpeed,
+      );
+    }
+  }, [
+    hydrated,
+    muted,
+    currentScene,
+    speaker,
+    story.scenes,
+    characterMap,
+    state.hero,
+  ]);
 
-  const rawNarration = overrideActive
-    ? narrationOverride!.text
-    : currentScene.narration;
-  const displayedNarration = formatNarration(rawNarration, state.hero);
-
-  const displayedSpeakerId: SpeakerId = overrideActive
-    ? narrationOverride!.speaker
+  // Outcome page overrides the displayed scene art + narration with the
+  // outgoing scene's image + the branch's outcome text. The actual
+  // PlayState has already advanced to the next scene; we look the prior
+  // scene up by id from interaction (works even on refresh-resume).
+  const showingOutcome = !!pendingOutcome;
+  const outcomePrevScene = pendingOutcome
+    ? story.scenes[pendingOutcome.sourceSceneId]
+    : null;
+  const displayedNarration = showingOutcome
+    ? formatNarration(pendingOutcome.text, state.hero)
+    : formatNarration(currentScene.narration, state.hero);
+  const displayedSpeakerId: SpeakerId = showingOutcome
+    ? outcomePrevScene?.speaker ?? currentScene.speaker
     : currentScene.speaker;
+  const displayedImage = showingOutcome
+    ? outcomePrevScene?.image ?? currentScene.image
+    : currentScene.image;
+  const displayedSceneKey = showingOutcome
+    ? `outcome:${pendingOutcome.branch.id}`
+    : state.currentSceneId;
 
   // If the speaker is the hero (dorothy), swap in the player's chosen name.
   const baseSpeaker = characterMap[displayedSpeakerId] ?? speaker;
@@ -331,23 +623,39 @@ export function StoryPlayer({ story, medals, characters }: Props) {
       ? { ...baseSpeaker, name: state.hero.name }
       : baseSpeaker;
 
-  const narrationKey = `${state.currentSceneId}:${displayedNarration.slice(0, 40)}`;
+  const narrationKey = `${displayedSceneKey}:${displayedNarration.slice(0, 40)}`;
 
+  // Reset the narration-done gate whenever the narration content changes
+  // so the next scene's choices re-enter via the typewriter→fade flow.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: narrationKey transition drives the gate reset
+    setNarrationDone(false);
+  }, [narrationKey]);
+
+  // `fixed inset-0` (instead of `relative h-dvh w-dvw`) pins the player
+  // root to the viewport edges directly, independent of any parent
+  // context — body padding, flex layout, iOS Safari's implicit
+  // `viewport-fit: cover` safe-area injection, scrollbar gutters, etc.
+  // The earlier `relative w-dvw` setup left a thin strip of body bg on
+  // the LEFT of iPad / desktop Chrome alike, because the player was
+  // being placed inside body's content area (which an outer layer was
+  // insetting). Fixed positioning sees the viewport directly — no
+  // ambiguity, no math, no per-browser quirks.
   return (
-    <div className="relative h-dvh w-dvw overflow-hidden bg-ink">
+    <div className="fixed inset-0 z-0 overflow-hidden bg-ink">
       {/* Full-bleed scene image as background — both old & new in DOM at
           the same time so the swap is a true cross-fade. Long duration for
           a slow, painterly transition between storybook pages. */}
       <AnimatePresence initial={false}>
         <motion.div
-          key={`img-${state.currentSceneId}`}
+          key={`img-${displayedSceneKey}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 2.4, ease: "easeInOut" }}
           className="absolute inset-0"
         >
-          <SceneImage src={currentScene.image} alt={`${story.title} — scene`} />
+          <SceneImage src={displayedImage} alt={`${story.title} — scene`} />
         </motion.div>
       </AnimatePresence>
 
@@ -355,11 +663,15 @@ export function StoryPlayer({ story, medals, characters }: Props) {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-ink/35 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-ink/55 via-ink/15 to-transparent" />
 
-      {/* Top header — floating over the image (right side only) */}
+      {/* Top header — floating over the image. Left slot is reserved for
+          the demo Previous/Skip/Reset bar (only rendered when the parent
+          passes `extraTopBar`); right slot holds the always-on Backpack +
+          Settings buttons. */}
       <header
-        className="absolute inset-x-0 top-0 z-10 flex items-center justify-end gap-3 px-4 sm:px-6"
+        className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-4 sm:px-6"
         style={{ paddingTop: "max(0.625rem, env(safe-area-inset-top))" }}
       >
+        <div className="flex items-center gap-2 sm:gap-3">{extraTopBar}</div>
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
@@ -383,54 +695,97 @@ export function StoryPlayer({ story, medals, characters }: Props) {
         </div>
       </header>
 
-      {/* Bottom layout — narration (above), choices row (below). Choices
-          stretch horizontally across the full width so they cover the
-          minimum amount of the scene image. */}
+      {/* Bottom layout — narration (above), choices row (below). Hidden
+          while a dialogue bubble is open so the two UIs don't overlap.
+          During an outcome page the whole region also acts as a tap
+          target → continueFromOutcome(). */}
       <div
-        className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-stretch gap-3 px-4 pb-4 sm:px-6 sm:pb-6 sm:gap-4"
+        className={`absolute inset-x-0 bottom-0 z-10 flex flex-col items-stretch gap-3 px-4 pb-4 transition-opacity duration-200 sm:px-6 sm:pb-6 sm:gap-4 ${
+          dialogueActive ? "pointer-events-none opacity-0" : "opacity-100"
+        } ${showingOutcome ? "cursor-pointer" : ""}`}
+        aria-hidden={dialogueActive}
+        onClick={showingOutcome ? continueFromOutcome : undefined}
         style={{
           paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
         }}
       >
         {/* Narration — cinematic subtitle style. Block centered + text
             centered so left/right margins look identical regardless of
-            line length. text-balance keeps each line a similar length. */}
-        <div className="mx-auto w-[85%] max-w-4xl">
+            line length. text-balance keeps each line a similar length.
+            We gate on `!pendingEncounter` so the Typewriter for the
+            destination scene doesn't silently finish behind a battle
+            overlay — once the encounter clears the narration mounts
+            fresh and types out as the player sees it. */}
+        <div className="mx-auto w-[95%] max-w-6xl">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={`narr-${narrationKey}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.3 }}
-              className="max-h-[28dvh] overflow-y-auto pr-2"
-            >
-              <CharacterSpeechBox
-                speaker={displayedSpeakerId}
-                characterName={displayedSpeaker?.name ?? "Narrator"}
-                characterColor={displayedSpeaker?.color ?? "#5a4128"}
-                narration={displayedNarration}
-                variant="overlay"
-              />
-            </motion.div>
+            {!pendingEncounter && (
+              <motion.div
+                key={`narr-${narrationKey}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3 }}
+                // No fixed height cap — the narration block grows up
+                // from the bottom (parent is `absolute bottom-0 flex
+                // flex-col`), so longer text simply raises its top Y while
+                // the choice row stays anchored at the bottom. A safety
+                // ceiling of 60dvh keeps a worst-case multi-paragraph
+                // narration from covering the whole scene.
+                className="max-h-[60dvh] overflow-y-auto pr-2"
+              >
+                <CharacterSpeechBox
+                  speaker={displayedSpeakerId}
+                  characterName={displayedSpeaker?.name ?? "Narrator"}
+                  characterColor={displayedSpeaker?.color ?? "#5a4128"}
+                  narration={displayedNarration}
+                  variant="overlay"
+                  onTypingDone={() => setNarrationDone(true)}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
 
-          {isNarrating && (
-            <div className="mt-2 inline-flex items-center gap-2.5 rounded-pill bg-paper/85 px-3 py-1.5 text-sm text-ink-soft backdrop-blur">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
-              <span>The story is unfolding…</span>
-            </div>
-          )}
         </div>
 
-        {/* Choices row — horizontal at the very bottom.
-            Width ratio (total elements in the row, free input always last):
-              1 element (single branch, no free) → 40% centered
-              2 elements (1 branch + free)       → 40 / 60        (2 : 3)
-              3 elements (2 branches + free)     → 30 / 30 / 40   (3 : 3 : 4)
-              4 elements (3 branches + free)     → 20 / 20 / 20 / 40 (1 : 1 : 1 : 2)
-              N branches, no free                → evenly split */}
+        {/* Choices row — horizontal at the very bottom. While an outcome
+            is pending, we replace the choice row with reward chips + a
+            "tap anywhere to continue" hint. */}
         {(() => {
+          if (showingOutcome && pendingOutcome) {
+            return (
+              <div className="flex flex-col items-center gap-3">
+                {(pendingOutcome.items.length > 0 || pendingOutcome.medal) && (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {pendingOutcome.medal && (
+                      <span className="inline-flex items-center gap-1.5 rounded-pill bg-amber-300/40 px-3 py-1.5 text-sm font-semibold text-amber-900 ring-1 ring-amber-700/30 shadow-soft">
+                        <span aria-hidden>{pendingOutcome.medal.icon}</span>
+                        <span>{pendingOutcome.medal.name}</span>
+                      </span>
+                    )}
+                    {pendingOutcome.items.map((id, i) => (
+                      <span
+                        key={`${id}-${i}`}
+                        className="inline-flex items-center gap-1.5 rounded-pill bg-paper/90 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/15 shadow-soft"
+                      >
+                        <span aria-hidden>🎁</span>
+                        <span>{id}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <span
+                  className="text-sm font-semibold uppercase tracking-wide text-paper"
+                  style={{
+                    textShadow:
+                      "0 2px 6px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.95)",
+                  }}
+                  aria-hidden
+                >
+                  Tap anywhere to continue
+                </span>
+              </div>
+            );
+          }
           if (isEnding) {
             return (
               <EndingPanel
@@ -443,91 +798,76 @@ export function StoryPlayer({ story, medals, characters }: Props) {
           }
 
           const branches = currentScene.branches;
-          const hasFree = !!currentScene.allowFreeInput;
-          const total = branches.length + (hasFree ? 1 : 0);
-
-          if (total === 1) {
+          if (branches.length === 0) return null;
+          // Buttons stay hidden until narration finishes typing, then each
+          // pops in with a small stagger. `pointerEvents` is gated too so a
+          // rapid tap during the entrance can't accidentally pick a branch.
+          const entrance = (i: number) => ({
+            initial: { opacity: 0, y: 14, scale: 0.96 },
+            animate: narrationDone
+              ? { opacity: 1, y: 0, scale: 1 }
+              : { opacity: 0, y: 14, scale: 0.96 },
+            transition: {
+              type: "spring" as const,
+              stiffness: 320,
+              damping: 26,
+              delay: narrationDone ? i * 0.08 : 0,
+            },
+          });
+          if (branches.length === 1) {
             const branch = branches[0];
             return (
               <div className="flex justify-center">
-                <div className="w-full sm:w-2/5">
+                <motion.div
+                  className="w-full sm:w-2/5"
+                  style={{ pointerEvents: narrationDone ? "auto" : "none" }}
+                  {...entrance(0)}
+                >
                   <ChoiceButton
                     branch={branch}
-                    disabled={isNarrating}
                     onSelect={handleChoose}
                   />
-                </div>
+                </motion.div>
               </div>
             );
           }
-
-          // flex ratios for branch vs free input depending on total count
-          let branchFlex = 1;
-          let freeFlex = 1;
-          if (total === 2) {
-            branchFlex = 2;
-            freeFlex = 3;
-          } else if (total === 3) {
-            branchFlex = 3;
-            freeFlex = 4;
-          } else if (total === 4) {
-            branchFlex = 1;
-            freeFlex = 2;
-          }
-
           return (
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:gap-4">
-              {branches.map((branch) => (
-                <div
+              {branches.map((branch, i) => (
+                <motion.div
                   key={branch.id}
-                  className="min-w-0 sm:flex-[var(--branch-flex)]"
-                  style={
-                    {
-                      "--branch-flex": branchFlex,
-                    } as React.CSSProperties
-                  }
+                  className="min-w-0 flex-1"
+                  style={{ pointerEvents: narrationDone ? "auto" : "none" }}
+                  {...entrance(i)}
                 >
                   <ChoiceButton
                     branch={branch}
-                    disabled={isNarrating}
                     onSelect={handleChoose}
                   />
-                </div>
+                </motion.div>
               ))}
-
-              {hasFree && (
-                <div
-                  className="min-w-0 sm:flex-[var(--free-flex)]"
-                  style={
-                    {
-                      "--free-flex": freeFlex,
-                    } as React.CSSProperties
-                  }
-                >
-                  <FreeInput
-                    hint={
-                      currentScene.freeInputHint
-                        ? formatNarration(
-                            currentScene.freeInputHint,
-                            state.hero,
-                          )
-                        : undefined
-                    }
-                    disabled={isNarrating}
-                    onSubmit={handleFreeInput}
-                  />
-                </div>
-              )}
             </div>
           );
         })()}
       </div>
 
+      {/* Outcome tap-to-continue overlay. Sits BELOW the bottom UI
+          (z-10) but ABOVE the scene gradients/image (default z) — tapping
+          anywhere outside the speech box advances. */}
+      {showingOutcome && (
+        <button
+          type="button"
+          aria-label="Continue"
+          onClick={continueFromOutcome}
+          className="absolute inset-0 z-[5] cursor-pointer"
+        />
+      )}
+
       {hydrated && displayedSpeaker && (
         <NarrationAudio
           text={displayedNarration}
           character={displayedSpeaker}
-          muted={false}
+          muted={muted}
           playKey={narrationKey}
         />
       )}
@@ -537,47 +877,30 @@ export function StoryPlayer({ story, medals, characters }: Props) {
         onDismiss={() => setMedalQueue((q) => q.slice(1))}
       />
 
-      {/* Companion dialogue rail (left edge) */}
-      <CompanionRail
-        companions={state.companions}
-        moods={state.companionMoods ?? {}}
-        imageBase={(id) => characterImagePath(story.id, id)}
-        characterColor={(id) =>
-          characterMap[id as SpeakerId]?.color ?? "#5a4128"
-        }
-        characterName={(id) =>
-          characterMap[id as SpeakerId]?.name ?? id
-        }
-        onTalk={(id) => openDialogueWith(id as SpeakerId)}
-      />
-
-      {/* Dialogue modal */}
-      {dialogueWith && (() => {
-        const char = characterMap[dialogueWith];
-        if (!char) return null;
-        const moodKey = dialogueWith as CompanionId;
-        const mood = state.companionMoods?.[moodKey] ?? 5;
-        return (
-          <DialogueModal
-            open
-            storyId={story.id}
-            characterId={dialogueWith}
-            characterName={char.name}
-            characterColor={char.color}
-            characterImageBase={characterImagePath(story.id, dialogueWith)}
-            mood={mood}
-            hero={state.hero}
-            sceneId={state.currentSceneId}
-            sceneNarration={displayedNarration}
-            companions={state.companions}
-            history={state.dialogueHistory?.[dialogueWith] ?? []}
-            onApplyTurn={(resp, userText) =>
-              handleApplyDialogueTurn(dialogueWith, resp, userText)
-            }
-            onClose={() => setDialogueWith(null)}
-          />
-        );
-      })()}
+      {/* In-scene dialogue — left-edge portrait rail. Suppressed while
+          a battle encounter is active so the rail doesn't sit on top of
+          the BattleScreen. Unmounting also resets any open dialogue
+          state safely; it remounts after the battle closes. */}
+      {!pendingEncounter && (
+        <SceneDialogueLayer
+          storyId={story.id}
+          sceneId={state.currentSceneId}
+          sceneSpeaker={currentScene.speaker}
+          sceneNarration={displayedNarration}
+          hero={state.hero}
+          companions={state.companions}
+          extraDialogueCharacters={currentScene.dialogueCharacters ?? []}
+          characters={characters}
+          portraitBase={(id) =>
+            dialoguePortraitPath(story.id, id as SpeakerId | CompanionId)
+          }
+          mood={(id) => state.companionMoods?.[id as CompanionId] ?? 5}
+          history={(id) => state.dialogueHistory?.[id] ?? []}
+          onApplyTurn={handleApplyDialogueTurn}
+          onSessionClose={() => handleDialogueClose()}
+          onActiveChange={setDialogueActive}
+        />
+      )}
 
       <MedalShelfModal
         open={shelfOpen}
@@ -606,11 +929,30 @@ export function StoryPlayer({ story, medals, characters }: Props) {
             characterImageBase={(id, mode = "default") =>
               characterImagePath(story.id, id, mode)
             }
+            characters={characters.characters}
+            initialBattleState={persistedBattleState}
+            onBattleStateChange={handleBattleStateChange}
             onComplete={applyEncounterResult}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
       </AnimatePresence>
+
+      {/* Branch puzzle — overlay shown after picking a branch with
+          `puzzle`. `attemptKey` remounts PatternPuzzle for retry. */}
+      {pendingPuzzle && (
+        <div
+          className="fixed inset-0 z-[55] bg-ink/85 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <PatternPuzzle
+            key={`${pendingPuzzle.branch.id}-${pendingPuzzle.attemptKey}`}
+            puzzle={pendingPuzzle.puzzle}
+            onSolved={handlePuzzleResolved}
+          />
+        </div>
+      )}
 
       <SettingsModal
         open={settingsOpen}

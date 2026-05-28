@@ -22,7 +22,7 @@ export default async function EncountersPage({
         title="Encounters"
         count={encounters.length}
         filePath="encounters.json"
-        subtitle="edit via Story Graph → scene inspector"
+        subtitle="battle pool — edit via Story Graph → scene inspector"
       />
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <CatalogTable<EncounterDefT>
@@ -43,65 +43,40 @@ export default async function EncountersPage({
             },
             {
               key: "trigger",
-              header: "After Scene",
-              width: "w-44",
+              header: "On Branch",
+              width: "w-56",
               render: (e) => (
                 <div className="flex flex-col">
-                  <code className="text-ink-soft">{e.trigger.afterScene}</code>
+                  <code className="text-ink-soft">
+                    {e.trigger.sceneId} → {e.trigger.branchId}
+                  </code>
                   <span className="text-xs text-ink-soft/60">
-                    chance {e.trigger.chance}
-                    {e.trigger.once ? " · once" : ""}
+                    × {e.trigger.count ?? 1}
                   </span>
                 </div>
               ),
             },
             {
-              key: "kind",
-              header: "Kind",
-              width: "w-24",
-              render: (e) =>
-                e.body.kind === "battle" ? (
-                  <span className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs text-ruby">
-                    battle
-                  </span>
-                ) : (
-                  <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
-                    story
-                  </span>
-                ),
-            },
-            {
-              key: "body",
-              header: "Body",
-              render: (e) =>
-                e.body.kind === "battle" ? (
-                  <div className="flex flex-wrap gap-1">
-                    {e.body.monsterIds.map((m, i) => (
-                      <code
-                        key={`${m}-${i}`}
-                        className="rounded-pill bg-paper-deep/40 px-1.5 py-0.5 text-xs"
-                      >
-                        {m}
-                      </code>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-xs text-ink-soft">
-                    {e.body.choices
-                      ? `${e.body.choices.length} choice(s)`
-                      : "auto-victory"}
-                  </span>
-                ),
+              key: "monsters",
+              header: "Monsters",
+              render: (e) => (
+                <div className="flex flex-wrap gap-1">
+                  {e.body.monsterIds.map((m, i) => (
+                    <code
+                      key={`${m}-${i}`}
+                      className="rounded-pill bg-paper-deep/40 px-1.5 py-0.5 text-xs"
+                    >
+                      {m}
+                    </code>
+                  ))}
+                </div>
+              ),
             },
             {
               key: "rewards",
-              header: "Rewards",
+              header: "Bonus",
               render: (e) => (
                 <div className="flex flex-col gap-0.5 text-xs">
-                  {e.rewards.victoryItems &&
-                    e.rewards.victoryItems.length > 0 && (
-                      <span>📦 {e.rewards.victoryItems.join(", ")}</span>
-                    )}
                   {e.rewards.medalId && <span>🏅 {e.rewards.medalId}</span>}
                 </div>
               ),

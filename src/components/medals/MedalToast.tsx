@@ -27,14 +27,13 @@ export function MedalToast({ medal, onDismiss }: Props) {
           type="button"
           aria-label={`New medal: ${medal.name}. Tap to dismiss.`}
           onClick={onDismiss}
-          initial={{ opacity: 0, x: -16, scale: 0.96 }}
-          animate={{ opacity: 1, x: 0, scale: 1 }}
-          exit={{ opacity: 0, x: -12, scale: 0.97 }}
+          initial={{ opacity: 0, y: -16, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -12, scale: 0.97 }}
           transition={{ type: "spring", stiffness: 280, damping: 22 }}
-          className="pointer-events-auto fixed z-50 flex max-w-xs items-center gap-2.5 rounded-pill bg-paper/95 px-3.5 py-2 shadow-button ring-1 ring-accent/30 backdrop-blur"
+          className="pointer-events-auto fixed left-1/2 z-50 flex max-w-xs -translate-x-1/2 items-center gap-2.5 rounded-pill bg-paper/95 px-3.5 py-2 shadow-button ring-1 ring-accent/30 backdrop-blur"
           style={{
             top: "max(0.625rem, env(safe-area-inset-top))",
-            left: "max(0.625rem, env(safe-area-inset-left))",
           }}
         >
           <span className="text-2xl leading-none" aria-hidden>

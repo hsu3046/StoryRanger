@@ -100,10 +100,24 @@ export function scanItemReferences(storyId: string): {
     }
   }
 
-  for (const e of repo.listEncounters(storyId)) {
-    for (const v of e.rewards.victoryItems ?? []) {
-      if (!known.has(v)) {
-        missing.push({ where: `encounter:${e.id}.rewards.victoryItems`, id: v });
+  const story = repo.getStory(storyId)?.story;
+  if (story) {
+    for (const [sid, scene] of Object.entries(story.scenes)) {
+      for (const itemId of scene.reward?.items ?? []) {
+        if (!known.has(itemId)) {
+          missing.push({ where: `scene:${sid}.reward.items`, id: itemId });
+        }
+      }
+      for (const b of scene.branches) {
+        void b; // branch.reward removed — kept loop in case future fields
+        for (const itemId of [] as string[]) {
+          if (!known.has(itemId)) {
+            missing.push({
+              where: `scene:${sid}.branch:${b.id}.reward.items`,
+              id: itemId,
+            });
+          }
+        }
       }
     }
   }

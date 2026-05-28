@@ -11,7 +11,7 @@ interface Props {
 export function MedalShelf({ catalog, earned }: Props) {
   const earnedSet = new Set(earned);
   return (
-    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-3">
+    <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
       {catalog.medals.map((m, i) => {
         const got = earnedSet.has(m.id);
         return (

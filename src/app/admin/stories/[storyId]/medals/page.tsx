@@ -11,8 +11,8 @@ function describeTrigger(t: MedalTrigger): string {
       return `branch: ${t.branchId}`;
     case "scene":
       return `scene: ${t.sceneId}`;
-    case "free_input_count":
-      return `free input ≥ ${t.min}`;
+    case "dialogue_count":
+      return `dialogue ≥ ${t.min}`;
     case "ending":
       return `ending: ${t.endingId}`;
     case "encounter":

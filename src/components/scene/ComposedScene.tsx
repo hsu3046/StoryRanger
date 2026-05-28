@@ -201,15 +201,26 @@ function SpriteLayer({
   const scale = layer.scale ?? defaultScale;
   const xPercent = POS_X[layer.position];
 
-  // Container height as a fraction of parent: scale 1.0 => 75% of parent height.
-  const heightPct = Math.min(95, Math.max(20, scale * 75));
+  // Container height as a fraction of viewport. We deliberately compute
+  // BOTH width and height as explicit `dvh` values rather than relying on
+  // the `aspect-ratio` CSS property. Why: in our layout
+  //   `<fixed inset-0>` → `<absolute inset-0>` → `<absolute bottom:0; height:Xdvh; aspect-ratio:R>`
+  // every major browser (iOS Safari, desktop Chrome / Edge / Firefox)
+  // intermittently treated the aspect-ratio as the authoritative
+  // constraint and shrank `height` to fit a content-derived width, even
+  // though we had specified `height` explicitly. That dropped sprites
+  // to ~40% of their intended size. Deriving width directly from the
+  // image's aspect (`height × naturalAspect`) sidesteps the ambiguity —
+  // both axes are explicit, no circular layout, no surprises.
+  const heightDvh = Math.min(92, Math.max(15, scale * 80));
+  const widthDvh = aspectRatio != null ? heightDvh * aspectRatio : null;
 
   // Outer positioner: spring-animates left/bottom/zIndex so the slot swap
   // glides instead of teleporting. translateX(-50%) is the static centering
   // offset and stays in the style (Framer Motion isn't animating x here).
   const outerStyle: React.CSSProperties = {
-    height: `${heightPct}%`,
-    aspectRatio: aspectRatio ?? undefined,
+    height: `${heightDvh}dvh`,
+    width: widthDvh != null ? `${widthDvh}dvh` : "auto",
     transform: "translateX(-50%)",
   };
 
@@ -242,13 +253,16 @@ function SpriteLayer({
         initial={false}
         animate={{
           left: `${xPercent}%`,
-          bottom: layer.airborne ? "30%" : "0%",
+          bottom: layer.airborne ? "55%" : "3%",
           zIndex: layer.z ?? defaultZ,
           opacity: layer.defeated ? 0.35 : 1,
           filter: layer.defeated ? "grayscale(70%)" : "grayscale(0%)",
         }}
         transition={{ type: "spring", stiffness: 220, damping: 26 }}
-        style={{ ...outerStyle, aspectRatio: "1 / 1" }}
+        // Fallback placeholder is a 1:1 square — width equals height so
+        // we don't hit the same aspect-ratio-collapses-height bug as the
+        // main render path.
+        style={{ ...outerStyle, width: `${heightDvh}dvh` }}
         aria-hidden
       >
         <div className="flex h-3/4 w-3/4 items-center justify-center rounded-full bg-paper/30 ring-1 ring-ink-soft/20 backdrop-blur">
@@ -280,7 +294,7 @@ function SpriteLayer({
       initial={false}
       animate={{
         left: `${xPercent}%`,
-        bottom: layer.airborne ? "30%" : "0%",
+        bottom: layer.airborne ? "55%" : "3%",
         zIndex: layer.z ?? defaultZ,
         opacity: isHurting ? hurtOpacity : layer.defeated ? 0.35 : 1,
         filter: isHurting ? hurtFilter : baseFilter,
@@ -303,9 +317,11 @@ function SpriteLayer({
       style={outerStyle}
     >
       {/* The img probes its own natural ratio on load and tells the outer
-          via `setAspectRatio`. Once known, the outer has explicit height +
-          aspectRatio so width is deterministic; img fills with object-contain
-          (also a safety net if outer's aspect doesn't match exactly). */}
+          via `setAspectRatio`. Once known, the outer has explicit height
+          + width (both in dvh) so the inner img just fills the box. While
+          ratio is still null on the very first frame, the outer has
+          `width: auto` so the img can size to its natural aspect — once
+          measured we swap to the exact width derived from `naturalAspect`. */}
       <motion.img
         key={candidates[idx]}
         src={candidates[idx]}

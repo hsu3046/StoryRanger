@@ -490,24 +490,9 @@ export function resolveDefense(
       tone: "defeat",
     });
 
-    // Dorothy down → defeat.
-    if (frontId === "hero") {
-      log.push({
-        text: "Glinda's blessing carries you all to safety…",
-        tone: "defeat",
-      });
-      return {
-        ...state,
-        log,
-        partyLives,
-        fallenAttackers,
-        heroLives: 0,
-        monsterIdxThisRound: state.monsterIdxThisRound + 1,
-        defendingMonsterIdx: undefined,
-        phase: "defeat",
-      };
-    }
-
+    // Find next available attacker. Hero down is no longer auto-defeat —
+    // companions can keep fighting; the battle only ends when EVERY
+    // party member has fallen.
     const partyOrder: AttackerId[] = ["hero", ...state.companions];
     const nextActive = partyOrder.find(
       (a) => !fallenAttackers.includes(a),

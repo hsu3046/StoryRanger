@@ -13,6 +13,8 @@ export const SpeakerIdSchema = z.enum([
   "wicked-witch",
   "glinda",
   "wizard",
+  "aunt-em",
+  "toto",
 ]);
 
 export const CompanionIdSchema = z.enum(["scarecrow", "tinman", "lion"]);
