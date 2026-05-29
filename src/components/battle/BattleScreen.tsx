@@ -7,6 +7,7 @@ import { GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
 import {
   attackerName,
   canAttackerAct,
+  canUseItem,
   chooseHeroAction,
   enterMonsterAttack,
   puzzleKindFor,
@@ -22,7 +23,8 @@ import {
 } from "@/lib/battle-engine";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { MONSTERS } from "@/data/monsters";
-import { itemIcon, prettyItem } from "@/data/items";
+import { getItem, itemIcon, prettyItem } from "@/data/items";
+import { effectLabel, itemUsableIn } from "@/data/item-effects";
 import { characterSize, sizeScale } from "@/lib/sprite-size";
 
 import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
@@ -59,9 +61,14 @@ interface Props {
     partyHp: PartyHp;
     /** Attackers KO'd this battle, appended to PlayState.fallenAttackers. */
     fallenAttackers: AttackerId[];
+    /** Items spent during the battle — removed from PlayState.inventory. */
+    itemsConsumed: string[];
   }) => void;
   /** Open the global Settings modal from inside the battle. */
   onOpenSettings?: () => void;
+  /** Player inventory (item ids, may repeat). Drives the in-battle item
+   *  row; consumed items are removed from PlayState when the battle ends. */
+  inventory?: string[];
 }
 
 const HERO_POSITIONS: Record<number, StagePosition[]> = {
@@ -80,6 +87,7 @@ export function BattleScreen({
   onStateChange,
   onComplete,
   onOpenSettings,
+  inventory = [],
 }: Props) {
   const [state, setState] = useState<BattleState>(
     () => initialState ?? setupBattle(setup),
@@ -478,10 +486,21 @@ export function BattleScreen({
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {state.phase === "hero-choose" && (
-          <ActionRow
-            monsters={aliveMonsters}
-            onAction={(a) => setState((s) => chooseHeroAction(s, a))}
-          />
+          <>
+            <ItemRow
+              inventory={inventory}
+              state={state}
+              onUse={(itemId) =>
+                setState((s) =>
+                  chooseHeroAction(s, { kind: "useItem", itemId }),
+                )
+              }
+            />
+            <ActionRow
+              monsters={aliveMonsters}
+              onAction={(a) => setState((s) => chooseHeroAction(s, a))}
+            />
+          </>
         )}
 
         {isTerminal && (
@@ -505,6 +524,7 @@ export function BattleScreen({
                 rewards: state.rewards,
                 partyHp: { ...state.partyLives },
                 fallenAttackers: [...state.fallenAttackers],
+                itemsConsumed: [...state.itemsConsumed],
               })
             }
           />
@@ -708,6 +728,60 @@ function ActionRow({
           onClick={() => onAction({ kind: "attack", targetIdx: m.index })}
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Consumable items usable this turn (hero-choose). Generic over effect
+ * kind: it lists any item with a battle-context effect and lets the engine
+ * (`canUseItem`) decide enablement — no per-effect UI branches, so future
+ * battle items appear here automatically.
+ */
+function ItemRow({
+  inventory,
+  state,
+  onUse,
+}: {
+  inventory: string[];
+  state: BattleState;
+  onUse: (itemId: string) => void;
+}) {
+  // Available count = how many of each id remain after this battle's spends.
+  const counts = new Map<string, number>();
+  for (const id of inventory) counts.set(id, (counts.get(id) ?? 0) + 1);
+  for (const id of state.itemsConsumed) {
+    counts.set(id, (counts.get(id) ?? 0) - 1);
+  }
+  const usable = [...counts.keys()]
+    .map((id) => ({ id, item: getItem(id), avail: counts.get(id) ?? 0 }))
+    .filter((e) => e.avail > 0 && e.item && itemUsableIn(e.item, "battle"));
+
+  if (usable.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap justify-center gap-2">
+      {usable.map(({ id, item, avail }) => {
+        if (!item) return null;
+        const enabled = canUseItem(state, item);
+        return (
+          <button
+            key={id}
+            type="button"
+            disabled={!enabled}
+            onClick={() => onUse(id)}
+            title={enabled ? item.description : "Can't use right now"}
+            className="inline-flex min-h-11 items-center gap-2 rounded-pill bg-paper/60 px-4 text-sm font-medium text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-paper/60"
+          >
+            <span aria-hidden>{item.icon ?? "🎁"}</span>
+            <span>{item.name}</span>
+            <span className="text-xs text-ink-soft">
+              {effectLabel(item.effect)}
+              {avail > 1 ? ` ×${avail}` : ""}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

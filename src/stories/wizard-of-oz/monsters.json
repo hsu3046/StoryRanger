@@ -5,9 +5,6 @@
       "name": "Forest Wolf",
       "type": "hostile",
       "hits": 3,
-      "drops": [
-        "wolf-fang"
-      ],
       "size": "medium",
       "puzzleKind": "add-1d"
     },
@@ -17,7 +14,7 @@
       "type": "hostile",
       "hits": 5,
       "drops": [
-        "wolf-pelt"
+        "magic-berry"
       ],
       "size": "large",
       "puzzleKind": "add-2d"
@@ -35,9 +32,6 @@
       "name": "Crow Scout",
       "type": "hostile",
       "hits": 2,
-      "drops": [
-        "feather-of-flight"
-      ],
       "size": "tiny",
       "puzzleKind": "bigger",
       "airborne": true
@@ -48,7 +42,7 @@
       "type": "hostile",
       "hits": 4,
       "drops": [
-        "feather-bundle"
+        "magic-berry"
       ],
       "size": "tiny",
       "puzzleKind": "odd-out",
@@ -60,7 +54,7 @@
       "type": "hostile",
       "hits": 6,
       "drops": [
-        "kalidah-claw"
+        "honey-cake"
       ],
       "size": "large",
       "puzzleKind": "multiply",
@@ -71,9 +65,6 @@
       "name": "Fighting Tree",
       "type": "hostile",
       "hits": 5,
-      "drops": [
-        "enchanted-acorn"
-      ],
       "size": "large",
       "puzzleKind": "missing"
     },
@@ -83,7 +74,7 @@
       "type": "hostile",
       "hits": 5,
       "drops": [
-        "stone-flake"
+        "magic-berry"
       ],
       "size": "huge",
       "puzzleKind": "sub-1d"
@@ -93,9 +84,6 @@
       "name": "Winged Monkey",
       "type": "hostile",
       "hits": 3,
-      "drops": [
-        "monkey-feather"
-      ],
       "size": "medium",
       "puzzleKind": "add-1d",
       "airborne": true
@@ -106,7 +94,7 @@
       "type": "hostile",
       "hits": 6,
       "drops": [
-        "swamp-pearl"
+        "honey-cake"
       ],
       "size": "large",
       "puzzleKind": "pattern"
@@ -116,9 +104,6 @@
       "name": "Crystal Cave Spider",
       "type": "hostile",
       "hits": 3,
-      "drops": [
-        "silk-thread"
-      ],
       "size": "tiny",
       "puzzleKind": "sub-1d",
       "airborne": true
@@ -129,7 +114,7 @@
       "type": "hostile",
       "hits": 4,
       "drops": [
-        "bat-wing"
+        "magic-berry"
       ],
       "size": "medium",
       "puzzleKind": "bigger",
@@ -140,9 +125,6 @@
       "name": "Goblin Scout",
       "type": "hostile",
       "hits": 2,
-      "drops": [
-        "tarnished-coin"
-      ],
       "size": "small",
       "puzzleKind": "add-1d"
     },
@@ -152,7 +134,7 @@
       "type": "friendly",
       "hits": 0,
       "drops": [
-        "mouse-call"
+        "magic-berry"
       ],
       "size": "tiny",
       "notes": "Friendly NPC. Gifts mouse-call (1 free encounter escape)."
@@ -163,8 +145,7 @@
       "type": "hostile",
       "hits": 8,
       "drops": [
-        "witch-broom",
-        "witch-hat"
+        "honey-cake"
       ],
       "size": "large",
       "puzzleKind": "multiply",
@@ -175,9 +156,6 @@
       "name": "Will-o-Wisp",
       "type": "neutral",
       "hits": 2,
-      "drops": [
-        "wisp-light"
-      ],
       "size": "tiny",
       "airborne": true,
       "notes": "Reveals hidden paths. Can be befriended via riddle."

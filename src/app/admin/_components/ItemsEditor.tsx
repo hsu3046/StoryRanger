@@ -6,21 +6,31 @@ import { useRouter } from "next/navigation";
 import {
   ItemsFileSchema,
   type ItemDefT,
+  type ItemEffectKind,
+  type ItemEffectT,
   type ItemsFileT,
 } from "@/data/schemas";
+import { effectLabel } from "@/data/item-effects";
 import { saveItemsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
 import { uniqueId } from "../_lib/uniqueId";
 import { Field, StyledSelect, inputCls } from "./form";
 
-const CATEGORIES = [
-  "trophy",
-  "tool",
-  "consumable",
-  "keepsake",
-  "key-item",
-] as const;
-const RARITIES = ["common", "uncommon", "rare", "unique"] as const;
+/** Effect kinds offered in the editor. Add a kind here + a default + a
+ *  field block below when a new effect ships. */
+const EFFECT_KINDS = ["heal"] as const satisfies readonly ItemEffectKind[];
+
+const EFFECT_KIND_LABEL: Record<ItemEffectKind, string> = {
+  heal: "Heal (restore HP)",
+};
+
+/** Default-shaped effect when switching the kind dropdown. */
+function defaultEffect(kind: ItemEffectKind): ItemEffectT {
+  switch (kind) {
+    case "heal":
+      return { kind: "heal", amount: 1 };
+  }
+}
 
 interface Props {
   storyId: string;
@@ -81,8 +91,7 @@ export function ItemsEditor({
       name: "New Item",
       icon: "🎁",
       description: "",
-      category: "trophy",
-      rarity: "common",
+      effect: { kind: "heal", amount: 1 },
     };
     setItems((prev) => [...prev, placeholder]);
     setSelectedIdx(items.length);
@@ -187,8 +196,7 @@ export function ItemsEditor({
                 <tr>
                   <th className="px-3 py-2 w-10"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-28">Category</th>
-                  <th className="px-3 py-2 w-24">Rarity</th>
+                  <th className="px-3 py-2 w-28">Effect</th>
                   <th className="px-3 py-2">Description</th>
                 </tr>
               </thead>
@@ -209,23 +217,8 @@ export function ItemsEditor({
                     <td className="px-3 py-2 text-2xl">{it.icon ?? "🎁"}</td>
                     <td className="px-3 py-2 text-ink">{it.name}</td>
                     <td className="px-3 py-2">
-                      <code className="capitalize text-ink-soft">
-                        {it.category}
-                      </code>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-pill px-2 py-0.5 text-xs capitalize ${
-                          it.rarity === "unique"
-                            ? "bg-accent-deep text-paper"
-                            : it.rarity === "rare"
-                              ? "bg-accent/30 text-accent-deep"
-                              : it.rarity === "uncommon"
-                                ? "bg-emerald/15 text-emerald"
-                                : "bg-paper-deep/50 text-ink-soft"
-                        }`}
-                      >
-                        {it.rarity}
+                      <span className="rounded-pill bg-emerald/15 px-2 py-0.5 text-xs text-emerald">
+                        {effectLabel(it.effect)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-ink-soft">
@@ -325,40 +318,46 @@ function ItemForm({
         />
       </Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Category">
+        <Field label="Effect">
           <StyledSelect
-            value={item.category}
+            value={item.effect.kind}
             onChange={(e) =>
               onChange((it) => ({
                 ...it,
-                category: e.target.value as ItemDefT["category"],
+                effect: defaultEffect(e.target.value as ItemEffectKind),
               }))
             }
           >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c.charAt(0).toUpperCase() + c.slice(1)}
+            {EFFECT_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {EFFECT_KIND_LABEL[k]}
               </option>
             ))}
           </StyledSelect>
         </Field>
-        <Field label="Rarity">
-          <StyledSelect
-            value={item.rarity}
-            onChange={(e) =>
-              onChange((it) => ({
-                ...it,
-                rarity: e.target.value as ItemDefT["rarity"],
-              }))
-            }
-          >
-            {RARITIES.map((r) => (
-              <option key={r} value={r}>
-                {r.charAt(0).toUpperCase() + r.slice(1)}
-              </option>
-            ))}
-          </StyledSelect>
-        </Field>
+        {item.effect.kind === "heal" && (
+          <Field label="Heal amount (HP)">
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={item.effect.amount}
+              onChange={(e) =>
+                onChange((it) => ({
+                  ...it,
+                  effect: {
+                    kind: "heal",
+                    amount: Math.max(
+                      1,
+                      Math.min(10, Math.floor(Number(e.target.value) || 1)),
+                    ),
+                  },
+                }))
+              }
+              className={inputCls}
+            />
+          </Field>
+        )}
       </div>
       <Field label="Description">
         <textarea

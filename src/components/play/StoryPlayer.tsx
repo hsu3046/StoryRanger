@@ -45,7 +45,7 @@ import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow"
 import { trimDialogueHistory } from "@/lib/dialogue-personas";
 import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
-import { prettyItem } from "@/data/items";
+import { itemIcon, prettyItem } from "@/data/items";
 import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
@@ -507,10 +507,16 @@ export function StoryPlayer({
       const completed = Array.from(
         new Set([...(prev.completedEncounters ?? []), res.encounterId]),
       );
+      // Remove one occurrence per item spent in battle, then add drops.
       // Keep duplicates — the bag groups by id and shows ×N for counts.
+      const afterConsumed = [...(prev.inventory ?? [])];
+      for (const id of res.itemsConsumed) {
+        const idx = afterConsumed.indexOf(id);
+        if (idx !== -1) afterConsumed.splice(idx, 1);
+      }
       const inventory = res.itemsGained.length
-        ? [...(prev.inventory ?? []), ...res.itemsGained]
-        : prev.inventory;
+        ? [...afterConsumed, ...res.itemsGained]
+        : afterConsumed;
       const earnedMedals = res.medalId
         ? Array.from(new Set([...prev.earnedMedals, res.medalId]))
         : prev.earnedMedals;
@@ -600,6 +606,7 @@ export function StoryPlayer({
       partyHp: state.partyHp ?? { hero: DEFAULT_MAX_HP.hero },
       fallenAttackers: [],
       itemsGained: [],
+      itemsConsumed: [],
       medalId: pendingEncounter.rewards.medalId,
       moodBoost: pendingEncounter.rewards.moodBoost,
     });
@@ -821,8 +828,8 @@ export function StoryPlayer({
                         key={`${id}-${i}`}
                         className="inline-flex items-center gap-1.5 rounded-pill bg-paper/90 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/15 shadow-soft"
                       >
-                        <span aria-hidden>🎁</span>
-                        <span>{id}</span>
+                        <span aria-hidden>{itemIcon(id)}</span>
+                        <span>{prettyItem(id)}</span>
                       </span>
                     ))}
                   </div>
@@ -994,6 +1001,7 @@ export function StoryPlayer({
               return characterImagePath(story.id, id, mode);
             }}
             characters={characters.characters}
+            inventory={state.inventory ?? []}
             initialBattleState={persistedBattleState}
             onBattleStateChange={handleBattleStateChange}
             onComplete={applyEncounterResult}

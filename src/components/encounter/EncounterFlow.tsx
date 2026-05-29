@@ -26,6 +26,8 @@ export interface EncounterResult {
   /** Attackers KO'd this encounter — appended to PlayState.fallenAttackers. */
   fallenAttackers: AttackerId[];
   itemsGained: string[];
+  /** Consumables spent during the battle — removed from inventory. */
+  itemsConsumed: string[];
   medalId?: string;
   moodBoost?: { companionId: CompanionId; delta: number }[];
   /** Encounter may force a transition to a specific main scene. */
@@ -50,6 +52,8 @@ interface Props {
   ) => string;
   /** Character roster — forwarded to BattleScreen for sprite sizing. */
   characters: readonly Character[];
+  /** Player inventory — forwarded to BattleScreen's in-battle item row. */
+  inventory: string[];
   /** Saved battle snapshot — when present we skip the alert splash and
    *  remount BattleScreen on this exact state (refresh-resume). */
   initialBattleState?: BattleState;
@@ -85,6 +89,7 @@ export function EncounterFlow({
   fallenAttackers,
   characterImageBase,
   characters,
+  inventory,
   initialBattleState,
   onBattleStateChange,
   onComplete,
@@ -125,6 +130,7 @@ export function EncounterFlow({
         characterImageBase={(id) => characterImageBase(id, "battle")}
         characters={characters}
         onOpenSettings={onOpenSettings}
+        inventory={inventory}
         initialState={initialBattleState}
         onStateChange={onBattleStateChange}
         setup={{
@@ -150,6 +156,7 @@ export function EncounterFlow({
             partyHp: res.partyHp,
             fallenAttackers: res.fallenAttackers,
             itemsGained: res.outcome === "victory" ? res.rewards : [],
+            itemsConsumed: res.itemsConsumed,
             medalId:
               res.outcome === "victory" ? encounter.rewards.medalId : undefined,
             moodBoost:

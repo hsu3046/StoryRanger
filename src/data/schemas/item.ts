@@ -1,22 +1,22 @@
 import { z } from "zod";
 
 /**
- * Item catalog — the formal definition of every item that can appear in
- * inventory, monster drops, encounter rewards, or dialogue gifts. Replaces
- * the previous free-form string IDs scattered across the code.
+ * Item catalog — every item is now a FUNCTIONAL consumable used during
+ * gameplay (medals carry the collection/achievement role). Each item has a
+ * structured `effect`; only `heal` ships today, but `ItemEffectSchema` is a
+ * discriminated union so new effects are a one-line additive change. See
+ * data/item-effects.ts for the metadata/usage-context registry.
  */
 
-export const ItemCategorySchema = z.enum([
-  "trophy", // memento, no gameplay use (wolf-fang, monkey-feather)
-  "tool", // potentially usable (mouse-call, wisp-light)
-  "consumable", // future use
-  "keepsake", // emotional value (lost-pup-trust)
-  "key-item", // story-critical (silver-shoes, witch-broom)
+export const ItemEffectSchema = z.discriminatedUnion("kind", [
+  /** Restore `amount` HP to the active attacker (battle only). */
+  z.object({ kind: z.literal("heal"), amount: z.number().int().min(1).max(10) }),
+  // [+EXT] add future kinds here, e.g.:
+  // z.object({ kind: z.literal("hint") }),                            // quiz: dim 2 wrong answers
+  // z.object({ kind: z.literal("extra-time"), seconds: z.number().int() }), // quiz: extend timer
+  // z.object({ kind: z.literal("skip-monster") }),                    // battle: remove 1 monster
+  // z.object({ kind: z.literal("shield") }),                          // battle: block next hit
 ]);
-
-export const ItemRaritySchema = z
-  .enum(["common", "uncommon", "rare", "unique"])
-  .default("common");
 
 export const ItemDefSchema = z.object({
   id: z.string(),
@@ -24,13 +24,14 @@ export const ItemDefSchema = z.object({
   /** Emoji or path under /public/items/. */
   icon: z.string().optional(),
   description: z.string(),
-  category: ItemCategorySchema,
-  rarity: ItemRaritySchema,
+  effect: ItemEffectSchema,
 });
 
 export const ItemsFileSchema = z.object({
   items: z.array(ItemDefSchema),
 });
 
+export type ItemEffectT = z.infer<typeof ItemEffectSchema>;
+export type ItemEffectKind = ItemEffectT["kind"];
 export type ItemDefT = z.infer<typeof ItemDefSchema>;
 export type ItemsFileT = z.infer<typeof ItemsFileSchema>;
