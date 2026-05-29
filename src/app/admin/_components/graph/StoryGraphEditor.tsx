@@ -1183,12 +1183,6 @@ function SceneInspector({
         onChange={onChange}
       />
 
-      <SceneAsksEditor
-        characters={characters}
-        scene={scene}
-        onChange={onChange}
-      />
-
       <RewardEditor
         label="Reward"
         items={items}
@@ -1241,13 +1235,38 @@ function SceneInspector({
         )}
       </Field>
 
-      <button
-        type="button"
-        onClick={onAddBranch}
-        className="self-start rounded-pill bg-accent-deep px-3 py-1 text-xs font-semibold text-paper hover:opacity-90"
-      >
-        + Add branch
-      </button>
+      {/* Branch choices + ask chips are authored together — the player sees
+          both in the same choice area at runtime. */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onAddBranch}
+          className="rounded-pill bg-accent-deep px-3 py-1 text-xs font-semibold text-paper hover:opacity-90"
+        >
+          + Add branch
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onChange((s) => ({
+              ...s,
+              asks: [
+                ...(s.asks ?? []),
+                newAsk(characters.filter((c) => !!c.persona)),
+              ],
+            }))
+          }
+          className="rounded-pill bg-paper-deep/60 px-3 py-1 text-xs font-semibold text-ink-soft hover:bg-paper-deep"
+        >
+          + Add ask
+        </button>
+      </div>
+
+      <SceneAsksEditor
+        characters={characters}
+        scene={scene}
+        onChange={onChange}
+      />
 
       {scene.branches.length > 0 && (
         <ul className="flex flex-col gap-1">
@@ -2219,6 +2238,20 @@ function DialogueCharactersEditor({
  * each answered in-character. Answerers are limited to persona-bearing
  * characters (only they can hold a dialogue).
  */
+/** Default-shaped ask appended by the "+ Add ask" button. */
+function newAsk(askable: { id: string }[]): SceneAskT {
+  return {
+    id: `ask_${Math.random().toString(36).slice(2, 7)}`,
+    label: "",
+    characterId: (askable[0]?.id ?? "narrator") as SceneAskT["characterId"],
+  };
+}
+
+/**
+ * Ask rows shown alongside the branch list (the player sees branch choices
+ * and ask chips together). The "+ Add ask" button lives in the branch
+ * header next to "+ Add branch"; this only renders the existing rows.
+ */
 function SceneAsksEditor({
   characters,
   scene,
@@ -2238,8 +2271,10 @@ function SceneAsksEditor({
     setAsks(asks.map((a, j) => (j === i ? mut(a) : a)));
   }
 
+  if (asks.length === 0) return null;
+
   return (
-    <Field label="Asks (in-story questions)">
+    <Field label="Asks">
       <div className="flex flex-col gap-2">
         {asks.map((ask, i) => (
           <div
@@ -2293,23 +2328,6 @@ function SceneAsksEditor({
             <CharCount value={ask.label} limit={120} />
           </div>
         ))}
-        <button
-          type="button"
-          onClick={() =>
-            setAsks([
-              ...asks,
-              {
-                id: `ask_${Math.random().toString(36).slice(2, 7)}`,
-                label: "",
-                characterId: (askable[0]?.id ??
-                  "narrator") as SceneAskT["characterId"],
-              },
-            ])
-          }
-          className="self-start rounded-pill bg-paper-deep/60 px-2.5 py-1 text-xs text-ink-soft hover:bg-paper-deep"
-        >
-          + Add ask
-        </button>
       </div>
     </Field>
   );
