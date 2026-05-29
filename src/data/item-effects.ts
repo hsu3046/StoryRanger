@@ -23,6 +23,12 @@ export const EFFECT_META: Record<ItemEffectKind, EffectMeta> = {
     label: (e) => (e.kind === "heal" ? `Heal +${e.amount}` : "Heal"),
     contexts: ["battle"],
   },
+  event: {
+    // Story/event item — no mechanical effect, so it's never offered as a
+    // usable consumable (empty contexts).
+    label: () => "Event",
+    contexts: [],
+  },
   // [+EXT] hint: { label: () => "Hint", contexts: ["puzzle"] },
   // [+EXT] "extra-time": { label: (e) => `+${e.seconds}s`, contexts: ["puzzle"] },
   // [+EXT] "skip-monster": { label: () => "Skip monster", contexts: ["battle"] },

@@ -18,10 +18,11 @@ import { Field, StyledSelect, inputCls } from "./form";
 
 /** Effect kinds offered in the editor. Add a kind here + a default + a
  *  field block below when a new effect ships. */
-const EFFECT_KINDS = ["heal"] as const satisfies readonly ItemEffectKind[];
+const EFFECT_KINDS = ["heal", "event"] as const satisfies readonly ItemEffectKind[];
 
 const EFFECT_KIND_LABEL: Record<ItemEffectKind, string> = {
-  heal: "Heal (restore HP)",
+  heal: "Restore HP",
+  event: "Event",
 };
 
 /** Default-shaped effect when switching the kind dropdown. */
@@ -29,6 +30,8 @@ function defaultEffect(kind: ItemEffectKind): ItemEffectT {
   switch (kind) {
     case "heal":
       return { kind: "heal", amount: 1 };
+    case "event":
+      return { kind: "event" };
   }
 }
 
@@ -335,29 +338,35 @@ function ItemForm({
             ))}
           </StyledSelect>
         </Field>
-        {item.effect.kind === "heal" && (
-          <Field label="Heal amount (HP)">
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={item.effect.amount}
-              onChange={(e) =>
-                onChange((it) => ({
-                  ...it,
-                  effect: {
-                    kind: "heal",
-                    amount: Math.max(
-                      1,
-                      Math.min(10, Math.floor(Number(e.target.value) || 1)),
-                    ),
-                  },
-                }))
-              }
-              className={inputCls}
-            />
-          </Field>
-        )}
+        {/* Heal-only field — disabled (greyed) for effects that don't heal,
+            e.g. Event items. */}
+        <Field label="Heal amount">
+          <input
+            type="number"
+            min={1}
+            max={10}
+            disabled={item.effect.kind !== "heal"}
+            value={item.effect.kind === "heal" ? item.effect.amount : ""}
+            placeholder={item.effect.kind === "heal" ? undefined : "—"}
+            onChange={(e) =>
+              onChange((it) =>
+                it.effect.kind === "heal"
+                  ? {
+                      ...it,
+                      effect: {
+                        kind: "heal",
+                        amount: Math.max(
+                          1,
+                          Math.min(10, Math.floor(Number(e.target.value) || 1)),
+                        ),
+                      },
+                    }
+                  : it,
+              )
+            }
+            className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`}
+          />
+        </Field>
       </div>
       <Field label="Description">
         <textarea

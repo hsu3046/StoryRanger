@@ -11,6 +11,10 @@ import { z } from "zod";
 export const ItemEffectSchema = z.discriminatedUnion("kind", [
   /** Restore `amount` HP to the active attacker (battle only). */
   z.object({ kind: z.literal("heal"), amount: z.number().int().min(1).max(10) }),
+  /** Story/event-use item (e.g. oil for the Tin Man). No mechanical effect —
+   *  it lives in the inventory to be referenced by scene/branch logic, not
+   *  "used" in battle. */
+  z.object({ kind: z.literal("event") }),
   // [+EXT] add future kinds here, e.g.:
   // z.object({ kind: z.literal("hint") }),                            // quiz: dim 2 wrong answers
   // z.object({ kind: z.literal("extra-time"), seconds: z.number().int() }), // quiz: extend timer
