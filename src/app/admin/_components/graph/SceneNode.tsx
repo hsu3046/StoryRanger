@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { Flag } from "@phosphor-icons/react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { SceneT } from "@/data/schemas";
 import type { SpeakerId } from "@/types/story";
@@ -30,20 +31,23 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
   const dialogueChars = scene.dialogueCharacters ?? [];
 
   const accent = isEnding
-    ? "bg-accent-deep text-paper"
+    ? "bg-ruby text-paper"
     : isStart
       ? "bg-emerald text-paper"
       : "bg-paper-deep/30 text-ink-soft";
 
   // Top-right badge: ending / start take priority; otherwise the speaker —
   // but "narrator" is the default voice, so we hide it to cut visual noise.
-  const speakerBadge = isEnding
-    ? "🏁 ending"
-    : isStart
-      ? "▶ Start"
-      : scene.speaker !== "narrator"
-        ? scene.speaker
-        : null;
+  const speakerBadge = isEnding ? (
+    <span className="inline-flex items-center gap-0.5">
+      <Flag size={11} weight="fill" aria-hidden />
+      Ending
+    </span>
+  ) : isStart ? (
+    "▶ Start"
+  ) : scene.speaker !== "narrator" ? (
+    scene.speaker
+  ) : null;
 
   return (
     // `transition-colors` (not `transition-all`): React Flow drags by
