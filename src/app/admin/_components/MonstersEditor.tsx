@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CaretDown } from "@phosphor-icons/react";
 
 import {
   MonstersFileSchema,
@@ -11,6 +12,8 @@ import {
 } from "@/data/schemas";
 import { saveMonstersAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
+import { ClickableImageThumb } from "./ClickableImageThumb";
+import { useConfirm } from "./ConfirmDialog";
 
 const TYPES = ["hostile", "neutral", "friendly"] as const;
 const SIZES = ["tiny", "small", "medium", "large", "huge"] as const;
@@ -27,10 +30,14 @@ const PUZZLES = [
 
 interface Props {
   storyId: string;
+  storyTitle?: string;
   initial: MonsterStatsT[];
   itemCatalog: ItemDefT[];
   /** Server-side resolved portrait paths keyed by monster id. */
   assetMap?: Record<string, string | null>;
+  /** Image stems scanned from /public/stories/<id>/monsters/. Drives
+   *  the in-form image picker. */
+  imageOptions: { value: string; label: string }[];
 }
 
 function monsterImageBase(storyId: string, monsterId: string): string {
@@ -39,11 +46,14 @@ function monsterImageBase(storyId: string, monsterId: string): string {
 
 export function MonstersEditor({
   storyId,
+  storyTitle,
   initial,
   itemCatalog,
   assetMap,
+  imageOptions,
 }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [monsters, setMonsters] = useState<MonsterStatsT[]>(initial);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +68,13 @@ export function MonstersEditor({
     selectedIdx !== null && selectedIdx < monsters.length
       ? monsters[selectedIdx]
       : null;
+
+  // id → item definition, so the Drops column can render the same
+  // icon + name as the inspector instead of the raw id.
+  const itemById = useMemo(
+    () => new Map(itemCatalog.map((it) => [it.id, it])),
+    [itemCatalog],
+  );
 
   function save() {
     setError(null);
@@ -91,6 +108,7 @@ export function MonstersEditor({
       hits: 2,
       size: "small",
       drops: [],
+      puzzleKind: "random",
     };
     setMonsters((prev) => [...prev, placeholder]);
     setSelectedIdx(monsters.length);
@@ -104,10 +122,14 @@ export function MonstersEditor({
     );
   }
 
-  function deleteSelected() {
+  async function deleteSelected() {
     if (selectedIdx === null) return;
     const m = monsters[selectedIdx];
-    if (!confirm(`Delete monster "${m.id}"?`)) return;
+    const ok = await confirm({
+      title: "Delete monster",
+      message: `Delete monster "${m.name}"?\nThis cannot be undone.`,
+    });
+    if (!ok) return;
     setMonsters((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -117,14 +139,17 @@ export function MonstersEditor({
       {/* Header — actions live here, Story Graph style */}
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p className="font-handwritten text-base text-accent-deep">
-            {storyId} / Monsters
+          <p
+            className="font-handwritten text-base text-accent-deep"
+            title={storyId}
+          >
+            {storyTitle ?? storyId} / Monsters
           </p>
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
             {monsters.length}
           </span>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → monsters.json
+            monsters.json
           </code>
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
@@ -167,18 +192,23 @@ export function MonstersEditor({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Table */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        {/* Clicking empty space in the list pane closes the inspector. Row
+            clicks stopPropagation so selecting doesn't immediately re-close. */}
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3"
+          onClick={() => setSelectedIdx(null)}
+        >
           <div className="overflow-x-auto rounded-card-lg bg-paper ring-1 ring-ink-soft/10">
             <table className="w-full border-collapse text-sm">
               <thead className="border-b border-ink-soft/10 bg-paper-deep/20 text-left">
                 <tr>
                   <th className="px-3 py-2 w-14"></th>
-                  <th className="px-3 py-2 w-40">ID</th>
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2 w-20">Type</th>
                   <th className="px-3 py-2 w-20">Size</th>
-                  <th className="px-3 py-2 w-16">Hits</th>
+                  <th className="px-3 py-2 w-16">HP</th>
                   <th className="px-3 py-2 w-24">Puzzle</th>
+                  <th className="px-3 py-2 w-20">Airborne</th>
                   <th className="px-3 py-2">Drops</th>
                 </tr>
               </thead>
@@ -186,7 +216,10 @@ export function MonstersEditor({
                 {monsters.map((m, i) => (
                   <tr
                     key={`${m.id}-${i}`}
-                    onClick={() => setSelectedIdx(i)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedIdx(i);
+                    }}
                     className={`cursor-pointer border-b border-ink-soft/5 last:border-0 transition-colors ${
                       selectedIdx === i
                         ? "bg-accent/15 hover:bg-accent/20"
@@ -195,7 +228,7 @@ export function MonstersEditor({
                   >
                     <td className="px-3 py-2">
                       <AssetThumb
-                        base={monsterImageBase(storyId, m.id)}
+                        base={m.image ?? monsterImageBase(storyId, m.id)}
                         resolvedSrc={assetMap?.[m.id] ?? undefined}
                         alt={m.name}
                         className="h-12 w-12 p-1"
@@ -203,13 +236,10 @@ export function MonstersEditor({
                         fit="contain"
                       />
                     </td>
-                    <td className="px-3 py-2">
-                      <code className="text-ink">{m.id}</code>
-                    </td>
                     <td className="px-3 py-2 text-ink">{m.name}</td>
                     <td className="px-3 py-2">
                       <span
-                        className={`rounded-pill px-2 py-0.5 text-xs ${
+                        className={`rounded-pill px-2 py-0.5 text-xs capitalize ${
                           m.type === "hostile"
                             ? "bg-ruby/15 text-ruby"
                             : m.type === "friendly"
@@ -220,21 +250,27 @@ export function MonstersEditor({
                         {m.type}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-ink-soft">{m.size}</td>
+                    <td className="px-3 py-2 capitalize text-ink-soft">{m.size}</td>
                     <td className="px-3 py-2 tabular-nums">{m.hits}</td>
                     <td className="px-3 py-2 text-ink-soft">
-                      {m.puzzleKind ?? "—"}
+                      {m.puzzleKind ?? "random"}
+                    </td>
+                    <td className="px-3 py-2 text-ink-soft">
+                      {m.airborne ? "🕊️ Yes" : "—"}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
-                        {(m.drops ?? []).map((d) => (
-                          <code
-                            key={d}
-                            className="rounded-pill bg-paper-deep/40 px-1.5 py-0.5 text-xs"
-                          >
-                            {d}
-                          </code>
-                        ))}
+                        {(m.drops ?? []).map((d) => {
+                          const it = itemById.get(d);
+                          return (
+                            <span
+                              key={d}
+                              className="rounded-pill bg-paper-deep/40 px-1.5 py-0.5 text-xs text-ink"
+                            >
+                              {it?.icon ?? "🎁"} {it?.name ?? d}
+                            </span>
+                          );
+                        })}
                       </div>
                     </td>
                   </tr>
@@ -248,9 +284,11 @@ export function MonstersEditor({
         {selected && (
           <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-ink-soft/10 bg-paper p-4">
             <MonsterForm
+              storyId={storyId}
               monster={selected}
               isNew={!initial.some((m) => m.id === selected.id)}
               itemCatalog={itemCatalog}
+              imageOptions={imageOptions}
               onChange={updateSelected}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
@@ -263,21 +301,27 @@ export function MonstersEditor({
 }
 
 function MonsterForm({
+  storyId,
   monster,
   isNew,
   itemCatalog,
+  imageOptions,
   onChange,
   onDelete,
   onClose,
 }: {
+  storyId: string;
   monster: MonsterStatsT;
   isNew: boolean;
   itemCatalog: ItemDefT[];
+  imageOptions: { value: string; label: string }[];
   onChange: (mut: (m: MonsterStatsT) => MonsterStatsT) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const dropSet = new Set(monster.drops ?? []);
+  const defaultImageBase = `/stories/${storyId}/monsters/${monster.id}`;
+  const currentImagePath = monster.image ?? defaultImageBase;
 
   function toggleDrop(itemId: string) {
     const next = new Set(dropSet);
@@ -289,11 +333,18 @@ function MonsterForm({
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between">
-        <div>
-          <p className="font-handwritten text-base text-accent-deep">Monster</p>
-          <code className="text-sm text-ink">{monster.id}</code>
-        </div>
+        <p className="font-handwritten text-base text-accent-deep">Monster</p>
         <div className="flex gap-1">
+          {isNew && (
+            <input
+              value={monster.id}
+              onChange={(e) =>
+                onChange((m) => ({ ...m, id: e.target.value }))
+              }
+              placeholder="id"
+              className={`${inputCls} max-w-[10rem]`}
+            />
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -311,14 +362,6 @@ function MonsterForm({
         </div>
       </header>
 
-      <Field label="ID">
-        <input
-          value={monster.id}
-          onChange={(e) => onChange((m) => ({ ...m, id: e.target.value }))}
-          disabled={!isNew}
-          className={`${inputCls} ${!isNew ? "opacity-60" : ""}`}
-        />
-      </Field>
       <Field label="Name">
         <input
           value={monster.name}
@@ -326,44 +369,101 @@ function MonsterForm({
           className={inputCls}
         />
       </Field>
+
+      <Field label="Image">
+        <div className="flex items-start gap-3">
+          <ClickableImageThumb
+            base={currentImagePath}
+            alt={monster.name}
+            className="h-20 w-20 shrink-0"
+            shape="square"
+            fit="contain"
+          />
+          <div className="relative flex-1">
+            <select
+              value={currentImagePath}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange((m) => ({
+                  ...m,
+                  image: v === defaultImageBase ? undefined : v,
+                }));
+              }}
+              className={`${inputCls} appearance-none pr-9`}
+            >
+              {!imageOptions.some((o) => o.value === currentImagePath) && (
+                <option value={currentImagePath}>
+                  {currentImagePath.split("/").pop() ?? currentImagePath}{" "}
+                  (custom)
+                </option>
+              )}
+              {imageOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <CaretDown
+              size={14}
+              weight="bold"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+            />
+          </div>
+        </div>
+      </Field>
+
       <div className="grid grid-cols-2 gap-2">
         <Field label="Type">
-          <select
-            value={monster.type}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                type: e.target.value as MonsterStatsT["type"],
-              }))
-            }
-            className={inputCls}
-          >
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={monster.type}
+              onChange={(e) =>
+                onChange((m) => ({
+                  ...m,
+                  type: e.target.value as MonsterStatsT["type"],
+                }))
+              }
+              className={`${inputCls} appearance-none pr-9`}
+            >
+              {TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </option>
+              ))}
+            </select>
+            <CaretDown
+              size={14}
+              weight="bold"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+            />
+          </div>
         </Field>
         <Field label="Size">
-          <select
-            value={monster.size}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                size: e.target.value as MonsterStatsT["size"],
-              }))
-            }
-            className={inputCls}
-          >
-            {SIZES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={monster.size}
+              onChange={(e) =>
+                onChange((m) => ({
+                  ...m,
+                  size: e.target.value as MonsterStatsT["size"],
+                }))
+              }
+              className={`${inputCls} appearance-none pr-9`}
+            >
+              {SIZES.map((s) => (
+                <option key={s} value={s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </option>
+              ))}
+            </select>
+            <CaretDown
+              size={14}
+              weight="bold"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+            />
+          </div>
         </Field>
-        <Field label="Hits">
+        <Field label="HP">
           <input
             type="number"
             min={0}
@@ -375,25 +475,31 @@ function MonsterForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Puzzle kind">
-          <select
-            value={monster.puzzleKind ?? ""}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                puzzleKind: (e.target.value ||
-                  undefined) as MonsterStatsT["puzzleKind"],
-              }))
-            }
-            className={inputCls}
-          >
-            <option value="">(none)</option>
-            {PUZZLES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+        <Field label="Puzzle">
+          <div className="relative">
+            <select
+              value={monster.puzzleKind ?? "random"}
+              onChange={(e) =>
+                onChange((m) => ({
+                  ...m,
+                  puzzleKind: e.target.value as MonsterStatsT["puzzleKind"],
+                }))
+              }
+              className={`${inputCls} appearance-none pr-9`}
+            >
+              <option value="random">random</option>
+              {PUZZLES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <CaretDown
+              size={14}
+              weight="bold"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+            />
+          </div>
         </Field>
       </div>
       <Field label="Airborne">
@@ -423,8 +529,8 @@ function MonsterForm({
           className={inputCls}
         />
       </Field>
-      <Field label="Drops (multi-select from item catalog)">
-        <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-button bg-paper-deep/40 p-2 ring-1 ring-ink-soft/10">
+      <Field label="Drops">
+        <div className="flex flex-wrap gap-1">
           {itemCatalog.map((it) => {
             const on = dropSet.has(it.id);
             return (
@@ -438,7 +544,7 @@ function MonsterForm({
                     : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
                 }`}
               >
-                {it.icon ?? "🎁"} {it.id}
+                {it.icon ?? "🎁"} {it.name}
               </button>
             );
           })}

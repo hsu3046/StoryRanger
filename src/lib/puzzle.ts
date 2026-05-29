@@ -27,6 +27,19 @@ export type PuzzleKind =
   | "bigger" // which number is bigger
   | "missing"; // 3 + ? = 8
 
+/** Every concrete puzzle kind. Used to resolve a monster's `"random"`
+ *  preference into an actual kind at attack time. */
+export const ALL_PUZZLE_KINDS: PuzzleKind[] = [
+  "add-1d",
+  "sub-1d",
+  "add-2d",
+  "multiply",
+  "pattern",
+  "odd-out",
+  "bigger",
+  "missing",
+];
+
 export interface Puzzle {
   kind: PuzzleKind;
   /** Display string, e.g. "7 + 5 = ?" */

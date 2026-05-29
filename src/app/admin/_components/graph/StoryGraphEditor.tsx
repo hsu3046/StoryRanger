@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import {
   CaretDown,
   Copy,
+  Flag,
   PencilSimple,
   Play,
   Sparkle,
@@ -61,6 +62,8 @@ import {
   saveScenesAction,
 } from "../../_actions/saveJson";
 import { AssetThumb } from "../AssetThumb";
+import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
+import { useAlert, useConfirm } from "../ConfirmDialog";
 import { SceneNode, type SceneNodeData } from "./SceneNode";
 import { BranchEdge, type BranchEdgeData } from "./BranchEdge";
 import { computeLayout, computeLayoutConnected } from "./layout";
@@ -120,6 +123,8 @@ function StoryGraphEditorInner({
   runtimeCharactersFile,
 }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const alert = useAlert();
   const [story, setStory] = useState<StoryT>(initialStory);
   const [encounters, setEncounters] =
     useState<EncounterDefT[]>(initialEncounters);
@@ -327,14 +332,15 @@ function StoryGraphEditorInner({
     rfInstanceRef.current = instance;
   }, []);
 
-  function runAutoLayout() {
-    if (
-      !confirm(
+  async function runAutoLayout() {
+    const ok = await confirm({
+      title: "Auto-layout",
+      message:
         "Auto-layout connected scenes? Disconnected scenes keep their current position.",
-      )
-    ) {
-      return;
-    }
+      confirmLabel: "Run",
+      tone: "default",
+    });
+    if (!ok) return;
     // Only re-place scenes that participate in an edge. Orphans (drafts
     // the author parked off to the side) keep their coordinates — merge
     // the new connected-only layout on top of the existing positions.
@@ -434,11 +440,12 @@ function StoryGraphEditorInner({
     }));
   }
 
-  function deleteScene(sceneId: string) {
+  async function deleteScene(sceneId: string) {
     if (sceneId === story.startScene) {
-      alert(
-        `Cannot delete "${sceneId}" — it is the start scene. Change the start scene first.`,
-      );
+      await alert({
+        title: "Cannot delete scene",
+        message: `"${sceneId}" is the start scene. Change the start scene first.`,
+      });
       return;
     }
     // Find anything that would be orphaned and warn before destructive delete.
@@ -462,11 +469,12 @@ function StoryGraphEditorInner({
         `${triggeredEncounters.length} encounter(s) trigger from this scene and will be deleted.`,
       );
     }
-    const msg = [
-      `Delete scene "${sceneId}"?`,
-      ...warnings.map((w) => `\n• ${w}`),
-    ].join("");
-    if (!confirm(msg)) return;
+    const msg = warnings.map((w) => `\n• ${w}`).join("");
+    const ok = await confirm({
+      title: "Delete scene",
+      message: `Delete scene "${sceneId}"?${msg}`,
+    });
+    if (!ok) return;
 
     setStory((prev) => {
       const { [sceneId]: _removed, ...rest } = prev.scenes;
@@ -550,25 +558,25 @@ function StoryGraphEditorInner({
     setSelection({ kind: "scene", sceneId: newId });
   }
 
-  function deleteBranch(sceneId: string, branchId: string) {
+  async function deleteBranch(sceneId: string, branchId: string) {
     // Cascade — encounters live on (sceneId, branchId), so any tied to
     // this branch would become dangling refs after the delete. Surface
     // them in the confirm prompt and remove together.
     const triggeredEncounters = encounters.filter(
       (e) => e.trigger.sceneId === sceneId && e.trigger.branchId === branchId,
     );
-    const msg = [
-      `Delete branch "${branchId}" from ${sceneId}?`,
-      ...(triggeredEncounters.length > 0
-        ? [
-            `\n• ${triggeredEncounters.length} encounter(s) trigger on this branch and will be deleted: ${triggeredEncounters
-              .map((e) => e.id)
-              .slice(0, 3)
-              .join(", ")}${triggeredEncounters.length > 3 ? "…" : ""}`,
-          ]
-        : []),
-    ].join("");
-    if (!confirm(msg)) return;
+    const warning =
+      triggeredEncounters.length > 0
+        ? `\n• ${triggeredEncounters.length} encounter(s) trigger on this branch and will be deleted: ${triggeredEncounters
+            .map((e) => e.id)
+            .slice(0, 3)
+            .join(", ")}${triggeredEncounters.length > 3 ? "…" : ""}`
+        : "";
+    const ok = await confirm({
+      title: "Delete branch",
+      message: `Delete branch "${branchId}" from ${sceneId}?${warning}`,
+    });
+    if (!ok) return;
     updateScene(sceneId, (s) => ({
       ...s,
       branches: s.branches.filter((b) => b.id !== branchId),
@@ -616,8 +624,12 @@ function StoryGraphEditorInner({
     );
   }
 
-  function deleteEncounter(encId: string) {
-    if (!confirm(`Delete encounter "${encId}"?`)) return;
+  async function deleteEncounter(encId: string) {
+    const ok = await confirm({
+      title: "Delete encounter",
+      message: `Delete encounter "${encId}"?\nThis cannot be undone.`,
+    });
+    if (!ok) return;
     setEncounters((prev) => prev.filter((e) => e.id !== encId));
   }
 
@@ -786,8 +798,11 @@ function StoryGraphEditorInner({
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p className="font-handwritten text-base text-accent-deep">
-            {storyId} / Story graph
+          <p
+            className="font-handwritten text-base text-accent-deep"
+            title={storyId}
+          >
+            {story.title} / Story Graph
           </p>
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
             {Object.keys(story.scenes).length}
@@ -894,6 +909,12 @@ function StoryGraphEditorInner({
                     deleteBranch(selectedScene.id, branchId)
                   }
                   onPreview={() => setPreviewSceneId(selectedScene.id)}
+                  onSetStart={() =>
+                    setStory((prev) => ({
+                      ...prev,
+                      startScene: selectedScene.id,
+                    }))
+                  }
                 />
               )}
 
@@ -981,6 +1002,7 @@ function SceneInspector({
   onDelete,
   onDeleteBranch,
   onPreview,
+  onSetStart,
 }: {
   storyId: string;
   storyScenes: Record<string, SceneT>;
@@ -999,6 +1021,8 @@ function SceneInspector({
   onDuplicate: () => void;
   onDelete: () => void;
   onPreview: () => void;
+  /** Promote this scene to story.startScene (the entry point). */
+  onSetStart: () => void;
   /** Per-branch quick-delete from the inline branch list — needed for
    *  the dangling-branch cleanup case where the user removed the target
    *  scene first and the now-orphan branch only shows up here (no edge
@@ -1013,6 +1037,24 @@ function SceneInspector({
           <code className="text-sm text-ink">{sceneId}</code>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onSetStart}
+            disabled={isStart}
+            title={
+              isStart
+                ? "This is the story's start scene"
+                : "Mark this as the story's start scene"
+            }
+            aria-label={isStart ? "Start scene" : "Set as start scene"}
+            className={`flex h-6 w-6 items-center justify-center rounded-pill transition-colors ${
+              isStart
+                ? "bg-accent-deep text-paper"
+                : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+            }`}
+          >
+            <Flag size={12} weight={isStart ? "fill" : "regular"} />
+          </button>
           <button
             type="button"
             onClick={onPreview}
@@ -1060,9 +1102,10 @@ function SceneInspector({
       </Field>
 
       <Field label="BGM">
-        <SelectWithCustom
+        <BgmSelectWithPreview
           value={scene.bgm}
           options={bgmOptions}
+          storyId={storyId}
           placeholder="(no BGM tracks found on disk)"
           onChange={(v) => onChange((s) => ({ ...s, bgm: v }))}
         />
@@ -1306,30 +1349,37 @@ function EncounterCard({
             />
           </MiniField>
           <MiniField label="Background">
-            <select
-              value={encounter.intro.bg}
-              onChange={(e) =>
-                onChange((x) => ({
-                  ...x,
-                  intro: { ...x.intro, bg: e.target.value },
-                }))
-              }
-              className={inputClsSm}
-            >
-              {/* Surface the saved value even if it's not in the catalog yet
-                  (e.g. typo or pre-catalog data). */}
-              {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
-                encounter.intro.bg && (
-                  <option value={encounter.intro.bg}>
-                    {encounter.intro.bg} (not in catalog)
+            <div className="relative">
+              <select
+                value={encounter.intro.bg}
+                onChange={(e) =>
+                  onChange((x) => ({
+                    ...x,
+                    intro: { ...x.intro, bg: e.target.value },
+                  }))
+                }
+                className={`${inputClsSm} appearance-none pr-9`}
+              >
+                {/* Surface the saved value even if it's not in the catalog yet
+                    (e.g. typo or pre-catalog data). */}
+                {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
+                  encounter.intro.bg && (
+                    <option value={encounter.intro.bg}>
+                      {encounter.intro.bg} (not in catalog)
+                    </option>
+                  )}
+                {backgrounds.map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {b.label} ({b.key})
                   </option>
-                )}
-              {backgrounds.map((b) => (
-                <option key={b.key} value={b.key}>
-                  {b.label} ({b.key})
-                </option>
-              ))}
-            </select>
+                ))}
+              </select>
+              <CaretDown
+                size={14}
+                weight="bold"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+              />
+            </div>
           </MiniField>
           <MiniField label="Narration">
             <textarea
@@ -1647,10 +1697,11 @@ function BranchInspector({
       />
 
       <Field label="BGM override (optional)">
-        <SelectWithCustom
+        <BgmSelectWithPreview
           value={branch.bgmOverride ?? ""}
           options={bgmOptions}
-          allowEmpty="(none — uses target scene's bgm)"
+          storyId={storyId}
+          allowEmpty="Default (Scene's BGM)"
           onChange={(v) =>
             onChange((b) => ({
               ...b,
@@ -1781,10 +1832,7 @@ function BranchOutcomeEditor({
   }
 
   return (
-    <Field
-      label="Narration"
-      hint="Shown after this branch is picked"
-    >
+    <Field label="Narration">
       <textarea
         value={branch.outcome ?? ""}
         onChange={(e) =>
@@ -1927,19 +1975,26 @@ function BranchPuzzleCard({
           />
           <label className="flex items-center gap-2 text-xs">
             <span className="text-ink-soft">On fail:</span>
-            <select
-              value={branch.onFailMode ?? "retry"}
-              onChange={(e) =>
-                onChange((b) => ({
-                  ...b,
-                  onFailMode: e.target.value as "retry" | "skip",
-                }))
-              }
-              className={inputCls}
-            >
-              <option value="retry">Retry until solved</option>
-              <option value="skip">Skip — proceed without reward</option>
-            </select>
+            <div className="relative flex-1">
+              <select
+                value={branch.onFailMode ?? "retry"}
+                onChange={(e) =>
+                  onChange((b) => ({
+                    ...b,
+                    onFailMode: e.target.value as "retry" | "skip",
+                  }))
+                }
+                className={`${inputCls} appearance-none pr-9`}
+              >
+                <option value="retry">Retry until solved</option>
+                <option value="skip">Skip — proceed without reward</option>
+              </select>
+              <CaretDown
+                size={14}
+                weight="bold"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+              />
+            </div>
           </label>
           </div>
         </div>

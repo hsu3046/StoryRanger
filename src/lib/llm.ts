@@ -184,7 +184,17 @@ async function chatAnthropic<T>(opts: ChatOptions<T>): Promise<T> {
   const message = await client.messages.parse({
     model: activeModel(),
     max_tokens: 1024,
-    system: opts.system,
+    // System prompt is the static, per-character cacheable prefix. Marking
+    // it `ephemeral` opts it into Anthropic prompt caching so repeat turns
+    // for the same character reuse the cached prefix (the dynamic per-turn
+    // context lives in the user message, after this block).
+    system: [
+      {
+        type: "text",
+        text: opts.system,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: opts.messages.map((m) => ({
       role: m.role,
       content: m.content,

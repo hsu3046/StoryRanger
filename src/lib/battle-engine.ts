@@ -21,7 +21,7 @@ import type {
 } from "@/types/story";
 import { MONSTERS, type MonsterStats } from "@/data/monsters";
 import { rollD20, type RollResult } from "./dice";
-import { ATTACKER_KINDS, type PuzzleKind } from "./puzzle";
+import { ALL_PUZZLE_KINDS, ATTACKER_KINDS, type PuzzleKind } from "./puzzle";
 import type { StagePosition } from "@/components/scene/ComposedScene";
 
 export type BattlePhase =
@@ -41,7 +41,8 @@ export interface BattleMonsterInstance {
   hitsRemaining: number;
   maxHits: number;
   position: StagePosition;
-  puzzleKind: PuzzleKind;
+  /** `"random"` resolves to a fresh concrete kind on each hero attack. */
+  puzzleKind: PuzzleKind | "random";
   defeated: boolean;
 }
 
@@ -140,7 +141,7 @@ export function setupBattle(args: SetupArgs): BattleState {
         hitsRemaining: stats.hits,
         maxHits: stats.hits,
         position: layout[i] ?? "right",
-        puzzleKind: stats.puzzleKind ?? "add-1d",
+        puzzleKind: stats.puzzleKind ?? "random",
         defeated: stats.hits <= 0,
       };
     })
@@ -218,6 +219,20 @@ export function chooseHeroAction(
 }
 
 /**
+ * Resolve a monster's stored puzzle preference into a concrete kind.
+ * `"random"` picks a fresh kind from the full set; concrete values pass
+ * through unchanged.
+ */
+export function resolvePuzzleKind(kind: PuzzleKind | "random"): PuzzleKind {
+  if (kind === "random") {
+    return ALL_PUZZLE_KINDS[
+      Math.floor(Math.random() * ALL_PUZZLE_KINDS.length)
+    ];
+  }
+  return kind;
+}
+
+/**
  * Pick the puzzle kind the active attacker uses to hit a target monster.
  * - Hero: respects the monster's preferred kind (lore-driven).
  * - Companion: rotates through their stat-themed categories.
@@ -226,7 +241,7 @@ export function puzzleKindFor(
   attacker: AttackerId,
   monster: BattleMonsterInstance,
 ): PuzzleKind {
-  if (attacker === "hero") return monster.puzzleKind;
+  if (attacker === "hero") return resolvePuzzleKind(monster.puzzleKind);
   const kinds = ATTACKER_KINDS[attacker];
   return kinds[Math.floor(Math.random() * kinds.length)];
 }

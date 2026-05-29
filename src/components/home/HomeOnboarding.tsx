@@ -13,7 +13,7 @@ import { wizardOfOz } from "@/stories/wizard-of-oz";
 
 const NAME_MAX = 20;
 
-interface StoryCardMeta {
+export interface StoryCardMeta {
   id: string;
   title: string;
   /** Tagline shown under the title. */
@@ -22,17 +22,14 @@ interface StoryCardMeta {
   coverBase: string;
 }
 
-/** Story catalog shown on the home carousel. Add new stories here. */
-const STORIES: StoryCardMeta[] = [
-  {
-    id: "wizard-of-oz",
-    title: "The Wonderful Wizard of Oz",
-    subtitle: "A girl, a road of yellow brick, and three unlikely friends.",
-    coverBase: "/stories/wizard-of-oz/cover",
-  },
-];
+interface Props {
+  /** Story catalog assembled server-side from scenes.json — single
+   *  source of truth. Each entry mirrors `story.title`,
+   *  `story.subtitle`, and `story.coverImage` (extension stripped). */
+  stories: StoryCardMeta[];
+}
 
-export function HomeOnboarding() {
+export function HomeOnboarding({ stories: STORIES }: Props) {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [savedMap, setSavedMap] = useState<Record<string, PlayState | null>>(

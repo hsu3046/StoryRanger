@@ -20,9 +20,11 @@ export interface MonsterStats {
   hits: number;
   drops?: string[];
   size: SpriteSize;
-  puzzleKind?: PuzzleKind;
+  puzzleKind?: PuzzleKind | "random";
   airborne?: boolean;
   notes?: string;
+  /** Optional sprite path override (extensionless base). */
+  image?: string;
 }
 
 // Validate on module load — fail fast with a clear error if JSON drifts.

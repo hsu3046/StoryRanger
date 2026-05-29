@@ -40,6 +40,22 @@ export const PuzzleKindSchema = z.enum([
   "missing",
 ]);
 
+/** A monster's puzzle preference: any concrete kind, or `"random"` which
+ *  picks a fresh kind on each hero attack. Kept separate from
+ *  `PuzzleKindSchema` because the puzzle-routing matrix (attacker → kinds)
+ *  must only contain concrete kinds. */
+export const MonsterPuzzleKindSchema = z.enum([
+  "add-1d",
+  "sub-1d",
+  "add-2d",
+  "multiply",
+  "pattern",
+  "odd-out",
+  "bigger",
+  "missing",
+  "random",
+]);
+
 export const TtsVoiceSchema = z.enum([
   "alloy",
   "echo",

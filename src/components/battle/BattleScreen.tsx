@@ -10,6 +10,7 @@ import {
   chooseHeroAction,
   enterMonsterAttack,
   puzzleKindFor,
+  resolvePuzzleKind,
   resolveDefense,
   resolvePuzzleAttack,
   setupBattle,
@@ -27,6 +28,7 @@ import { characterSize, sizeScale } from "@/lib/sprite-size";
 import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
 import { HitsBar } from "./HpBar";
 import { MathPuzzle } from "./MathPuzzle";
+import type { PuzzleKind } from "@/lib/puzzle";
 import { DamageNumber, type FloatingEffect } from "./DamageNumber";
 
 import type {
@@ -351,7 +353,9 @@ export function BattleScreen({
 
   const monsterLayers = state.monsters.map((m, i) => ({
     monsterId: m.monsterId,
-    base: `/stories/${storyId}/monsters/${m.monsterId}`,
+    base:
+      MONSTERS[m.monsterId]?.image ??
+      `/stories/${storyId}/monsters/${m.monsterId}`,
     position: m.position,
     flip: false,
     defeated: m.defeated,
@@ -384,6 +388,27 @@ export function BattleScreen({
             monster: state.monsters[state.defendingMonsterIdx],
           }
         : null;
+
+  // Resolve the puzzle kind once per active puzzle. Doing it inline in JSX
+  // would re-roll any "random" kind on every re-render (animation state,
+  // etc.), regenerating the puzzle mid-solve. Memoizing on the puzzle's
+  // identity keeps the question stable until a new puzzle opens.
+  const activePuzzleKind = useMemo<PuzzleKind | null>(() => {
+    if (!activePuzzle) return null;
+    if (activePuzzle.mode === "attack") {
+      return puzzleKindFor(state.activeAttacker, activePuzzle.monster);
+    }
+    return resolvePuzzleKind(activePuzzle.monster.puzzleKind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-roll only on puzzle identity change
+  }, [
+    activePuzzle?.mode,
+    activePuzzle?.monster.monsterId,
+    state.activeAttacker,
+    // Key on the target INSTANCE index too, so two monsters sharing a
+    // monsterId each get a fresh "random" roll instead of a cached one.
+    state.pendingTargetIdx,
+    state.defendingMonsterIdx,
+  ]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-ink">
@@ -421,7 +446,10 @@ export function BattleScreen({
               hitsRemaining={m.hitsRemaining}
               maxHits={m.maxHits}
               defeated={m.defeated}
-              portraitBase={`/stories/${storyId}/monsters/${m.monsterId}`}
+              portraitBase={
+                MONSTERS[m.monsterId]?.image ??
+                `/stories/${storyId}/monsters/${m.monsterId}`
+              }
             />
           ))}
           {onOpenSettings && (
@@ -488,7 +516,7 @@ export function BattleScreen({
         {activePuzzle && activePuzzle.mode === "attack" && (
           <MathPuzzle
             targetName={activePuzzle.monster.name}
-            kind={puzzleKindFor(state.activeAttacker, activePuzzle.monster)}
+            kind={activePuzzleKind ?? "add-1d"}
             attackerLabel={attackerName(state.activeAttacker)}
             streak={state.streak}
             onSolved={(correct, durationMs) => {
@@ -503,7 +531,7 @@ export function BattleScreen({
           <MathPuzzle
             mode="defend"
             targetName={activePuzzle.monster.name}
-            kind={activePuzzle.monster.puzzleKind}
+            kind={activePuzzleKind ?? "add-1d"}
             streak={0}
             onSolved={(correct, durationMs) => {
               if (correct) {

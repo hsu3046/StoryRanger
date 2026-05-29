@@ -5,106 +5,190 @@ import { useRouter } from "next/navigation";
 import { CaretDown } from "@phosphor-icons/react";
 
 import {
-  ItemsFileSchema,
-  type ItemDefT,
-  type ItemsFileT,
+  MedalsFileSchema,
+  type MedalT,
+  type MedalsFileT,
 } from "@/data/schemas";
-import { saveItemsAction } from "../_actions/saveJson";
+import { saveMedalsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
-import { uniqueId } from "../_lib/uniqueId";
 
-const CATEGORIES = [
-  "trophy",
-  "tool",
-  "consumable",
-  "keepsake",
-  "key-item",
+/** All medal trigger kinds, in the order shown in the type dropdown. */
+const TRIGGER_TYPES = [
+  "scene",
+  "branch",
+  "ending",
+  "encounter",
+  "dialogue_count",
 ] as const;
-const RARITIES = ["common", "uncommon", "rare", "unique"] as const;
+
+type MedalTrigger = MedalT["trigger"];
+type TriggerType = MedalTrigger["type"];
+
+const TRIGGER_LABEL: Record<TriggerType, string> = {
+  scene: "Scene",
+  branch: "Branch",
+  ending: "Ending",
+  encounter: "Encounter",
+  dialogue_count: "Min dialogues",
+};
+
+/** Uppercase only the first character (leaves ids untouched). */
+function capitalizeFirst(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const TRIGGER_TYPE_LABEL: Record<TriggerType, string> = {
+  scene: "Scene entered",
+  branch: "Branch taken",
+  ending: "Ending reached",
+  encounter: "Encounter reward",
+  dialogue_count: "Dialogue count",
+};
+
+/** Default-shaped trigger when switching the type dropdown. */
+function defaultTrigger(type: TriggerType): MedalTrigger {
+  switch (type) {
+    case "branch":
+      return { type: "branch", branchId: "" };
+    case "scene":
+      return { type: "scene", sceneId: "" };
+    case "ending":
+      return { type: "ending", endingId: "" };
+    case "encounter":
+      return { type: "encounter", encounterId: "" };
+    case "dialogue_count":
+      return { type: "dialogue_count", min: 1 };
+  }
+}
+
+/** The single editable value carried by each trigger type, as a string. */
+function triggerValue(t: MedalTrigger): string {
+  switch (t.type) {
+    case "branch":
+      return t.branchId;
+    case "scene":
+      return t.sceneId;
+    case "ending":
+      return t.endingId;
+    case "encounter":
+      return t.encounterId;
+    case "dialogue_count":
+      return String(t.min);
+  }
+}
+
+function setTriggerValue(t: MedalTrigger, v: string): MedalTrigger {
+  switch (t.type) {
+    case "branch":
+      return { type: "branch", branchId: v };
+    case "scene":
+      return { type: "scene", sceneId: v };
+    case "ending":
+      return { type: "ending", endingId: v };
+    case "encounter":
+      return { type: "encounter", encounterId: v };
+    case "dialogue_count":
+      // Clamp to ≥1 — a min of 0 would make the medal trigger immediately
+      // (always earned). Empty/invalid input falls back to 1.
+      return {
+        type: "dialogue_count",
+        min: Math.max(1, Math.floor(Number(v) || 1)),
+      };
+  }
+}
+
+/** Human-readable one-liner for the table column. */
+function describeTrigger(t: MedalTrigger): string {
+  switch (t.type) {
+    case "branch":
+      return `branch: ${t.branchId}`;
+    case "scene":
+      return `scene: ${t.sceneId}`;
+    case "dialogue_count":
+      return `dialogue ≥ ${t.min}`;
+    case "ending":
+      return `ending: ${t.endingId}`;
+    case "encounter":
+      return `encounter: ${t.encounterId}`;
+  }
+}
 
 interface Props {
   storyId: string;
   storyTitle?: string;
-  initial: ItemDefT[];
-  missingRefs?: Array<{ where: string; id: string }>;
+  initial: MedalT[];
 }
 
-export function ItemsEditor({
-  storyId,
-  storyTitle,
-  initial,
-  missingRefs = [],
-}: Props) {
+export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [items, setItems] = useState<ItemDefT[]>(initial);
+  const [medals, setMedals] = useState<MedalT[]>(initial);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const dirty = useMemo(
-    () => JSON.stringify(initial) !== JSON.stringify(items),
-    [initial, items],
+    () => JSON.stringify(initial) !== JSON.stringify(medals),
+    [initial, medals],
   );
 
   const selected =
-    selectedIdx !== null && selectedIdx < items.length
-      ? items[selectedIdx]
+    selectedIdx !== null && selectedIdx < medals.length
+      ? medals[selectedIdx]
       : null;
 
   function save() {
     setError(null);
-    const payload: ItemsFileT = { items };
-    const parsed = ItemsFileSchema.safeParse(payload);
+    const payload: MedalsFileT = { medals };
+    const parsed = MedalsFileSchema.safeParse(payload);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Validation failed");
       return;
     }
     const ids = new Set<string>();
-    for (const it of items) {
-      if (ids.has(it.id)) {
-        setError(`Duplicate item id: ${it.id}`);
+    for (const m of medals) {
+      if (ids.has(m.id)) {
+        setError(`Duplicate medal id: ${m.id}`);
         return;
       }
-      ids.add(it.id);
+      ids.add(m.id);
     }
     startTransition(async () => {
-      const res = await saveItemsAction(storyId, payload);
+      const res = await saveMedalsAction(storyId, payload);
       if (!res.ok) setError(res.error);
       else router.refresh();
     });
   }
 
   function startCreate() {
-    const placeholder: ItemDefT = {
-      id: uniqueId("new-item", items.map((i) => i.id)),
-      name: "New Item",
-      icon: "🎁",
+    const placeholder: MedalT = {
+      id: `new-medal-${medals.length + 1}`,
+      name: "New Medal",
+      icon: "🏅",
       description: "",
-      category: "trophy",
-      rarity: "common",
+      trigger: { type: "scene", sceneId: "" },
     };
-    setItems((prev) => [...prev, placeholder]);
-    setSelectedIdx(items.length);
+    setMedals((prev) => [...prev, placeholder]);
+    setSelectedIdx(medals.length);
     setError(null);
   }
 
-  function updateSelected(mut: (it: ItemDefT) => ItemDefT) {
+  function updateSelected(mut: (m: MedalT) => MedalT) {
     if (selectedIdx === null) return;
-    setItems((prev) =>
-      prev.map((it, i) => (i === selectedIdx ? mut(it) : it)),
+    setMedals((prev) =>
+      prev.map((m, i) => (i === selectedIdx ? mut(m) : m)),
     );
   }
 
   async function deleteSelected() {
     if (selectedIdx === null) return;
-    const it = items[selectedIdx];
+    const m = medals[selectedIdx];
     const ok = await confirm({
-      title: "Delete item",
-      message: `Delete item "${it.name}"?\nThis cannot be undone.`,
+      title: "Delete medal",
+      message: `Delete medal "${m.name}"?\nThis cannot be undone.`,
     });
     if (!ok) return;
-    setItems((prev) => prev.filter((_, i) => i !== selectedIdx));
+    setMedals((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
 
@@ -116,25 +200,14 @@ export function ItemsEditor({
             className="font-handwritten text-base text-accent-deep"
             title={storyId}
           >
-            {storyTitle ?? storyId} / Items
+            {storyTitle ?? storyId} / Medals
           </p>
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
-            {items.length}
+            {medals.length}
           </span>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            items.json
+            medals.json
           </code>
-          {missingRefs.length > 0 && (
-            <span
-              className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs text-ruby"
-              title={missingRefs
-                .slice(0, 8)
-                .map((m) => `${m.id} @ ${m.where}`)
-                .join("\n")}
-            >
-              ⚠ {missingRefs.length} unknown refs
-            </span>
-          )}
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
               unsaved
@@ -149,12 +222,12 @@ export function ItemsEditor({
             disabled={isPending}
             className="rounded-pill bg-accent-deep px-3 py-1 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-50"
           >
-            + Item
+            + Medal
           </button>
           <button
             type="button"
             onClick={() => {
-              setItems(initial);
+              setMedals(initial);
               setSelectedIdx(null);
               setError(null);
             }}
@@ -187,15 +260,14 @@ export function ItemsEditor({
                 <tr>
                   <th className="px-3 py-2 w-10"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-28">Category</th>
-                  <th className="px-3 py-2 w-24">Rarity</th>
+                  <th className="px-3 py-2 w-64">Trigger</th>
                   <th className="px-3 py-2">Description</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((it, i) => (
+                {medals.map((m, i) => (
                   <tr
-                    key={`${it.id}-${i}`}
+                    key={`${m.id}-${i}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedIdx(i);
@@ -206,30 +278,15 @@ export function ItemsEditor({
                         : "hover:bg-paper-deep/15"
                     }`}
                   >
-                    <td className="px-3 py-2 text-2xl">{it.icon ?? "🎁"}</td>
-                    <td className="px-3 py-2 text-ink">{it.name}</td>
+                    <td className="px-3 py-2 text-2xl">{m.icon}</td>
+                    <td className="px-3 py-2 text-ink">{m.name}</td>
                     <td className="px-3 py-2">
-                      <code className="capitalize text-ink-soft">
-                        {it.category}
+                      <code className="text-ink-soft">
+                        {capitalizeFirst(describeTrigger(m.trigger))}
                       </code>
                     </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-pill px-2 py-0.5 text-xs capitalize ${
-                          it.rarity === "unique"
-                            ? "bg-accent-deep text-paper"
-                            : it.rarity === "rare"
-                              ? "bg-accent/30 text-accent-deep"
-                              : it.rarity === "uncommon"
-                                ? "bg-emerald/15 text-emerald"
-                                : "bg-paper-deep/50 text-ink-soft"
-                        }`}
-                      >
-                        {it.rarity}
-                      </span>
-                    </td>
                     <td className="px-3 py-2 text-ink-soft">
-                      {it.description}
+                      {m.description}
                     </td>
                   </tr>
                 ))}
@@ -240,9 +297,8 @@ export function ItemsEditor({
 
         {selected && (
           <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-ink-soft/10 bg-paper p-4">
-            <ItemForm
-              item={selected}
-              isNew={!initial.some((i) => i.id === selected.id)}
+            <MedalForm
+              medal={selected}
               onChange={updateSelected}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
@@ -254,24 +310,23 @@ export function ItemsEditor({
   );
 }
 
-function ItemForm({
-  item,
-  isNew,
+function MedalForm({
+  medal,
   onChange,
   onDelete,
   onClose,
 }: {
-  item: ItemDefT;
-  isNew: boolean;
-  onChange: (mut: (it: ItemDefT) => ItemDefT) => void;
+  medal: MedalT;
+  onChange: (mut: (m: MedalT) => MedalT) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const trigger = medal.trigger;
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between">
         <div>
-          <p className="font-handwritten text-base text-accent-deep">Item</p>
+          <p className="font-handwritten text-base text-accent-deep">Medal</p>
         </div>
         <div className="flex gap-1">
           <button
@@ -291,96 +346,71 @@ function ItemForm({
         </div>
       </header>
 
-      {isNew && (
-        <Field label="ID (kebab-case)">
-          <input
-            value={item.id}
-            onChange={(e) => onChange((it) => ({ ...it, id: e.target.value }))}
-            className={inputCls}
-            placeholder="e.g. magic-key"
-          />
-        </Field>
-      )}
-
       <Field label="Name">
         <input
-          value={item.name}
+          value={medal.name}
           onChange={(e) =>
-            onChange((it) => ({ ...it, name: e.target.value }))
+            onChange((m) => ({ ...m, name: e.target.value }))
           }
           className={inputCls}
         />
       </Field>
       <Field label="Emoji">
         <input
-          value={item.icon ?? ""}
+          value={medal.icon}
           onChange={(e) =>
-            onChange((it) => ({
-              ...it,
-              icon: e.target.value || undefined,
+            onChange((m) => ({ ...m, icon: e.target.value }))
+          }
+          className={inputCls}
+          placeholder="🏅"
+        />
+      </Field>
+
+      <Field label="Trigger">
+        <div className="relative">
+          <select
+            value={trigger.type}
+            onChange={(e) =>
+              onChange((m) => ({
+                ...m,
+                trigger: defaultTrigger(e.target.value as TriggerType),
+              }))
+            }
+            className={`${inputCls} appearance-none pr-9`}
+          >
+            {TRIGGER_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {TRIGGER_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+          <CaretDown
+            size={14}
+            weight="bold"
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+          />
+        </div>
+      </Field>
+      <Field label={TRIGGER_LABEL[trigger.type]}>
+        <input
+          type={trigger.type === "dialogue_count" ? "number" : "text"}
+          min={trigger.type === "dialogue_count" ? 1 : undefined}
+          value={triggerValue(trigger)}
+          onChange={(e) =>
+            onChange((m) => ({
+              ...m,
+              trigger: setTriggerValue(m.trigger, e.target.value),
             }))
           }
           className={inputCls}
-          placeholder="🪶"
         />
       </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Category">
-          <div className="relative">
-            <select
-              value={item.category}
-              onChange={(e) =>
-                onChange((it) => ({
-                  ...it,
-                  category: e.target.value as ItemDefT["category"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
-        </Field>
-        <Field label="Rarity">
-          <div className="relative">
-            <select
-              value={item.rarity}
-              onChange={(e) =>
-                onChange((it) => ({
-                  ...it,
-                  rarity: e.target.value as ItemDefT["rarity"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {RARITIES.map((r) => (
-                <option key={r} value={r}>
-                  {r.charAt(0).toUpperCase() + r.slice(1)}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
-        </Field>
-      </div>
+
       <Field label="Description">
         <textarea
-          value={item.description}
+          value={medal.description}
           onChange={(e) =>
-            onChange((it) => ({ ...it, description: e.target.value }))
+            onChange((m) => ({ ...m, description: e.target.value }))
           }
           rows={3}
           className={inputCls}

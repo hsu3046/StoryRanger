@@ -8,6 +8,7 @@ import {
   CaretDoubleRight,
   CaretDown,
   CaretRight,
+  GearSix,
   Ghost,
   Image as ImageIcon,
   Medal,
@@ -22,6 +23,7 @@ import {
 
 interface StoryRow {
   id: string;
+  title: string;
 }
 
 interface Props {
@@ -39,12 +41,13 @@ interface MenuEntry {
 
 function storyMenu(storyId: string): MenuEntry[] {
   return [
-    { label: "Story graph", href: `/admin/stories/${storyId}/graph`, icon: TreeStructure },
+    { label: "Basic", href: `/admin/stories/${storyId}/basic`, icon: GearSix },
+    { label: "Story Graph", href: `/admin/stories/${storyId}/graph`, icon: TreeStructure },
     { label: "Characters", href: `/admin/stories/${storyId}/characters`, icon: UsersFour },
     { label: "Monsters", href: `/admin/stories/${storyId}/monsters`, icon: Ghost },
     { label: "Backgrounds", href: `/admin/stories/${storyId}/backgrounds`, icon: ImageIcon },
     { label: "Encounters", href: `/admin/stories/${storyId}/encounters`, icon: Sword },
-    { label: "Puzzle routing", href: `/admin/stories/${storyId}/puzzles`, icon: PuzzlePiece },
+    { label: "Puzzles & Quizzes", href: `/admin/stories/${storyId}/puzzles`, icon: PuzzlePiece },
     { label: "Medals", href: `/admin/stories/${storyId}/medals`, icon: Medal },
     { label: "Items", href: `/admin/stories/${storyId}/items`, icon: Package },
   ];
@@ -158,7 +161,9 @@ export function AdminSidebar({ stories }: Props) {
               ) : (
                 <CaretRight size={10} weight="bold" />
               )}
-              <span className="flex-1">{s.id}</span>
+              <span className="flex-1 truncate normal-case" title={s.id}>
+                {s.title}
+              </span>
             </button>
             {isOpen &&
               storyMenu(s.id).map((entry) => (

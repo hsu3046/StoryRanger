@@ -10,7 +10,7 @@ export const MedalTriggerSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("encounter"), encounterId: z.string() }),
   /** Awarded after N companion dialogues — replaces the old
    *  `free_input_count` trigger now that free input is gone. */
-  z.object({ type: z.literal("dialogue_count"), min: z.number() }),
+  z.object({ type: z.literal("dialogue_count"), min: z.number().int().min(1) }),
 ]);
 
 export const MedalSchema = z.object({

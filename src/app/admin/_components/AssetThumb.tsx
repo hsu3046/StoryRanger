@@ -55,6 +55,8 @@ interface Props {
    *  `resolveAssetPath()` from a server component — `null` means "no file
    *  on disk; render the ? placeholder immediately, no flicker". */
   resolvedSrc?: string | null;
+  /** Placeholder rendered when no image resolves. Defaults to a "?" glyph. */
+  placeholder?: React.ReactNode;
 }
 
 /**
@@ -73,6 +75,7 @@ export function AssetThumb({
   ringColor,
   ringWidth,
   resolvedSrc,
+  placeholder,
 }: Props) {
   const [idx, setIdx] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -116,7 +119,7 @@ export function AssetThumb({
     >
       {failed ? (
         <div className="flex h-full w-full items-center justify-center text-[10px] text-ink-soft/60">
-          ?
+          {placeholder ?? "?"}
         </div>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element -- extension fallback chain

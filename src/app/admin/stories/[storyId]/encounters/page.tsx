@@ -12,13 +12,15 @@ export default async function EncountersPage({
 }) {
   const { storyId } = await params;
   const repo = contentRepo();
-  if (!repo.getStory(storyId)) notFound();
+  const loaded = repo.getStory(storyId);
+  if (!loaded) notFound();
   const encounters = repo.listEncounters(storyId);
 
   return (
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <AdminPageHeader
         storyId={storyId}
+        storyTitle={loaded.story.title}
         title="Encounters"
         count={encounters.length}
         filePath="encounters.json"

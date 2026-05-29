@@ -44,7 +44,11 @@ import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow"
 import { trimDialogueHistory } from "@/lib/dialogue-personas";
 import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
+import { prettyItem } from "@/data/items";
 import type { EncounterDef } from "@/types/encounter";
+
+/** Upper bound on the global hero-memory log kept in PlayState. */
+const HERO_MEMORY_CAP = 30;
 
 /**
  * Resolve a character image base path. The hero (speakerId "dorothy")
@@ -174,6 +178,28 @@ export function StoryPlayer({
     return headId ? getEncounter(headId) : null;
   }, [state.interaction]);
 
+  // Deterministic "adventures so far" line for ambient dialogue awareness.
+  // No LLM — derived from already-tracked structured state.
+  const journeyNote = useMemo(() => {
+    const parts: string[] = [];
+    const medalNames = state.earnedMedals
+      .map((id) => medals.medals.find((m) => m.id === id)?.name)
+      .filter((n): n is string => !!n);
+    if (medalNames.length) parts.push(`medals earned: ${medalNames.join(", ")}`);
+    const items = Array.from(new Set(state.inventory ?? [])).map((id) =>
+      prettyItem(id),
+    );
+    if (items.length) parts.push(`carrying: ${items.join(", ")}`);
+    const cleared = (state.completedEncounters ?? []).length;
+    if (cleared) parts.push(`${cleared} encounter(s) cleared`);
+    return parts.join("; ");
+  }, [
+    state.earnedMedals,
+    state.inventory,
+    state.completedEncounters,
+    medals.medals,
+  ]);
+
   const persistedBattleState: BattleState | undefined = useMemo(() => {
     const i = state.interaction;
     if (!i || i.kind !== "encounter") return undefined;
@@ -205,9 +231,25 @@ export function StoryPlayer({
         : [...baseHistory, { role: "character" as const, text: resp.reply }];
       const trimmed = trimDialogueHistory(turns, 12);
 
+      // itemGift is already hard-gated server-side (mood, once-per-character,
+      // whitelist, catalogue). When one arrives, bank it AND record the
+      // character as having gifted so future turns send alreadyGifted=true.
       const inventory = resp.itemGift
         ? [...(prev.inventory ?? []), resp.itemGift]
         : prev.inventory;
+      const giftedCharacters = resp.itemGift
+        ? Array.from(new Set([...(prev.giftedCharacters ?? []), targetId]))
+        : prev.giftedCharacters;
+
+      // Record what the hero said into the global cross-character memory.
+      // Skip the first-turn opener (empty userText) and consecutive dupes;
+      // cap to the most recent HERO_MEMORY_CAP lines.
+      const trimmedUser = userText.trim();
+      const prevMemory = prev.heroMemory ?? [];
+      const heroMemory =
+        trimmedUser && prevMemory[prevMemory.length - 1] !== trimmedUser
+          ? [...prevMemory, trimmedUser].slice(-HERO_MEMORY_CAP)
+          : prevMemory;
 
       return {
         ...prev,
@@ -220,6 +262,8 @@ export function StoryPlayer({
           [targetId]: trimmed,
         },
         inventory,
+        giftedCharacters,
+        heroMemory,
         updatedAt: new Date().toISOString(),
       };
     });
@@ -895,6 +939,9 @@ export function StoryPlayer({
             dialoguePortraitPath(story.id, id as SpeakerId | CompanionId)
           }
           mood={(id) => state.companionMoods?.[id as CompanionId] ?? 5}
+          hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
+          heroMemory={state.heroMemory ?? []}
+          journeyNote={journeyNote}
           history={(id) => state.dialogueHistory?.[id] ?? []}
           onApplyTurn={handleApplyDialogueTurn}
           onSessionClose={() => handleDialogueClose()}
@@ -926,9 +973,16 @@ export function StoryPlayer({
             partyHp={state.partyHp ?? { hero: DEFAULT_MAX_HP.hero }}
             partyMaxHp={state.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }}
             fallenAttackers={state.fallenAttackers ?? []}
-            characterImageBase={(id, mode = "default") =>
-              characterImagePath(story.id, id, mode)
-            }
+            characterImageBase={(id, mode = "default") => {
+              // Honor per-character `image` override when set, but only
+              // for the default in-scene sprite. Battle-stance art keeps
+              // the id-based convention under /characters/battle/.
+              if (mode === "default") {
+                const ch = characters.characters.find((c) => c.id === id);
+                if (ch?.image) return ch.image;
+              }
+              return characterImagePath(story.id, id, mode);
+            }}
             characters={characters.characters}
             initialBattleState={persistedBattleState}
             onBattleStateChange={handleBattleStateChange}

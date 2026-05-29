@@ -143,6 +143,94 @@
       "description": "The tall black hat of the Wicked Witch. Older than it has any right to be, light as ash.",
       "category": "key-item",
       "rarity": "unique"
+    },
+    {
+      "id": "straw-charm",
+      "name": "Straw Charm",
+      "icon": "🌾",
+      "description": "A little braided straw token from the Scarecrow. He says it holds a thought or two.",
+      "category": "keepsake",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "lucky-corn-kernel",
+      "name": "Lucky Corn Kernel",
+      "icon": "🌽",
+      "description": "A single golden kernel the Scarecrow swears is lucky. Probably.",
+      "category": "keepsake",
+      "rarity": "common"
+    },
+    {
+      "id": "drop-of-oil",
+      "name": "Drop of Oil",
+      "icon": "💧",
+      "description": "A precious drop from the Tin Mans can — given so your heart never rusts.",
+      "category": "keepsake",
+      "rarity": "common"
+    },
+    {
+      "id": "polished-tin-button",
+      "name": "Polished Tin Button",
+      "icon": "🔘",
+      "description": "A bright tin button the Tin Man buffed himself. A small, shining kindness.",
+      "category": "keepsake",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "tuft-of-mane",
+      "name": "Tuft of Mane",
+      "icon": "🦁",
+      "description": "A soft golden tuft from the Lions mane — braver than it looks.",
+      "category": "keepsake",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "courage-pebble",
+      "name": "Courage Pebble",
+      "icon": "🪨",
+      "description": "A smooth stone the Lion carries when he is scared. Now it is yours.",
+      "category": "keepsake",
+      "rarity": "common"
+    },
+    {
+      "id": "glinda-blessing",
+      "name": "Glindas Blessing",
+      "icon": "✨",
+      "description": "A shimmer of warmth left by the Good Witch. It glows faintly when you are kind.",
+      "category": "keepsake",
+      "rarity": "rare"
+    },
+    {
+      "id": "wizard-trinket",
+      "name": "Wizards Trinket",
+      "icon": "🎁",
+      "description": "A clever little gadget from Omaha. Mostly for show — but made with care.",
+      "category": "keepsake",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "balloon-ticket",
+      "name": "Balloon Ticket",
+      "icon": "🎈",
+      "description": "A faded ticket for the Wizards balloon. A promise of the way home.",
+      "category": "keepsake",
+      "rarity": "rare"
+    },
+    {
+      "id": "aunt-em-locket",
+      "name": "Aunt Ems Locket",
+      "icon": "💛",
+      "description": "A worn locket from Aunt Em. Warm from being held so often.",
+      "category": "keepsake",
+      "rarity": "rare"
+    },
+    {
+      "id": "warm-shawl",
+      "name": "Warm Shawl",
+      "icon": "🧣",
+      "description": "A hand-knit shawl that smells of the farm kitchen. Home, woven into wool.",
+      "category": "keepsake",
+      "rarity": "common"
     }
   ]
 }

@@ -31,6 +31,12 @@ interface Props {
   portraitBase: (id: SpeakerId) => string;
   /** Current mood per character (from PlayState.companionMoods or 5). */
   mood: (id: SpeakerId) => number;
+  /** Whether this character has already gifted the hero (gate input). */
+  hasGifted: (id: SpeakerId) => boolean;
+  /** Cross-character memory of things the hero has shared (global). */
+  heroMemory: string[];
+  /** Deterministic "adventures so far" one-liner (medals, items, etc.). */
+  journeyNote: string;
   /** Latest dialogue history per character (sliding window). */
   history: (id: SpeakerId) => DialogueMessage[];
   onApplyTurn: (
@@ -64,6 +70,9 @@ export function SceneDialogueLayer({
   characters,
   portraitBase,
   mood,
+  hasGifted,
+  heroMemory,
+  journeyNote,
   history,
   onApplyTurn,
   onSessionClose,
@@ -75,7 +84,6 @@ export function SceneDialogueLayer({
     reply: string;
     action: string | null;
     suggestions: string[];
-    hint?: string | null;
     itemGift?: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -151,6 +159,9 @@ export function SceneDialogueLayer({
           history: history(characterId),
           utterance: heroText,
           isFirstTurn: !!opts.isFirstTurn,
+          alreadyGifted: hasGifted(characterId),
+          heroMemory,
+          journeyNote,
         }),
       });
       if (!res.ok) throw new Error(`dialogue ${res.status}`);
@@ -159,7 +170,6 @@ export function SceneDialogueLayer({
         reply: data.reply,
         action: data.action ?? null,
         suggestions: data.suggestions ?? [],
-        hint: data.hiddenHint,
         itemGift: data.itemGift,
       });
       onApplyTurn(characterId, data, opts.isFirstTurn ? "" : heroText);
@@ -170,8 +180,13 @@ export function SceneDialogueLayer({
       if ((err as Error)?.name === "AbortError") return;
       console.warn("[dialogue]", err);
     } finally {
-      setLoading(false);
-      if (abortRef.current === abort) abortRef.current = null;
+      // Only clear loading if THIS request is still the current one. A
+      // superseded (aborted) request must not turn off the spinner that
+      // the newer in-flight request just turned on.
+      if (abortRef.current === abort) {
+        setLoading(false);
+        abortRef.current = null;
+      }
     }
   }
 

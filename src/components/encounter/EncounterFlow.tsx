@@ -238,7 +238,7 @@ function EncounterAlertSplash({
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- ext fallback */}
           <img
-            src={`/stories/${storyId}/monsters/${primary}.webp`}
+            src={`${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`}
             onError={(e) => {
               const el = e.currentTarget;
               if (!el.src.endsWith(".png")) el.src = el.src.replace(".webp", ".png");

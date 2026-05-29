@@ -83,6 +83,8 @@ export interface Scene {
 export interface Story {
   id: string;
   title: string;
+  /** Optional tagline displayed under the title on the home carousel. */
+  subtitle?: string;
   language: string;
   ageRange: [number, number];
   estimatedMinutes: number;
@@ -122,6 +124,17 @@ export interface MedalsFile {
   medals: Medal[];
 }
 
+/** Editable dialogue persona for the interactive character-chat feature.
+ *  Mirrors `CharacterPersonaSchema` in data/schemas/character.ts. */
+export interface CharacterPersona {
+  shortBio: string;
+  speechStyle: string;
+  voiceTraits: string;
+  dos: string[];
+  donts: string[];
+  giftableItems: string[];
+}
+
 export interface Character {
   id: SpeakerId;
   name: string;
@@ -134,6 +147,12 @@ export interface Character {
   /** Stage display size — feeds the SpriteLayer height the same way
    *  monsters do. */
   size: "tiny" | "small" | "medium" | "large" | "huge";
+  /** Optional override of the in-scene sprite path (extensionless base).
+   *  Omit to use the id-based convention. */
+  image?: string;
+  /** Optional interactive-dialogue persona (companions + story NPCs).
+   *  Omitted for narrator / hero. */
+  persona?: CharacterPersona;
 }
 
 export interface CharactersFile {
@@ -214,6 +233,16 @@ export interface PlayState {
   dialogueHistory?: Partial<Record<SpeakerId, DialogueMessage[]>>;
   /** v2.0 — items earned through dialogue, encounters, etc. */
   inventory?: string[];
+  /** Characters who have already gifted the hero a keepsake. Each
+   *  dialogue character may gift at most ONCE per playthrough — once their
+   *  id is here, the dialogue route refuses further gifts from them. */
+  giftedCharacters?: SpeakerId[];
+  /** Cross-character memory of things the HERO (the player) has said in
+   *  conversations — what they told characters, their answers, etc. Global
+   *  (not per-character) so any character can stay aware of the hero.
+   *  Capped, deterministic (no LLM). MVP-local; intended to migrate to a
+   *  server store (e.g. Supabase) later. */
+  heroMemory?: string[];
   /** Cumulative HP per attacker. Carries from one battle to the next.
    *  Missing key → use the default max for that attacker. */
   partyHp?: PartyHp;
@@ -245,9 +274,14 @@ export interface DialogueRequest {
   companions: CompanionId[];
   /** Current mood of THIS character toward the hero (0..10). */
   currentMood: number;
-  /** Sliding-window of last ~6 turns of this dialogue (oldest first). */
+  /** Sliding-window of the last several turns of this dialogue (oldest first). */
   history: DialogueMessage[];
   utterance: string;
+  /** Things the hero has shared across all conversations (global memory). */
+  heroMemory?: string[];
+  /** Deterministic one-line "adventures so far" summary (medals, items,
+   *  encounters cleared) for ambient situational awareness. */
+  journeyNote?: string;
 }
 
 export interface DialogueResponse {
@@ -257,9 +291,8 @@ export interface DialogueResponse {
   action?: string | null;
   /** -3..+3 — how this turn shifts the character's mood toward the hero. */
   moodDelta: number;
-  /** If the character chooses to share a gameplay hint. */
-  hiddenHint: string | null;
-  /** If the character gifts an item (id only). */
+  /** If the character gifts an item (id only). Hard-gated server-side:
+   *  only honoured at high mood, once per character, whitelisted + real. */
   itemGift: string | null;
   /** Set true when the character is wrapping up the conversation. */
   endsConversation: boolean;

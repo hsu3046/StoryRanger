@@ -13,7 +13,8 @@ export default async function PuzzlesPage({
 }) {
   const { storyId } = await params;
   const repo = contentRepo();
-  if (!repo.getStory(storyId)) notFound();
+  const loaded = repo.getStory(storyId);
+  if (!loaded) notFound();
 
   const filePath = path.join(
     process.cwd(),
@@ -25,5 +26,11 @@ export default async function PuzzlesPage({
   const raw = await fs.readFile(filePath, "utf-8");
   const routing = PuzzleRoutingSchema.parse(JSON.parse(raw));
 
-  return <PuzzleRoutingEditor storyId={storyId} initial={routing} />;
+  return (
+    <PuzzleRoutingEditor
+      storyId={storyId}
+      storyTitle={loaded.story.title}
+      initial={routing}
+    />
+  );
 }

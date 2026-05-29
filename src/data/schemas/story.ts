@@ -65,6 +65,10 @@ export const SceneSchema = z.object({
 export const StorySchema = z.object({
   id: z.string(),
   title: z.string(),
+  /** Optional subtitle / tagline — shown under the title on the home
+   *  card and cover screens. Existing stories without this field are
+   *  still valid; the player UI falls back to title-only. */
+  subtitle: z.string().optional(),
   language: z.string(),
   ageRange: z.tuple([z.number(), z.number()]),
   estimatedMinutes: z.number(),

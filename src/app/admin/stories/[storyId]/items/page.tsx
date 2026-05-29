@@ -10,13 +10,15 @@ export default async function ItemsPage({
 }) {
   const { storyId } = await params;
   const repo = contentRepo();
-  if (!repo.getStory(storyId)) notFound();
+  const loaded = repo.getStory(storyId);
+  if (!loaded) notFound();
   const items = repo.listItems(storyId);
   const { missing } = scanItemReferences(storyId);
 
   return (
     <ItemsEditor
       storyId={storyId}
+      storyTitle={loaded.story.title}
       initial={items}
       missingRefs={missing}
     />

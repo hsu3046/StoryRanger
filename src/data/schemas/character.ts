@@ -5,6 +5,32 @@ import {
   TtsVoiceSchema,
 } from "./primitives";
 
+/**
+ * Editable dialogue persona — the descriptive half of the LLM system
+ * prompt for the interactive character-chat feature. The character's
+ * `name` (displayName) and `id` are supplied separately; this object
+ * carries only the per-character behavioural content the admin tunes.
+ *
+ * Kept as a STATIC block in the system prompt (no hero/scene/mood values)
+ * so the prompt prefix stays identical across requests and is eligible
+ * for provider prompt-caching.
+ */
+export const CharacterPersonaSchema = z.object({
+  /** Who this character is — 1-3 sentences. */
+  shortBio: z.string(),
+  /** How they talk — cadence, quirks, vocabulary. */
+  speechStyle: z.string(),
+  /** One-line summary of vocal feel. */
+  voiceTraits: z.string(),
+  /** Positive behavioural guidelines. */
+  dos: z.array(z.string()).default([]),
+  /** Things the character must never do. */
+  donts: z.array(z.string()).default([]),
+  /** Item ids this character may gift at very high mood (one per
+   *  character per playthrough — see the dialogue route's hard gate). */
+  giftableItems: z.array(z.string()).default([]),
+});
+
 export const CharacterSchema = z.object({
   id: SpeakerIdSchema,
   name: z.string(),
@@ -15,11 +41,23 @@ export const CharacterSchema = z.object({
    *  way as monsters. Lion / Wizard typically read as "large", Toto is
    *  "tiny", everyone else "medium". */
   size: SpriteSizeSchema,
+  /** Optional interactive-dialogue persona. Present only for characters
+   *  the player can talk with (companions + story NPCs). Omit for
+   *  narrator / hero. */
+  persona: CharacterPersonaSchema.optional(),
+  /** Optional override of the in-scene sprite path. Stored as a base
+   *  path without extension (e.g. `/stories/wizard-of-oz/characters/
+   *  alt-scarecrow`); AssetThumb / runtime extension fallback resolves
+   *  the file. Omit to use the id-based convention. Dialogue portraits
+   *  (head-shots in /dialogue/) and battle stances (/characters/battle/)
+   *  still follow the id-based path — they're separate artistic intents. */
+  image: z.string().optional(),
 });
 
 export const CharactersFileSchema = z.object({
   characters: z.array(CharacterSchema),
 });
 
+export type CharacterPersonaT = z.infer<typeof CharacterPersonaSchema>;
 export type CharacterT = z.infer<typeof CharacterSchema>;
 export type CharactersFileT = z.infer<typeof CharactersFileSchema>;
