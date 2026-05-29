@@ -21,7 +21,6 @@ export const EncounterTriggerSchema = z.object({
 
 export const EncounterIntroSchema = z.object({
   bg: z.string(),
-  narration: z.string(),
 });
 
 export const EncounterRewardsSchema = z.object({

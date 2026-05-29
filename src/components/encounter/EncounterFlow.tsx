@@ -14,6 +14,7 @@ import type {
 } from "@/types/story";
 import type { EncounterDef } from "@/types/encounter";
 import type { BattleState } from "@/lib/battle-engine";
+import { formatNarration } from "@/lib/narrative";
 
 import { BattleScreen } from "../battle/BattleScreen";
 import { MONSTERS } from "@/data/monsters";
@@ -69,14 +70,13 @@ interface Props {
 
 type Phase = "alert" | "body";
 
-/** How long the alert splash plays before the battle starts. The
- *  encounter's intro narration is shown WITHIN this splash. */
+/** How long the alert splash plays before the battle starts. */
 const ALERT_DURATION_MS = 2400;
 
 /**
- * Battle encounter overlay. Dramatic alert splash (with the encounter
- * intro narration baked in) → straight into the BattleScreen. No
- * "Ready!" confirmation; the splash itself is the pacing beat.
+ * Battle encounter overlay. Dramatic alert splash (monsters + headline) →
+ * straight into the BattleScreen. No "Ready!" confirmation; the splash
+ * itself is the pacing beat.
  *
  * Story-style encounters were folded into Scene (`reward`) and Branch
  * (`puzzle` / `requires` / `reward` / `onFailMode`) in v3.
@@ -99,7 +99,6 @@ export function EncounterFlow({
   onComplete,
   onOpenSettings,
 }: Props) {
-  void hero; // reserved for future hero-name interpolation
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
   // alert splash is purely intro flair, not worth replaying on refresh.
@@ -120,13 +119,7 @@ export function EncounterFlow({
   let body: React.ReactNode = null;
 
   if (phase === "alert") {
-    body = (
-      <EncounterAlertSplash
-        monsterIds={monsterIds}
-        storyId={storyId}
-        narration={encounter.intro.narration}
-      />
-    );
+    body = <EncounterAlertSplash monsterIds={monsterIds} storyId={storyId} />;
   } else {
     body = (
       <BattleScreen
@@ -138,6 +131,11 @@ export function EncounterFlow({
         inventory={inventory}
         initialState={initialBattleState}
         onStateChange={onBattleStateChange}
+        victoryNarration={
+          encounter.outro.victory
+            ? formatNarration(encounter.outro.victory, hero)
+            : undefined
+        }
         setup={{
           bg: encounter.intro.bg,
           monsterIds: encounter.body.monsterIds,
@@ -146,7 +144,6 @@ export function EncounterFlow({
           fallenAttackers,
           companions,
           companionMoods,
-          introNarration: encounter.intro.narration,
         }}
         onComplete={(res) => {
           const forceNextSceneId =
@@ -197,11 +194,9 @@ export function EncounterFlow({
 function EncounterAlertSplash({
   monsterIds,
   storyId,
-  narration,
 }: {
   monsterIds: string[];
   storyId: string;
-  narration: string;
 }) {
   const primary = monsterIds[0];
   const primaryName = primary ? MONSTERS[primary]?.name ?? primary : null;
@@ -297,27 +292,6 @@ function EncounterAlertSplash({
               : primaryName}
           </motion.p>
         )}
-      </motion.div>
-
-      {/* Layer 5 — intro narration, fades in after the headline lands. */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.1, duration: 0.5, ease: "easeOut" }}
-        className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-6 pb-10 sm:pb-14"
-        style={{ paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))" }}
-      >
-        <p
-          className="mx-auto max-w-3xl text-center text-xl font-semibold leading-snug text-paper text-balance sm:text-2xl"
-          style={{
-            textShadow:
-              "0 5px 18px rgba(20,12,4,0.95), 0 3px 6px rgba(20,12,4,0.95)",
-            WebkitTextStroke: "2px rgba(20,12,4,0.7)",
-            paintOrder: "stroke fill",
-          }}
-        >
-          {narration}
-        </p>
       </motion.div>
 
       {/* Layer 6 — single screen flash at the very end to wipe into

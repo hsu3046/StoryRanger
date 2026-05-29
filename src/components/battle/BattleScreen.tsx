@@ -72,6 +72,9 @@ interface Props {
   /** Player inventory (item ids, may repeat). Drives the in-battle item
    *  row; consumed items are removed from PlayState when the battle ends. */
   inventory?: string[];
+  /** Authored victory line (encounter.outro.victory, already templated).
+   *  Shown on the victory panel; falls back to a default when empty. */
+  victoryNarration?: string;
 }
 
 const HERO_POSITIONS: Record<number, StagePosition[]> = {
@@ -92,6 +95,7 @@ export function BattleScreen({
   onComplete,
   onOpenSettings,
   inventory = [],
+  victoryNarration,
 }: Props) {
   const [state, setState] = useState<BattleState>(
     () => initialState ?? setupBattle(setup),
@@ -517,6 +521,7 @@ export function BattleScreen({
                   ? "defeat"
                   : "escaped"
             }
+            victoryNarration={victoryNarration}
             rewards={state.rewards}
             onContinue={() =>
               onComplete({
@@ -816,10 +821,12 @@ function BattleActionButton({
 
 function TerminalPanel({
   outcome,
+  victoryNarration,
   rewards,
   onContinue,
 }: {
   outcome: "victory" | "defeat" | "escaped";
+  victoryNarration?: string;
   rewards: string[];
   onContinue: () => void;
 }) {
@@ -831,7 +838,9 @@ function TerminalPanel({
         : "You fell…";
   const subtitle =
     outcome === "victory"
-      ? "The path is clear ahead."
+      ? // Authored victory line (encounter.outro.victory); the hardcoded
+        // string is the default shown when the author left it blank.
+        (victoryNarration?.trim() || "The path is clear ahead.")
       : outcome === "escaped"
         ? "Your friends help you find your breath."
         : "Glinda's blessing carries you to safety.";

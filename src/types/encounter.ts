@@ -24,7 +24,6 @@ export interface EncounterTrigger {
 
 export interface EncounterIntro {
   bg: string;
-  narration: string;
 }
 
 export interface EncounterRewards {

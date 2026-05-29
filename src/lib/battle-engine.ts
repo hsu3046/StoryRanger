@@ -122,7 +122,6 @@ export interface SetupArgs {
   fallenAttackers: AttackerId[];
   companions: CompanionId[];
   companionMoods: CompanionMoods;
-  introNarration?: string;
 }
 
 const MONSTER_SLOTS: StagePosition[][] = [
@@ -188,9 +187,7 @@ export function setupBattle(args: SetupArgs): BattleState {
     companionMoods: args.companionMoods,
     monsters,
     bg: args.bg,
-    log: args.introNarration
-      ? [{ text: args.introNarration, tone: "neutral" }]
-      : [],
+    log: [],
     activeAttacker: firstActive,
     streak: 0,
     monsterIdxThisRound: 0,

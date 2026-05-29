@@ -640,11 +640,11 @@ function StoryGraphEditorInner({
       trigger: { sceneId, branchId, count: 1 },
       intro: {
         bg: "forest-clearing",
-        narration: "(intro narration)",
       },
       body: { kind: "battle", monsterIds: [] },
       rewards: {},
-      outro: { victory: "(victory line)" },
+      // Empty → the battle's victory panel shows a sensible default line.
+      outro: { victory: "" },
     };
     setEncounters((prev) => [...prev, newEnc]);
   }
@@ -1462,20 +1462,6 @@ function EncounterCard({
               ))}
             </StyledSelect>
           </MiniField>
-          <MiniField label="Narration">
-            <textarea
-              value={encounter.intro.narration}
-              onChange={(e) =>
-                onChange((x) => ({
-                  ...x,
-                  intro: { ...x.intro, narration: e.target.value },
-                }))
-              }
-              rows={5}
-              className={inputClsSm}
-            />
-            <CharCount value={encounter.intro.narration} />
-          </MiniField>
 
           <MiniField label="Monsters">
             <div className="flex max-h-48 flex-wrap gap-1 overflow-y-auto">
@@ -1584,6 +1570,7 @@ function EncounterCard({
                 }))
               }
               rows={5}
+              placeholder="The path is clear ahead.  (default if left blank — shown on the battle's victory screen)"
               className={inputClsSm}
             />
             <CharCount value={encounter.outro.victory} />
