@@ -105,6 +105,10 @@ export function SceneDialogueLayer({
   // beat — otherwise the buttons pop in over a half-typed bubble.
   const [choicesReady, setChoicesReady] = useState(false);
   const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Pending auto-close (when the LLM ends the conversation). Stored so it can
+  // be cancelled if the player closes / starts a new turn first — otherwise it
+  // fires later and closes a fresh session.
+  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionStartedRef = useRef<SpeakerId | null>(null);
   const handledAskKeyRef = useRef<number | null>(null);
 
@@ -116,6 +120,12 @@ export function SceneDialogueLayer({
       choiceTimerRef.current = null;
     }
   }
+  function clearEndTimer() {
+    if (endTimerRef.current) {
+      clearTimeout(endTimerRef.current);
+      endTimerRef.current = null;
+    }
+  }
   function handleReplyTyped() {
     clearChoiceTimer();
     choiceTimerRef.current = setTimeout(
@@ -123,8 +133,14 @@ export function SceneDialogueLayer({
       CHOICE_REVEAL_DELAY_MS,
     );
   }
-  // Clear any pending reveal timer on unmount.
-  useEffect(() => clearChoiceTimer, []);
+  // Clear any pending timers on unmount.
+  useEffect(
+    () => () => {
+      clearChoiceTimer();
+      clearEndTimer();
+    },
+    [],
+  );
 
   const characterMap = useMemo(() => {
     const m: Record<string, (typeof characters.characters)[number]> = {};
@@ -206,8 +222,10 @@ export function SceneDialogueLayer({
 
     setLoading(true);
     setLatestReply(null);
-    // New turn → hide the choices until this reply finishes streaming.
+    // New turn → hide the choices until this reply finishes streaming, and
+    // cancel any pending auto-close from a previous "endsConversation" turn.
     clearChoiceTimer();
+    clearEndTimer();
     setChoicesReady(false);
     try {
       const res = await fetch("/api/dialogue", {
@@ -240,7 +258,8 @@ export function SceneDialogueLayer({
       });
       onApplyTurn(characterId, data, opts.isFirstTurn ? "" : heroText);
       if (data.endsConversation) {
-        setTimeout(() => closeSession(), 2400);
+        clearEndTimer();
+        endTimerRef.current = setTimeout(() => closeSession(), 2400);
       }
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
@@ -262,6 +281,7 @@ export function SceneDialogueLayer({
     abortRef.current?.abort();
     abortRef.current = null;
     clearChoiceTimer();
+    clearEndTimer();
     setChoicesReady(false);
     if (active) {
       onSessionClose(active);
