@@ -4,25 +4,25 @@
       "id": "narrator",
       "name": "Narrator",
       "voice": "nova",
-      "color": "#5a4128",
       "voiceSpeed": 1,
+      "color": "#5a4128",
       "size": "medium"
     },
     {
       "id": "dorothy",
-      "name": "Dorothy",
+      "name": "Hero",
       "isHero": true,
       "voice": "shimmer",
-      "color": "#a8487f",
       "voiceSpeed": 1.05,
+      "color": "#a8487f",
       "size": "medium"
     },
     {
       "id": "scarecrow",
       "name": "Scarecrow",
       "voice": "alloy",
-      "color": "#c9a23a",
       "voiceSpeed": 1.1,
+      "color": "#c9a23a",
       "size": "medium",
       "persona": {
         "shortBio": "A friendly straw figure recently lifted off a wooden pole. He believes he has no brain — yet keeps saying things that sound oddly wise. Open-hearted, eager, slightly clumsy.",
@@ -48,8 +48,8 @@
       "id": "tinman",
       "name": "Tin Man",
       "voice": "echo",
-      "color": "#6b8aa0",
       "voiceSpeed": 0.95,
+      "color": "#6b8aa0",
       "size": "medium",
       "persona": {
         "shortBio": "A man made entirely of tin. He longs deeply for a heart and feels things acutely despite (or because of) his hollow chest. Speaks softly, listens carefully, holds tears in his eyes when moved.",
@@ -75,8 +75,8 @@
       "id": "lion",
       "name": "Cowardly Lion",
       "voice": "onyx",
-      "color": "#b8651b",
       "voiceSpeed": 0.95,
+      "color": "#b8651b",
       "size": "large",
       "persona": {
         "shortBio": "An enormous golden-maned lion who trembles at almost everything yet refuses to abandon his friends. Apologetic, self-doubting, and braver than he knows.",
@@ -101,8 +101,8 @@
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
       "voice": "fable",
-      "color": "#4a2a4a",
       "voiceSpeed": 0.9,
+      "color": "#4a2a4a",
       "size": "medium",
       "persona": {
         "shortBio": "A green-skinned old witch with sharp wit. Sweetly menacing — classic fairy-tale villain who manipulates with honeyed words rather than open threats. Age-appropriate evil.",
@@ -125,8 +125,8 @@
       "id": "glinda",
       "name": "Glinda the Good Witch",
       "voice": "nova",
-      "color": "#d27ab0",
       "voiceSpeed": 1,
+      "color": "#d27ab0",
       "size": "medium",
       "persona": {
         "shortBio": "A serene elder witch who radiates gentle warmth. Wise, never preachy. Never gives a direct answer — only beautiful questions that lead the hero to discover things themselves.",
@@ -151,8 +151,8 @@
       "id": "wizard",
       "name": "Wizard of Oz",
       "voice": "echo",
-      "color": "#7a5a3a",
       "voiceSpeed": 0.95,
+      "color": "#7a5a3a",
       "size": "large",
       "persona": {
         "shortBio": "After being unmasked: a small, kindly older man from Omaha. Regretful, honest now, and surprisingly wise about ordinary courage. Tries to make up for past tricks.",

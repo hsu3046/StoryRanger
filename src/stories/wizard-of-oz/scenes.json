@@ -29,8 +29,8 @@
       ],
       "asks": [
         {
-          "id": "ask_cyclone",
-          "label": "What is a cyclone?",
+          "id": "ask_bckdw",
+          "label": "What is cyclone?",
           "characterId": "aunt-em"
         }
       ]
@@ -79,13 +79,6 @@
       ],
       "dialogueCharacters": [
         "glinda"
-      ],
-      "asks": [
-        {
-          "id": "ask_where",
-          "label": "Where am I?",
-          "characterId": "glinda"
-        }
       ]
     },
     "s04_road": {
