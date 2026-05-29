@@ -136,6 +136,20 @@ export function StoryBasicEditor({ storyId, initialStory, coverOptions }: Props)
             />
           </Field>
 
+          <Field label="Subtitle (optional)">
+            <input
+              value={story.subtitle ?? ""}
+              onChange={(e) =>
+                update((s) => ({
+                  ...s,
+                  subtitle: e.target.value || undefined,
+                }))
+              }
+              className={inputCls}
+              placeholder="e.g. A tale of Kansas, Oz, and finding home"
+            />
+          </Field>
+
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-5">
               <Field label="Cover image">
@@ -188,20 +202,6 @@ export function StoryBasicEditor({ storyId, initialStory, coverOptions }: Props)
               ringWidth={0}
             />
           </div>
-
-          <Field label="Subtitle (optional)">
-            <input
-              value={story.subtitle ?? ""}
-              onChange={(e) =>
-                update((s) => ({
-                  ...s,
-                  subtitle: e.target.value || undefined,
-                }))
-              }
-              className={inputCls}
-              placeholder="e.g. A tale of Kansas, Oz, and finding home"
-            />
-          </Field>
 
           <div className="grid grid-cols-2 gap-5">
             <Field label="Age range">

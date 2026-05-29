@@ -26,14 +26,12 @@ const PUZZLE_KINDS = [
 type PuzzleKind = (typeof PUZZLE_KINDS)[number];
 
 interface Props {
-  storyId: string;
-  storyTitle?: string;
   initial: PuzzleRoutingT;
 }
 
 type Tab = "routing" | "generators";
 
-export function PuzzleRoutingEditor({ storyId, storyTitle, initial }: Props) {
+export function PuzzleRoutingEditor({ initial }: Props) {
   const router = useRouter();
   const [routing, setRouting] = useState<PuzzleRoutingT>(initial);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +81,7 @@ export function PuzzleRoutingEditor({ storyId, storyTitle, initial }: Props) {
       }
     }
     startTransition(async () => {
-      const res = await savePuzzleRoutingAction(storyId, routing);
+      const res = await savePuzzleRoutingAction(routing);
       if (!res.ok) setError(res.error);
       else router.refresh();
     });
@@ -93,11 +91,8 @@ export function PuzzleRoutingEditor({ storyId, storyTitle, initial }: Props) {
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p
-            className="font-handwritten text-base text-accent-deep"
-            title={storyId}
-          >
-            {storyTitle ?? storyId} / Puzzles
+          <p className="font-handwritten text-base text-accent-deep">
+            Puzzles &amp; Quizzes
           </p>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
             puzzle-routing.json

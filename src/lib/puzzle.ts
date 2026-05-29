@@ -66,10 +66,10 @@ export function difficultyFor(monsterAc: number): "easy" | "medium" | "hard" {
  * Puzzle categories each attacker can solve. When a companion attacks,
  * their categories take priority over the monster's preferred kind.
  *
- * Loaded from JSON via the puzzle-routing schema. Admin can edit the matrix
- * at /admin/stories/<id>/puzzles.
+ * Loaded from JSON via the puzzle-routing schema. This config is GLOBAL
+ * (shared by every story). Admin can edit the matrix at /admin/puzzles.
  */
-import routingJson from "@/stories/wizard-of-oz/puzzle-routing.json";
+import routingJson from "@/data/global/puzzle-routing.json";
 import { PuzzleRoutingSchema } from "@/data/schemas/puzzle-routing";
 
 const parsedRouting = PuzzleRoutingSchema.parse(routingJson);
