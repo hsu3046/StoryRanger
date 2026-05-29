@@ -90,7 +90,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
         {speakerBadge && (
           <div className="pointer-events-none absolute right-1.5 top-1.5">
             <span
-              className={`rounded-pill px-1.5 py-0.5 text-[10px] font-semibold ${accent}`}
+              className={`inline-flex items-center justify-center rounded-pill px-1.5 py-0.5 text-[10px] font-semibold leading-none ${accent}`}
             >
               {speakerBadge}
             </span>
