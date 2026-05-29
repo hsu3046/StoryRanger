@@ -60,15 +60,20 @@ export function ScenePreviewModal({
       {/* Player surface — fills the viewport minus a small inset so the
           author can see the modal frame and find the close button. */}
       <div className="absolute inset-2 overflow-hidden rounded-card-lg bg-ink shadow-overlay sm:inset-4">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close preview"
-          className="absolute left-1/2 top-3 z-[90] flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-pill bg-paper/85 text-ink shadow-button ring-1 ring-ink-soft/20 hover:bg-paper active:scale-95"
-          title="Close preview (Esc)"
-        >
-          <X size={16} weight="bold" />
-        </button>
+        {/* Top-center: a single pill holding the "Preview" label and the
+            close button together. */}
+        <div className="absolute left-1/2 top-3 z-[90] flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-pill bg-paper/55 pl-4 pr-1.5 shadow-button ring-1 ring-ink-soft/20 backdrop-blur-sm">
+          <span className="text-sm font-semibold text-ink">Preview</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close preview"
+            className="flex h-6 w-6 items-center justify-center rounded-pill text-ink transition-colors hover:bg-ink/10 active:scale-95"
+            title="Close preview (Esc)"
+          >
+            <X size={14} weight="bold" />
+          </button>
+        </div>
         <StoryPlayer
           story={story}
           medals={medals}
