@@ -919,6 +919,9 @@ function StoryGraphEditorInner({
               {selection?.kind === "scene" && selectedScene && (
                 <SceneInspector
                   storyId={storyId}
+                  storyLanguage={story.language}
+                  storyTitle={story.title}
+                  storyPremise={story.subtitle ?? ""}
                   storyScenes={story.scenes}
                   characters={runtimeCharactersFile.characters}
                   sceneId={selectedScene.id}
@@ -1017,6 +1020,9 @@ export function StoryGraphEditor(props: Props) {
 
 function SceneInspector({
   storyId,
+  storyLanguage,
+  storyTitle,
+  storyPremise,
   storyScenes,
   sceneId,
   scene,
@@ -1035,6 +1041,11 @@ function SceneInspector({
   onSetStart,
 }: {
   storyId: string;
+  /** Story language code + title + premise — passed to the narration AI so
+   *  it writes in the story's language and tone. */
+  storyLanguage: string;
+  storyTitle: string;
+  storyPremise: string;
   storyScenes: Record<string, SceneT>;
   sceneId: string;
   scene: SceneT;
@@ -1167,18 +1178,17 @@ function SceneInspector({
         />
       </Field>
 
-      <Field label="Narration">
-        <textarea
-          value={scene.narration}
-          onChange={(e) =>
-            onChange((s) => ({ ...s, narration: e.target.value }))
-          }
-          rows={5}
-          placeholder="e.g. {{name}} pauses at the gate. {{They}} grip {{their}} pack tighter — {{themself}} alone now."
-          className={inputCls}
-        />
-        <CharCount value={scene.narration} />
-      </Field>
+      <SceneNarrationEditor
+        storyId={storyId}
+        storyLanguage={storyLanguage}
+        storyTitle={storyTitle}
+        storyPremise={storyPremise}
+        storyScenes={storyScenes}
+        sceneId={sceneId}
+        scene={scene}
+        characters={characters}
+        onChange={onChange}
+      />
 
       <DialogueCharactersEditor
         storyId={storyId}
@@ -1982,6 +1992,114 @@ function BranchOutcomeEditor({
       />
       <div className="mt-1 flex items-center justify-between gap-2">
         <CharCount value={branch.outcome ?? ""} />
+        <button
+          type="button"
+          onClick={generate}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-pill bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:opacity-50"
+        >
+          <Sparkle size={12} weight="fill" />
+          {loading ? "Generating…" : "Generate"}
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+/**
+ * Scene narration editor — the scene's main prose, with a "Generate" button
+ * that drafts it from the story tone, the lead-up scenes, the scene's speaker,
+ * and the choices this scene offers. Mirrors BranchOutcomeEditor (confirm
+ * before overwriting, current text doubles as the request).
+ */
+function SceneNarrationEditor({
+  storyId,
+  storyLanguage,
+  storyTitle,
+  storyPremise,
+  storyScenes,
+  sceneId,
+  scene,
+  characters,
+  onChange,
+}: {
+  storyId: string;
+  storyLanguage: string;
+  storyTitle: string;
+  storyPremise: string;
+  storyScenes: Record<string, SceneT>;
+  sceneId: string;
+  scene: SceneT;
+  characters: CharactersFile["characters"];
+  onChange: (mut: (s: SceneT) => SceneT) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const confirm = useConfirm();
+
+  async function generate() {
+    // Guard an accidental overwrite of existing narration (the current text
+    // is still sent as the request, then replaced).
+    if (scene.narration.trim().length > 0) {
+      const ok = await confirm({
+        title: "Generate over current text?",
+        message:
+          "This replaces the Narration below with a fresh AI generation. Your current text is sent as the request to steer it, then overwritten.",
+        confirmLabel: "Generate",
+        tone: "default",
+      });
+      if (!ok) return;
+    }
+    setLoading(true);
+    try {
+      // Lead-up context: scenes whose branches point INTO this scene.
+      const incoming = Object.values(storyScenes)
+        .flatMap((s) =>
+          s.branches
+            .filter((b) => b.next === sceneId)
+            .map((b) => ({ label: b.label, narration: s.narration })),
+        )
+        .slice(0, 3);
+      const speakerName =
+        characters.find((c) => c.id === scene.speaker)?.name ?? scene.speaker;
+      const authorRequest = scene.narration.trim();
+      const res = await fetch("/api/scene-narration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyId,
+          language: storyLanguage,
+          storyTitle,
+          storyPremise,
+          speaker: scene.speaker,
+          speakerName,
+          choices: scene.branches.map((b) => b.label),
+          incoming,
+          authorRequest: authorRequest || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`scene-narration ${res.status}`);
+      const data = (await res.json()) as { narration: string };
+      onChange((s) => ({ ...s, narration: data.narration }));
+    } catch (err) {
+      console.warn("[scene-narration] generate failed", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Field label="Narration">
+      <textarea
+        value={scene.narration}
+        onChange={(e) =>
+          onChange((s) => ({ ...s, narration: e.target.value }))
+        }
+        rows={5}
+        placeholder="e.g. {{name}} pauses at the gate. {{They}} grip {{their}} pack tighter — {{themself}} alone now."
+        className={inputCls}
+      />
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <CharCount value={scene.narration} />
         <button
           type="button"
           onClick={generate}
