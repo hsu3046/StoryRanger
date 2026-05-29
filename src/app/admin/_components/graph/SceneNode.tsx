@@ -35,6 +35,16 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
       ? "bg-emerald text-paper"
       : "bg-paper-deep/30 text-ink-soft";
 
+  // Top-right badge: ending / start take priority; otherwise the speaker —
+  // but "narrator" is the default voice, so we hide it to cut visual noise.
+  const speakerBadge = isEnding
+    ? "🏁 ending"
+    : isStart
+      ? "▶ Start"
+      : scene.speaker !== "narrator"
+        ? scene.speaker
+        : null;
+
   return (
     // `transition-colors` (not `transition-all`): React Flow drags by
     // mutating CSS `transform: translate(...)`, and `transition-all` would
@@ -73,13 +83,15 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
             {sceneId}
           </code>
         </div>
-        <div className="pointer-events-none absolute right-1.5 top-1.5">
-          <span
-            className={`rounded-pill px-1.5 py-0.5 text-[10px] font-semibold ${accent}`}
-          >
-            {isEnding ? "🏁 ending" : isStart ? "▶ Start" : scene.speaker}
-          </span>
-        </div>
+        {speakerBadge && (
+          <div className="pointer-events-none absolute right-1.5 top-1.5">
+            <span
+              className={`rounded-pill px-1.5 py-0.5 text-[10px] font-semibold ${accent}`}
+            >
+              {speakerBadge}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Text + footer */}
