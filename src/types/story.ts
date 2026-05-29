@@ -5,6 +5,12 @@
  * LLM responses to free input are typed as NarrateResponse.
  */
 
+/**
+ * Speaker ids are OPEN — the bundled Wizard of Oz ids below are kept for
+ * autocomplete + documentation, but any non-empty string is valid so new
+ * stories can introduce their own characters. The `(string & {})` member
+ * widens the union to all strings while preserving literal suggestions.
+ */
 export type SpeakerId =
   | "narrator"
   | "dorothy"
@@ -15,7 +21,8 @@ export type SpeakerId =
   | "glinda"
   | "wizard"
   | "aunt-em"
-  | "toto";
+  | "toto"
+  | (string & {});
 
 export type CompanionId = "scarecrow" | "tinman" | "lion";
 

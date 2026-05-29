@@ -4,7 +4,11 @@
 
 import { z } from "zod";
 
-export const SpeakerIdSchema = z.enum([
+/** Speaker ids known to the bundled stories. Speaker ids are OPEN (any
+ *  non-empty string) so new stories can introduce their own characters —
+ *  this list is kept only for admin convenience (starter options /
+ *  autocomplete) and for documenting the originals. */
+export const KNOWN_SPEAKER_IDS = [
   "narrator",
   "dorothy",
   "scarecrow",
@@ -15,7 +19,9 @@ export const SpeakerIdSchema = z.enum([
   "wizard",
   "aunt-em",
   "toto",
-]);
+] as const;
+
+export const SpeakerIdSchema = z.string().min(1);
 
 export const CompanionIdSchema = z.enum(["scarecrow", "tinman", "lion"]);
 

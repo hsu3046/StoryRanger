@@ -6,7 +6,7 @@ import { Star, User } from "@phosphor-icons/react";
 
 import {
   CharactersFileSchema,
-  SpeakerIdSchema,
+  KNOWN_SPEAKER_IDS,
   type CharacterPersonaT,
   type CharacterT,
   type CharactersFileT,
@@ -120,14 +120,20 @@ export function CharactersEditor({
   }
 
   function startCreate() {
-    const available = SpeakerIdSchema.options.find((sid) => !usedIds.has(sid));
-    if (!available) {
-      setError("All speaker ids are already used");
-      return;
+    // Seed with the first unused known id; once those run out (or for a fresh
+    // story) fall back to a generated `character-N`. Ids are free-text now, so
+    // the author can rename it in the inspector.
+    let id: string | undefined = KNOWN_SPEAKER_IDS.find(
+      (sid) => !usedIds.has(sid),
+    );
+    if (!id) {
+      let n = 1;
+      while (usedIds.has(`character-${n}`)) n++;
+      id = `character-${n}`;
     }
     const placeholder: CharacterT = {
-      id: available,
-      name: available.replace(/_/g, " "),
+      id,
+      name: id.replace(/[-_]/g, " "),
       voice: "alloy",
       voiceSpeed: 1.0,
       color: "#777777",
@@ -292,7 +298,6 @@ export function CharactersEditor({
               storyId={storyId}
               character={selected}
               isNew={!initial.some((c) => c.id === selected.id)}
-              usedIds={usedIds}
               imageOptions={imageOptions}
               itemCatalog={itemCatalog}
               onChange={updateSelected}
@@ -310,7 +315,6 @@ function CharacterForm({
   storyId,
   character,
   isNew,
-  usedIds,
   imageOptions,
   itemCatalog,
   onChange,
@@ -320,7 +324,6 @@ function CharacterForm({
   storyId: string;
   character: CharacterT;
   isNew: boolean;
-  usedIds: Set<string>;
   imageOptions: { value: string; label: string }[];
   itemCatalog: ItemDefT[];
   onChange: (mut: (c: CharacterT) => CharacterT) => void;
@@ -351,23 +354,23 @@ function CharacterForm({
         </div>
         <div className="flex gap-1">
           {isNew && (
-            <StyledSelect
-              className="max-w-[10rem]"
+            <input
+              className={`${inputCls} max-w-[10rem]`}
               value={character.id}
               onChange={(e) =>
-                onChange((c) => ({ ...c, id: e.target.value as SpeakerId }))
+                onChange((c) => ({
+                  ...c,
+                  // Ids are free-text now (any story can add characters), but
+                  // keep them slug-shaped for tidy asset paths.
+                  id: e.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9-]/g, "-") as SpeakerId,
+                }))
               }
-            >
-              {SpeakerIdSchema.options.map((sid) => {
-                const taken = usedIds.has(sid) && sid !== character.id;
-                return (
-                  <option key={sid} value={sid} disabled={taken}>
-                    {sid}
-                    {taken ? " (used)" : ""}
-                  </option>
-                );
-              })}
-            </StyledSelect>
+              placeholder="character-id"
+              aria-label="Character id"
+              title="Unique slug-style id (lowercase, hyphens)"
+            />
           )}
           <button
             type="button"

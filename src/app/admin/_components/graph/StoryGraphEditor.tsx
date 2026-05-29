@@ -55,6 +55,7 @@ import type {
   CharactersFile,
   CompanionId,
   MedalsFile,
+  SpeakerId,
   Story,
 } from "@/types/story";
 import {
@@ -1163,17 +1164,12 @@ function SceneInspector({
       <Field label="Narrator">
         <SelectWithCustom
           value={scene.speaker}
+          // Derived from the character catalog (+ the narrator) so each story
+          // offers its own cast; SelectWithCustom still surfaces any unknown
+          // stored value as a "(custom)" entry.
           options={[
-            "narrator",
-            "dorothy",
-            "scarecrow",
-            "tinman",
-            "lion",
-            "wicked-witch",
-            "glinda",
-            "wizard",
-            "aunt-em",
-            "toto",
+            { value: "narrator", label: "narrator" },
+            ...characters.map((c) => ({ value: c.id, label: c.name })),
           ]}
           onChange={(v) =>
             onChange((s) => ({
@@ -2351,19 +2347,6 @@ function RewardEditor({
 
 // ─────────────────────────────────────────────────────────────────
 
-/** Speaker IDs that can hold a dialogue persona — narrator + hero are
- *  excluded because narrator never talks and the hero IS the player. */
-const DIALOGUE_ABLE_IDS = [
-  "scarecrow",
-  "tinman",
-  "lion",
-  "glinda",
-  "wicked-witch",
-  "wizard",
-  "aunt-em",
-  "toto",
-] as const;
-
 /**
  * Multi-select editor for `Scene.dialogueCharacters`. Tap a chip to
  * toggle whether that character is available on the dialogue rail for
@@ -2376,16 +2359,15 @@ function DialogueCharactersEditor({
   onChange,
 }: {
   storyId: string;
-  characters: { id: string; name: string }[];
+  characters: CharactersFile["characters"];
   scene: SceneT;
   onChange: (mut: (s: SceneT) => SceneT) => void;
 }) {
   const selected = new Set(scene.dialogueCharacters ?? []);
-  // Lookup by id → name. Falls back to id when a character isn't in the
-  // catalog yet (newly-added id, or DIALOGUE_ABLE_IDS gets ahead of
-  // characters.json).
-  const nameById = new Map(characters.map((c) => [c.id, c.name]));
-  function toggle(id: (typeof DIALOGUE_ABLE_IDS)[number]) {
+  // Dialogue-able = characters that hold a persona (only they can chat). Derived
+  // from the story's own catalog so every story offers its own cast.
+  const ableChars = characters.filter((c) => !!c.persona);
+  function toggle(id: SpeakerId) {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -2398,9 +2380,10 @@ function DialogueCharactersEditor({
   return (
     <Field label="Interactive Character">
       <div className="flex flex-wrap gap-1">
-        {DIALOGUE_ABLE_IDS.map((id) => {
+        {ableChars.map((c) => {
+          const id = c.id;
           const on = selected.has(id);
-          const name = nameById.get(id) ?? id;
+          const name = c.name;
           return (
             <button
               key={id}
