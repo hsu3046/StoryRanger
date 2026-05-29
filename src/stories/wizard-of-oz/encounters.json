@@ -354,7 +354,7 @@
     },
     {
       "id": "s01_kansas__rescue_toto-battle",
-      "title": "New Battle",
+      "title": "Battle with Crows",
       "trigger": {
         "sceneId": "s01_kansas",
         "branchId": "rescue_toto",
@@ -362,7 +362,7 @@
       },
       "intro": {
         "bg": "prairie-storm",
-        "narration": "(intro narration)"
+        "narration": "The crows suddenly rushed at you."
       },
       "body": {
         "kind": "battle",
@@ -372,7 +372,7 @@
       },
       "rewards": {},
       "outro": {
-        "victory": "(victory line)"
+        "victory": "You barely chased the crows away."
       }
     }
   ]

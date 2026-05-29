@@ -22,31 +22,17 @@
           "label": "Run into the grass to find Toto",
           "next": "s02_toto_rescue",
           "outcome": "You dashed into the tall, swaying prairie grass, following the sound of the frantic barking."
-        },
-        {
-          "id": "obey_aunt",
-          "label": "Run to the cellar where it is safe",
-          "next": "s02_cellar",
-          "puzzle": {
-            "kind": "sequence",
-            "title": "Repeat the pattern",
-            "symbols": [
-              "🔵",
-              "🟡",
-              "🔴"
-            ],
-            "sequence": [
-              0,
-              1,
-              2
-            ]
-          },
-          "onFailMode": "retry",
-          "outcome": "You sprinted across the dry grass toward the farmhouse as the wind began to roar like a freight train."
         }
       ],
       "dialogueCharacters": [
         "aunt-em"
+      ],
+      "asks": [
+        {
+          "id": "ask_cyclone",
+          "label": "What is a cyclone?",
+          "characterId": "aunt-em"
+        }
       ]
     },
     "s02_toto_rescue": {
@@ -57,25 +43,12 @@
       "branches": [
         {
           "id": "branch_asjdb",
-          "label": "New choice",
+          "label": "Let’s quickly find a place to hide",
           "next": "s02_cellar_2"
         }
       ],
       "dialogueCharacters": [
         "toto"
-      ]
-    },
-    "s02_cellar": {
-      "image": "/stories/wizard-of-oz/scenes/02b-cellar-door",
-      "bgm": "tornado",
-      "speaker": "narrator",
-      "narration": "You scramble for the cellar — but the wind is faster. The whole house tilts, lifts, and the floorboards groan. You hear Toto barking somewhere inside. Desperately, you lunged and scooped him into your arms just in time.",
-      "branches": [
-        {
-          "id": "_to_munchkin_alone",
-          "label": "Hold on to anything you can",
-          "next": "s02c_tornado"
-        }
       ]
     },
     "s02c_tornado": {
@@ -86,7 +59,7 @@
       "branches": [
         {
           "id": "branch_61qod",
-          "label": "New choice",
+          "label": "Phew… let’s go outside",
           "next": "house-crashes"
         }
       ]
@@ -95,17 +68,24 @@
       "image": "/stories/wizard-of-oz/scenes/03-munchkinland",
       "bgm": "munchkinland",
       "speaker": "glinda",
-      "narration": "You step outside into a land of bright flowers and small, cheerful people. A beautiful witch in pink smiles. 'You are a hero! Your house has killed the Wicked Witch of the East. Look — only her silver shoes remain.'",
+      "narration": "All at once, small cheerful people appear from behind the flowers — popping up from every direction! A beautiful witch in pink smiles. \"You are a hero! Your house has crushed the Wicked Witch of the East. Look — only her silver shoes remain!\"",
       "branches": [
         {
           "id": "take_slippers",
-          "label": "Pick up the silver shoes",
+          "label": "How can I get back home?",
           "next": "s04_road",
           "outcome": "You carefully picked the shimmering silver shoes."
         }
       ],
       "dialogueCharacters": [
         "glinda"
+      ],
+      "asks": [
+        {
+          "id": "ask_where",
+          "label": "Where am I?",
+          "characterId": "glinda"
+        }
       ]
     },
     "s04_road": {
@@ -602,11 +582,11 @@
       "image": "/stories/wizard-of-oz/scenes/02d-house-crashes",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "You slowly opened the door and stepped outside. The land was bright and magical, full of colorful flowers and soft sunshine.\nThen you saw two striped legs sticking out from under the house.\nyour eyes grew wide, and Toto barked in surprise.",
       "branches": [
         {
           "id": "branch_3aspv",
-          "label": "New choice",
+          "label": "Huh? I hear a strange sound",
           "next": "s03_munchkinland"
         }
       ]
