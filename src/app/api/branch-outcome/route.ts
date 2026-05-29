@@ -63,7 +63,7 @@ If the author included a request or a rough draft, follow it: honour their inten
 
 RULES:
 - LANGUAGE: write the outcome STRICTLY in the language named under "WRITE IN" in the context — even when the author's request below is written in a different language. The request tells you WHAT to write; "WRITE IN" tells you which language to write it in.
-- LENGTH: prefer 1 sentence. Maximum 2 short sentences. Never longer.
+- LENGTH: prefer 1 sentence; at most 2 short sentences. As a soft guide aim for ~250 characters or fewer (guidance, not a hard cap) — shorter is better for a bridge line.
 - POINT OF VIEW: 2nd person — the player IS the hero. Use "you" as the subject (the rest of the storybook is also written in 2nd person, so this must match).
 - TENSE: past tense.
 - TONE: match the story's tone (gentle, adventurous, spooky, hopeful…) inferred from the premise and surrounding scenes — don't fall back to a generic voice.
