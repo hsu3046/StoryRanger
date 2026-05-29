@@ -448,25 +448,41 @@ function StoryGraphEditorInner({
       });
       return;
     }
-    // Find anything that would be orphaned and warn before destructive delete.
-    const inboundBranches: string[] = [];
+    // Inbound branches: branches in OTHER scenes that point at this scene.
+    // They'd dangle (next → a scene that no longer exists), so we remove
+    // them together with the scene rather than leaving manual cleanup.
+    const inbound: { sid: string; branchId: string }[] = [];
     for (const [sid, s] of Object.entries(story.scenes)) {
+      if (sid === sceneId) continue;
       for (const b of s.branches) {
-        if (b.next === sceneId) inboundBranches.push(`${sid}.${b.id}`);
+        if (b.next === sceneId) inbound.push({ sid, branchId: b.id });
       }
     }
-    const triggeredEncounters = encounters.filter(
-      (e) => e.trigger.sceneId === sceneId,
+    // Encounters removed: those triggered FROM this scene, plus those tied
+    // to any inbound branch we're about to strip (encounters key on the
+    // (sceneId, branchId) pair).
+    const removedEncounters = encounters.filter(
+      (e) =>
+        e.trigger.sceneId === sceneId ||
+        inbound.some(
+          (ib) =>
+            e.trigger.sceneId === ib.sid &&
+            e.trigger.branchId === ib.branchId,
+        ),
     );
+
     const warnings: string[] = [];
-    if (inboundBranches.length > 0) {
+    if (inbound.length > 0) {
       warnings.push(
-        `${inboundBranches.length} branch(es) point here and will be left dangling: ${inboundBranches.slice(0, 3).join(", ")}${inboundBranches.length > 3 ? "…" : ""}`,
+        `${inbound.length} branch(es) pointing here will be removed: ${inbound
+          .slice(0, 3)
+          .map((ib) => `${ib.sid}.${ib.branchId}`)
+          .join(", ")}${inbound.length > 3 ? "…" : ""}`,
       );
     }
-    if (triggeredEncounters.length > 0) {
+    if (removedEncounters.length > 0) {
       warnings.push(
-        `${triggeredEncounters.length} encounter(s) trigger from this scene and will be deleted.`,
+        `${removedEncounters.length} encounter(s) will be deleted.`,
       );
     }
     const msg = warnings.map((w) => `\n• ${w}`).join("");
@@ -477,14 +493,24 @@ function StoryGraphEditorInner({
     if (!ok) return;
 
     setStory((prev) => {
-      const { [sceneId]: _removed, ...rest } = prev.scenes;
-      void _removed;
-      return { ...prev, scenes: rest };
+      const next = { ...prev.scenes };
+      delete next[sceneId];
+      // Strip any branch in the remaining scenes that pointed at the deleted
+      // scene, so no dangling links are left behind.
+      for (const sid of Object.keys(next)) {
+        const s = next[sid];
+        if (s.branches.some((b) => b.next === sceneId)) {
+          next[sid] = {
+            ...s,
+            branches: s.branches.filter((b) => b.next !== sceneId),
+          };
+        }
+      }
+      return { ...prev, scenes: next };
     });
-    if (triggeredEncounters.length > 0) {
-      setEncounters((prev) =>
-        prev.filter((e) => e.trigger.sceneId !== sceneId),
-      );
+    if (removedEncounters.length > 0) {
+      const removedIds = new Set(removedEncounters.map((e) => e.id));
+      setEncounters((prev) => prev.filter((e) => !removedIds.has(e.id)));
     }
     setSelection(null);
   }
