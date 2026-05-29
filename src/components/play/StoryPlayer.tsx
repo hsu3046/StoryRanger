@@ -1011,7 +1011,7 @@ export function StoryPlayer({
         />
       )}
 
-      {hydrated && displayedSpeaker && (
+      {hydrated && displayedSpeaker && !pendingEncounter && (
         <NarrationAudio
           text={displayedNarration}
           character={displayedSpeaker}
