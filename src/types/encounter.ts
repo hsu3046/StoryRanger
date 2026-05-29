@@ -46,7 +46,4 @@ export interface EncounterDef {
   outro: EncounterOutro;
   /** Optional monster sprites to show in intro even when monsterIds is empty. */
   displayMonsters?: string[];
-  /** Boss-style encounters override the next main scene based on outcome. */
-  nextSceneOnVictory?: string;
-  nextSceneOnDefeat?: string;
 }

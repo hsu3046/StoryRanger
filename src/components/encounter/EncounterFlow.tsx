@@ -32,8 +32,6 @@ export interface EncounterResult {
   itemsConsumed: string[];
   medalId?: string;
   moodBoost?: { companionId: CompanionId; delta: number }[];
-  /** Encounter may force a transition to a specific main scene. */
-  forceNextSceneId?: string;
 }
 
 interface Props {
@@ -152,12 +150,6 @@ export function EncounterFlow({
           companionMoods,
         }}
         onComplete={(res) => {
-          const forceNextSceneId =
-            res.outcome === "victory"
-              ? encounter.nextSceneOnVictory
-              : res.outcome === "defeat"
-                ? encounter.nextSceneOnDefeat
-                : undefined;
           onComplete({
             encounterId: encounter.id,
             outcome: res.outcome,
@@ -171,7 +163,6 @@ export function EncounterFlow({
               res.outcome === "victory"
                 ? encounter.rewards.moodBoost
                 : undefined,
-            forceNextSceneId,
           });
         }}
       />

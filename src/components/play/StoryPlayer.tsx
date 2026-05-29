@@ -574,13 +574,6 @@ export function StoryPlayer({
           );
         }
       }
-      // Boss encounters may force the next main scene.
-      const currentSceneId = res.forceNextSceneId
-        ? story.scenes[res.forceNextSceneId]
-          ? res.forceNextSceneId
-          : prev.currentSceneId
-        : prev.currentSceneId;
-
       // All encounters are battles now → partyHp always returned.
       const partyHp = res.partyHp;
       const fallenAttackers = res.fallenAttackers.length
@@ -606,7 +599,6 @@ export function StoryPlayer({
 
       return {
         ...prev,
-        currentSceneId,
         completedEncounters: completed,
         inventory,
         earnedMedals,

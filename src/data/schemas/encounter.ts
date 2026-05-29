@@ -52,8 +52,6 @@ export const EncounterDefSchema = z.object({
   rewards: EncounterRewardsSchema,
   outro: EncounterOutroSchema,
   displayMonsters: z.array(z.string()).optional(),
-  nextSceneOnVictory: z.string().optional(),
-  nextSceneOnDefeat: z.string().optional(),
 });
 
 export const EncountersFileSchema = z.object({
