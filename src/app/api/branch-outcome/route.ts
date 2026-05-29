@@ -7,6 +7,9 @@ export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   storyId: z.string(),
+  /** Story language code (e.g. "en", "ko", "ja") or free-text. The outcome
+   *  must be written in THIS language regardless of the request's language. */
+  language: z.string().max(40).optional(),
   /** Story title + premise/tagline — give the model the overall tone. */
   storyTitle: z.string().max(200).optional(),
   storyPremise: z.string().max(600).optional(),
@@ -35,6 +38,18 @@ const ResponseSchema = z.object({
   outcome: z.string(),
 });
 
+/** Map a story language code to a human name the model handles reliably.
+ *  Falls back to the raw value (custom locales) so nothing is lost. */
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  ko: "Korean (한국어)",
+  ja: "Japanese (日本語)",
+};
+function languageName(code: string | undefined): string {
+  if (!code) return "English";
+  return LANGUAGE_NAMES[code] ?? code;
+}
+
 // Static (story-agnostic) so it stays cache-friendly — all per-story context
 // is folded into the user message. The model learns the tone from the premise
 // + surrounding scenes rather than a hardcoded setting.
@@ -47,6 +62,7 @@ Use the context you're given — the story's title and premise (for overall tone
 If the author included a request or a rough draft, follow it: honour their intent and wording where you can, while still obeying the rules below.
 
 RULES:
+- LANGUAGE: write the outcome STRICTLY in the language named under "WRITE IN" in the context — even when the author's request below is written in a different language. The request tells you WHAT to write; "WRITE IN" tells you which language to write it in.
 - LENGTH: prefer 1 sentence. Maximum 2 short sentences. Never longer.
 - POINT OF VIEW: 2nd person — the player IS the hero. Use "you" as the subject (the rest of the storybook is also written in 2nd person, so this must match).
 - TENSE: past tense.
@@ -77,6 +93,7 @@ export async function POST(req: Request) {
   }
 
   const lines: string[] = [];
+  lines.push(`WRITE IN: ${languageName(body.language)}`, "");
   if (body.storyTitle) lines.push(`STORY: ${body.storyTitle}`);
   if (body.storyPremise) lines.push(`PREMISE / TONE: ${body.storyPremise}`);
   if (lines.length > 0) lines.push("");
@@ -108,7 +125,7 @@ export async function POST(req: Request) {
       "",
     );
   }
-  lines.push("Write the outcome line.");
+  lines.push(`Write the outcome line in ${languageName(body.language)}.`);
   const userText = lines.join("\n");
 
   try {

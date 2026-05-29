@@ -950,6 +950,7 @@ function StoryGraphEditorInner({
                 selectedBranch && (
                   <BranchInspector
                     storyId={storyId}
+                    storyLanguage={story.language}
                     storyTitle={story.title}
                     storyPremise={story.subtitle ?? ""}
                     storyScenes={story.scenes}
@@ -1619,6 +1620,7 @@ const COMPANION_OPTIONS: { id: CompanionId }[] = [
 
 function BranchInspector({
   storyId,
+  storyLanguage,
   storyTitle,
   storyPremise,
   storyScenes,
@@ -1639,7 +1641,9 @@ function BranchInspector({
   onPreview,
 }: {
   storyId: string;
-  /** Story title + premise/tagline — passed to the outcome AI for tone. */
+  /** Story language code + title + premise — passed to the outcome AI so it
+   *  writes in the story's language and tone. */
+  storyLanguage: string;
   storyTitle: string;
   storyPremise: string;
   storyScenes: Record<string, SceneT>;
@@ -1775,6 +1779,7 @@ function BranchInspector({
 
       <BranchOutcomeEditor
         storyId={storyId}
+        storyLanguage={storyLanguage}
         storyTitle={storyTitle}
         storyPremise={storyPremise}
         storyScenes={storyScenes}
@@ -1884,6 +1889,7 @@ function BranchInspector({
  */
 function BranchOutcomeEditor({
   storyId,
+  storyLanguage,
   storyTitle,
   storyPremise,
   storyScenes,
@@ -1894,6 +1900,7 @@ function BranchOutcomeEditor({
   onChange,
 }: {
   storyId: string;
+  storyLanguage: string;
   storyTitle: string;
   storyPremise: string;
   storyScenes: Record<string, SceneT>;
@@ -1925,6 +1932,7 @@ function BranchOutcomeEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyId,
+          language: storyLanguage,
           storyTitle,
           storyPremise,
           branchLabel: branch.label,
