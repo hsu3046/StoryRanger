@@ -11,7 +11,6 @@ import {
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
-  CaretDown,
   Copy,
   Flag,
   PencilSimple,
@@ -64,7 +63,7 @@ import {
 import { AssetThumb } from "../AssetThumb";
 import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
 import { useAlert, useConfirm } from "../ConfirmDialog";
-import { Field, inputCls, inputClsSm } from "../form";
+import { Field, StyledSelect, inputCls, inputClsSm } from "../form";
 import { SceneNode, type SceneNodeData } from "./SceneNode";
 import { BranchEdge, type BranchEdgeData } from "./BranchEdge";
 import { computeLayout, computeLayoutConnected } from "./layout";
@@ -1350,37 +1349,30 @@ function EncounterCard({
             />
           </MiniField>
           <MiniField label="Background">
-            <div className="relative">
-              <select
-                value={encounter.intro.bg}
-                onChange={(e) =>
-                  onChange((x) => ({
-                    ...x,
-                    intro: { ...x.intro, bg: e.target.value },
-                  }))
-                }
-                className={`${inputClsSm} appearance-none pr-9`}
-              >
-                {/* Surface the saved value even if it's not in the catalog yet
-                    (e.g. typo or pre-catalog data). */}
-                {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
-                  encounter.intro.bg && (
-                    <option value={encounter.intro.bg}>
-                      {encounter.intro.bg} (not in catalog)
-                    </option>
-                  )}
-                {backgrounds.map((b) => (
-                  <option key={b.key} value={b.key}>
-                    {b.label} ({b.key})
+            <StyledSelect
+              compact
+              value={encounter.intro.bg}
+              onChange={(e) =>
+                onChange((x) => ({
+                  ...x,
+                  intro: { ...x.intro, bg: e.target.value },
+                }))
+              }
+            >
+              {/* Surface the saved value even if it's not in the catalog yet
+                  (e.g. typo or pre-catalog data). */}
+              {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
+                encounter.intro.bg && (
+                  <option value={encounter.intro.bg}>
+                    {encounter.intro.bg} (not in catalog)
                   </option>
-                ))}
-              </select>
-              <CaretDown
-                size={14}
-                weight="bold"
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-              />
-            </div>
+                )}
+              {backgrounds.map((b) => (
+                <option key={b.key} value={b.key}>
+                  {b.label} ({b.key})
+                </option>
+              ))}
+            </StyledSelect>
           </MiniField>
           <MiniField label="Narration">
             <textarea
@@ -1974,26 +1966,19 @@ function BranchPuzzleCard({
           />
           <label className="flex items-center gap-2 text-xs">
             <span className="text-ink-soft">On fail:</span>
-            <div className="relative flex-1">
-              <select
-                value={branch.onFailMode ?? "retry"}
-                onChange={(e) =>
-                  onChange((b) => ({
-                    ...b,
-                    onFailMode: e.target.value as "retry" | "skip",
-                  }))
-                }
-                className={`${inputCls} appearance-none pr-9`}
-              >
-                <option value="retry">Retry until solved</option>
-                <option value="skip">Skip — proceed without reward</option>
-              </select>
-              <CaretDown
-                size={14}
-                weight="bold"
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-              />
-            </div>
+            <StyledSelect
+              className="flex-1"
+              value={branch.onFailMode ?? "retry"}
+              onChange={(e) =>
+                onChange((b) => ({
+                  ...b,
+                  onFailMode: e.target.value as "retry" | "skip",
+                }))
+              }
+            >
+              <option value="retry">Retry until solved</option>
+              <option value="skip">Skip — proceed without reward</option>
+            </StyledSelect>
           </label>
           </div>
         </div>
@@ -2209,33 +2194,20 @@ function SelectWithCustom({
   const knownValues = new Set(normalized.map((o) => o.value));
   const showCustom = !!value && !knownValues.has(value);
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`${inputCls} appearance-none pr-9`}
-      >
-        {allowEmpty !== undefined && (
-          <option value="">{allowEmpty}</option>
-        )}
-        {normalized.length === 0 && !allowEmpty && placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
-        {showCustom && <option value={value}>{value} (custom)</option>}
-        {normalized.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <CaretDown
-        size={14}
-        weight="bold"
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-      />
-    </div>
+    <StyledSelect value={value} onChange={(e) => onChange(e.target.value)}>
+      {allowEmpty !== undefined && <option value="">{allowEmpty}</option>}
+      {normalized.length === 0 && !allowEmpty && placeholder && (
+        <option value="" disabled>
+          {placeholder}
+        </option>
+      )}
+      {showCustom && <option value={value}>{value} (custom)</option>}
+      {normalized.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </StyledSelect>
   );
 }
 

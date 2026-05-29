@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDown } from "@phosphor-icons/react";
 
 import {
   ItemsFileSchema,
@@ -12,7 +11,7 @@ import {
 import { saveItemsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
 import { uniqueId } from "../_lib/uniqueId";
-import { Field, inputCls } from "./form";
+import { Field, StyledSelect, inputCls } from "./form";
 
 const CATEGORIES = [
   "trophy",
@@ -327,54 +326,38 @@ function ItemForm({
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Category">
-          <div className="relative">
-            <select
-              value={item.category}
-              onChange={(e) =>
-                onChange((it) => ({
-                  ...it,
-                  category: e.target.value as ItemDefT["category"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            value={item.category}
+            onChange={(e) =>
+              onChange((it) => ({
+                ...it,
+                category: e.target.value as ItemDefT["category"],
+              }))
+            }
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c.charAt(0).toUpperCase() + c.slice(1)}
+              </option>
+            ))}
+          </StyledSelect>
         </Field>
         <Field label="Rarity">
-          <div className="relative">
-            <select
-              value={item.rarity}
-              onChange={(e) =>
-                onChange((it) => ({
-                  ...it,
-                  rarity: e.target.value as ItemDefT["rarity"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {RARITIES.map((r) => (
-                <option key={r} value={r}>
-                  {r.charAt(0).toUpperCase() + r.slice(1)}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            value={item.rarity}
+            onChange={(e) =>
+              onChange((it) => ({
+                ...it,
+                rarity: e.target.value as ItemDefT["rarity"],
+              }))
+            }
+          >
+            {RARITIES.map((r) => (
+              <option key={r} value={r}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </option>
+            ))}
+          </StyledSelect>
         </Field>
       </div>
       <Field label="Description">

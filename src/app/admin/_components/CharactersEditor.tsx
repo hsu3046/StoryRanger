@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDown, User } from "@phosphor-icons/react";
+import { User } from "@phosphor-icons/react";
 
 import {
   CharactersFileSchema,
@@ -17,7 +17,7 @@ import { saveCharactersAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
 import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
-import { Field, inputCls } from "./form";
+import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
 
 const VOICES = [
@@ -323,30 +323,23 @@ function CharacterForm({
         <p className="font-handwritten text-base text-accent-deep">Character</p>
         <div className="flex gap-1">
           {isNew && (
-            <div className="relative max-w-[10rem]">
-              <select
-                value={character.id}
-                onChange={(e) =>
-                  onChange((c) => ({ ...c, id: e.target.value as SpeakerId }))
-                }
-                className={`${inputCls} appearance-none pr-9`}
-              >
-                {SpeakerIdSchema.options.map((sid) => {
-                  const taken = usedIds.has(sid) && sid !== character.id;
-                  return (
-                    <option key={sid} value={sid} disabled={taken}>
-                      {sid}
-                      {taken ? " (used)" : ""}
-                    </option>
-                  );
-                })}
-              </select>
-              <CaretDown
-                size={14}
-                weight="bold"
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-              />
-            </div>
+            <StyledSelect
+              className="max-w-[10rem]"
+              value={character.id}
+              onChange={(e) =>
+                onChange((c) => ({ ...c, id: e.target.value as SpeakerId }))
+              }
+            >
+              {SpeakerIdSchema.options.map((sid) => {
+                const taken = usedIds.has(sid) && sid !== character.id;
+                return (
+                  <option key={sid} value={sid} disabled={taken}>
+                    {sid}
+                    {taken ? " (used)" : ""}
+                  </option>
+                );
+              })}
+            </StyledSelect>
           )}
           <button
             type="button"
@@ -387,62 +380,46 @@ function CharacterForm({
               <User size={32} weight="duotone" className="text-ink-soft/50" />
             }
           />
-          <div className="relative flex-1">
-            <select
-              value={currentImagePath}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange((c) => ({
-                  ...c,
-                  // Skip the override when the picked value is the
-                  // id-based convention — keeps JSON clean.
-                  image: v === defaultImageBase ? undefined : v,
-                }));
-              }}
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {!imageOptions.some((o) => o.value === currentImagePath) && (
-                <option value={currentImagePath}>
-                  {currentImagePath.split("/").pop() ?? currentImagePath}{" "}
-                  (custom)
-                </option>
-              )}
-              {imageOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            className="flex-1"
+            value={currentImagePath}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange((c) => ({
+                ...c,
+                // Skip the override when the picked value is the id-based
+                // convention — keeps JSON clean.
+                image: v === defaultImageBase ? undefined : v,
+              }));
+            }}
+          >
+            {!imageOptions.some((o) => o.value === currentImagePath) && (
+              <option value={currentImagePath}>
+                {currentImagePath.split("/").pop() ?? currentImagePath} (custom)
+              </option>
+            )}
+            {imageOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </StyledSelect>
         </div>
       </Field>
 
       <Field label="Voice">
-        <div className="relative">
-          <select
-            value={character.voice}
-            onChange={(e) =>
-              onChange((c) => ({ ...c, voice: e.target.value as Voice }))
-            }
-            className={`${inputCls} appearance-none pr-9`}
-          >
-            {VOICES.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-          <CaretDown
-            size={14}
-            weight="bold"
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-          />
-        </div>
+        <StyledSelect
+          value={character.voice}
+          onChange={(e) =>
+            onChange((c) => ({ ...c, voice: e.target.value as Voice }))
+          }
+        >
+          {VOICES.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </StyledSelect>
       </Field>
 
       <Field label="Voice speed (0.25 – 4.0)">
@@ -492,29 +469,21 @@ function CharacterForm({
       </Field>
 
       <Field label="Size">
-        <div className="relative">
-          <select
-            value={character.size}
-            onChange={(e) =>
-              onChange((c) => ({
-                ...c,
-                size: e.target.value as CharacterT["size"],
-              }))
-            }
-            className={`${inputCls} appearance-none pr-9`}
-          >
-            <option value="tiny">Tiny</option>
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-            <option value="huge">Huge</option>
-          </select>
-          <CaretDown
-            size={14}
-            weight="bold"
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-          />
-        </div>
+        <StyledSelect
+          value={character.size}
+          onChange={(e) =>
+            onChange((c) => ({
+              ...c,
+              size: e.target.value as CharacterT["size"],
+            }))
+          }
+        >
+          <option value="tiny">Tiny</option>
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+          <option value="huge">Huge</option>
+        </StyledSelect>
       </Field>
 
       <PersonaEditor

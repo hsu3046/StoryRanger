@@ -2,12 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDown } from "@phosphor-icons/react";
-
 import { StorySchema, type StoryT } from "@/data/schemas";
 import { saveScenesAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
-import { Field, inputCls } from "./form";
+import { Field, StyledSelect, inputCls } from "./form";
 
 interface Props {
   storyId: string;
@@ -141,64 +139,44 @@ export function StoryBasicEditor({ storyId, initialStory, coverOptions }: Props)
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-5">
               <Field label="Cover image">
-                <div className="relative">
-                  <select
-                    value={story.coverImage}
-                    onChange={(e) =>
-                      update((s) => ({ ...s, coverImage: e.target.value }))
-                    }
-                    className={`${inputCls} appearance-none pr-9`}
-                  >
-                    {!coverOptions.some(
-                      (o) => o.value === story.coverImage,
-                    ) && (
-                      <option value={story.coverImage}>
-                        {story.coverImage.split("/").pop() ?? story.coverImage}{" "}
-                        (custom)
-                      </option>
-                    )}
-                    {coverOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <CaretDown
-                    size={14}
-                    weight="bold"
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-                  />
-                </div>
+                <StyledSelect
+                  value={story.coverImage}
+                  onChange={(e) =>
+                    update((s) => ({ ...s, coverImage: e.target.value }))
+                  }
+                >
+                  {!coverOptions.some((o) => o.value === story.coverImage) && (
+                    <option value={story.coverImage}>
+                      {story.coverImage.split("/").pop() ?? story.coverImage}{" "}
+                      (custom)
+                    </option>
+                  )}
+                  {coverOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </StyledSelect>
               </Field>
 
               <Field label="Language">
-                <div className="relative">
-                  <select
-                    value={story.language}
-                    onChange={(e) =>
-                      update((s) => ({ ...s, language: e.target.value }))
-                    }
-                    className={`${inputCls} appearance-none pr-9`}
-                  >
-                    {!LANGUAGE_OPTIONS.some(
-                      (o) => o.value === story.language,
-                    ) && (
-                      <option value={story.language}>
-                        {story.language} (custom)
-                      </option>
-                    )}
-                    {LANGUAGE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <CaretDown
-                    size={14}
-                    weight="bold"
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-                  />
-                </div>
+                <StyledSelect
+                  value={story.language}
+                  onChange={(e) =>
+                    update((s) => ({ ...s, language: e.target.value }))
+                  }
+                >
+                  {!LANGUAGE_OPTIONS.some((o) => o.value === story.language) && (
+                    <option value={story.language}>
+                      {story.language} (custom)
+                    </option>
+                  )}
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </StyledSelect>
               </Field>
             </div>
             <AssetThumb

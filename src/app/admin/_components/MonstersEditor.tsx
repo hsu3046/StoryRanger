@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDown } from "@phosphor-icons/react";
 
 import {
   MonstersFileSchema,
@@ -14,7 +13,7 @@ import { saveMonstersAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
 import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
-import { Field, inputCls } from "./form";
+import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
 
 const TYPES = ["hostile", "neutral", "friendly"] as const;
@@ -381,89 +380,65 @@ function MonsterForm({
             shape="square"
             fit="contain"
           />
-          <div className="relative flex-1">
-            <select
-              value={currentImagePath}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange((m) => ({
-                  ...m,
-                  image: v === defaultImageBase ? undefined : v,
-                }));
-              }}
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {!imageOptions.some((o) => o.value === currentImagePath) && (
-                <option value={currentImagePath}>
-                  {currentImagePath.split("/").pop() ?? currentImagePath}{" "}
-                  (custom)
-                </option>
-              )}
-              {imageOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            className="flex-1"
+            value={currentImagePath}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange((m) => ({
+                ...m,
+                image: v === defaultImageBase ? undefined : v,
+              }));
+            }}
+          >
+            {!imageOptions.some((o) => o.value === currentImagePath) && (
+              <option value={currentImagePath}>
+                {currentImagePath.split("/").pop() ?? currentImagePath} (custom)
+              </option>
+            )}
+            {imageOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </StyledSelect>
         </div>
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
         <Field label="Type">
-          <div className="relative">
-            <select
-              value={monster.type}
-              onChange={(e) =>
-                onChange((m) => ({
-                  ...m,
-                  type: e.target.value as MonsterStatsT["type"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            value={monster.type}
+            onChange={(e) =>
+              onChange((m) => ({
+                ...m,
+                type: e.target.value as MonsterStatsT["type"],
+              }))
+            }
+          >
+            {TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </option>
+            ))}
+          </StyledSelect>
         </Field>
         <Field label="Size">
-          <div className="relative">
-            <select
-              value={monster.size}
-              onChange={(e) =>
-                onChange((m) => ({
-                  ...m,
-                  size: e.target.value as MonsterStatsT["size"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              {SIZES.map((s) => (
-                <option key={s} value={s}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            value={monster.size}
+            onChange={(e) =>
+              onChange((m) => ({
+                ...m,
+                size: e.target.value as MonsterStatsT["size"],
+              }))
+            }
+          >
+            {SIZES.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
+          </StyledSelect>
         </Field>
         <Field label="HP">
           <input
@@ -478,30 +453,22 @@ function MonsterForm({
           />
         </Field>
         <Field label="Puzzle">
-          <div className="relative">
-            <select
-              value={monster.puzzleKind ?? "random"}
-              onChange={(e) =>
-                onChange((m) => ({
-                  ...m,
-                  puzzleKind: e.target.value as MonsterStatsT["puzzleKind"],
-                }))
-              }
-              className={`${inputCls} appearance-none pr-9`}
-            >
-              <option value="random">random</option>
-              {PUZZLES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <CaretDown
-              size={14}
-              weight="bold"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-            />
-          </div>
+          <StyledSelect
+            value={monster.puzzleKind ?? "random"}
+            onChange={(e) =>
+              onChange((m) => ({
+                ...m,
+                puzzleKind: e.target.value as MonsterStatsT["puzzleKind"],
+              }))
+            }
+          >
+            <option value="random">random</option>
+            {PUZZLES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </StyledSelect>
         </Field>
       </div>
       <Field label="Airborne">

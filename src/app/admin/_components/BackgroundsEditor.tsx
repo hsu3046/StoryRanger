@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDown } from "@phosphor-icons/react";
 
 import {
   BackgroundsFileSchema,
@@ -14,7 +13,7 @@ import { AssetThumb } from "./AssetThumb";
 import { BgmSelectWithPreview } from "./BgmSelectWithPreview";
 import { useConfirm } from "./ConfirmDialog";
 import { uniqueId } from "../_lib/uniqueId";
-import { Field, inputCls } from "./form";
+import { Field, StyledSelect, inputCls } from "./form";
 
 const MOODS = ["calm", "tense", "magical", "spooky", "warm"] as const;
 type Mood = (typeof MOODS)[number];
@@ -333,26 +332,18 @@ function BackgroundForm({
       </Field>
 
       <Field label="Mood">
-        <div className="relative">
-          <select
-            value={background.mood}
-            onChange={(e) =>
-              onChange((b) => ({ ...b, mood: e.target.value as Mood }))
-            }
-            className={`${inputCls} appearance-none pr-9`}
-          >
-            {MOODS.map((m) => (
-              <option key={m} value={m}>
-                {m.charAt(0).toUpperCase() + m.slice(1)}
-              </option>
-            ))}
-          </select>
-          <CaretDown
-            size={14}
-            weight="bold"
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-          />
-        </div>
+        <StyledSelect
+          value={background.mood}
+          onChange={(e) =>
+            onChange((b) => ({ ...b, mood: e.target.value as Mood }))
+          }
+        >
+          {MOODS.map((m) => (
+            <option key={m} value={m}>
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </option>
+          ))}
+        </StyledSelect>
       </Field>
     </div>
   );

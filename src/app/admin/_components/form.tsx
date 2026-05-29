@@ -4,6 +4,8 @@
  * styling tweak lands everywhere at once.
  */
 
+import { CaretDown } from "@phosphor-icons/react";
+
 /** Standard text-input / select / textarea class. */
 export const inputCls =
   "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";
@@ -34,6 +36,51 @@ export function Field({
         )}
       </label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Native `<select>` dressed in the app's input style: the browser caret is
+ * hidden (`appearance-none`) and a `CaretDown` is drawn at the right edge.
+ * Pass the `<option>`s as children. `className` lands on the wrapper (for
+ * width constraints like `max-w-[10rem]` / `flex-1`).
+ *
+ * Note: the BGM picker is deliberately NOT this — it's a custom popover
+ * (BgmSelectWithPreview) because a native <select> can't host per-row
+ * preview buttons.
+ */
+export function StyledSelect({
+  value,
+  onChange,
+  className = "",
+  disabled = false,
+  compact = false,
+  children,
+}: {
+  value: string;
+  onChange: React.ChangeEventHandler<HTMLSelectElement>;
+  className?: string;
+  disabled?: boolean;
+  /** Use the smaller `inputClsSm` style (dense inline editors). */
+  compact?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`relative ${className}`.trim()}>
+      <select
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className={`${compact ? inputClsSm : inputCls} appearance-none pr-9${disabled ? " opacity-60" : ""}`}
+      >
+        {children}
+      </select>
+      <CaretDown
+        size={14}
+        weight="bold"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+      />
     </div>
   );
 }

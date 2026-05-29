@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDown } from "@phosphor-icons/react";
 
 import {
   MedalsFileSchema,
@@ -11,7 +10,7 @@ import {
 } from "@/data/schemas";
 import { saveMedalsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
-import { Field, inputCls } from "./form";
+import { Field, StyledSelect, inputCls } from "./form";
 
 /** All medal trigger kinds, in the order shown in the type dropdown. */
 const TRIGGER_TYPES = [
@@ -368,29 +367,21 @@ function MedalForm({
       </Field>
 
       <Field label="Trigger">
-        <div className="relative">
-          <select
-            value={trigger.type}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                trigger: defaultTrigger(e.target.value as TriggerType),
-              }))
-            }
-            className={`${inputCls} appearance-none pr-9`}
-          >
-            {TRIGGER_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TRIGGER_TYPE_LABEL[t]}
-              </option>
-            ))}
-          </select>
-          <CaretDown
-            size={14}
-            weight="bold"
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
-          />
-        </div>
+        <StyledSelect
+          value={trigger.type}
+          onChange={(e) =>
+            onChange((m) => ({
+              ...m,
+              trigger: defaultTrigger(e.target.value as TriggerType),
+            }))
+          }
+        >
+          {TRIGGER_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {TRIGGER_TYPE_LABEL[t]}
+            </option>
+          ))}
+        </StyledSelect>
       </Field>
       <Field label={TRIGGER_LABEL[trigger.type]}>
         <input
