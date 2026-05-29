@@ -1,9 +1,9 @@
 import type {
+  Character,
   CharacterPersona,
   CompanionId,
   DialogueMessage,
   Hero,
-  SpeakerId,
 } from "@/types/story";
 
 /**
@@ -17,30 +17,25 @@ import type {
  * ─────────────────────
  * The system prompt is split into two halves:
  *   1. STATIC  — `buildPersonaSystemPrompt`: identical for every request to
- *      the same character (no hero name / mood / scene baked in). This is
- *      the cacheable prefix (OpenAI auto-caches the longest common prefix;
- *      Anthropic marks it with `cache_control`).
+ *      the same character (no hero name / mood / scene baked in), so it is
+ *      a stable prefix every provider's prompt caching can reuse:
+ *        • OpenAI (GPT-5+) auto-caches the longest common prefix.
+ *        • Gemini 3 auto-caches implicitly (prefix at the start).
+ *        • Anthropic caches the block we mark with `cache_control`.
+ *      (All gated by a ~1024-token minimum prefix — see llm.ts.)
  *   2. DYNAMIC — `buildDialogueContext`: the per-turn snapshot (hero name,
  *      mood, scene, party). Sent inside the latest user message so it never
  *      breaks the static prefix.
  */
 
-/** Speakers the player can hold a conversation with. Narrator / hero are
- *  excluded. This set is intentionally static (independent of persona
- *  content) so the client can decide availability without persona data. */
-const DIALOGUE_ABLE_SPEAKERS = new Set<SpeakerId>([
-  "scarecrow",
-  "tinman",
-  "lion",
-  "glinda",
-  "wicked-witch",
-  "wizard",
-  "aunt-em",
-  "toto",
-]);
-
-export function canTalkTo(speakerId: SpeakerId): boolean {
-  return DIALOGUE_ABLE_SPEAKERS.has(speakerId);
+/**
+ * Single source of truth for "can the player hold a conversation with this
+ * character?": the character HAS a `persona`. Both the client (dialogue
+ * rail) and the server (dialogue route) derive availability from this, so
+ * adding/removing a persona in the admin can't desync the two.
+ */
+export function canTalkTo(character: Character | undefined): boolean {
+  return !!character?.persona;
 }
 
 function moodLabel(mood: number): string {

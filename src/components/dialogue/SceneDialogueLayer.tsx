@@ -101,13 +101,17 @@ export function SceneDialogueLayer({
    *    - extras declared on the scene (e.g. Aunt Em on s01_kansas) */
   const railIds = useMemo<SpeakerId[]>(() => {
     const ids = new Set<SpeakerId>();
-    for (const c of companions) ids.add(c as SpeakerId);
-    if (canTalkTo(sceneSpeaker)) ids.add(sceneSpeaker);
+    // Availability is derived from persona presence (single source of
+    // truth), so a character with no persona never shows a dead button.
+    for (const c of companions) {
+      if (canTalkTo(characterMap[c])) ids.add(c as SpeakerId);
+    }
+    if (canTalkTo(characterMap[sceneSpeaker])) ids.add(sceneSpeaker);
     for (const id of extraDialogueCharacters) {
-      if (canTalkTo(id)) ids.add(id);
+      if (canTalkTo(characterMap[id])) ids.add(id);
     }
     return Array.from(ids);
-  }, [companions, sceneSpeaker, extraDialogueCharacters]);
+  }, [companions, sceneSpeaker, extraDialogueCharacters, characterMap]);
 
   const activeRailIdx = useMemo(
     () => (active ? railIds.indexOf(active) : -1),

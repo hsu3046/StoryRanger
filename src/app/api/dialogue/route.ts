@@ -70,9 +70,30 @@ const ResponseLLMSchema = z.object({
   moodDelta: z.number(),
   itemGift: z.string().nullable(),
   endsConversation: z.boolean(),
-  /** 3 short follow-up replies the HERO might say next (3-8 words each). */
-  suggestions: z.array(z.string()).length(3),
+  /** Short follow-up replies the HERO might say next (3-8 words each). The
+   *  prompt asks for exactly 3; we accept a loose range so an off-count
+   *  response doesn't discard an otherwise-valid turn, then normalise to
+   *  exactly 3 below. */
+  suggestions: z.array(z.string()).min(1).max(6),
 });
+
+/** Generic suggestions used to pad up to 3 when the LLM returns fewer. */
+const FALLBACK_SUGGESTIONS = [
+  "Tell me more.",
+  "Are you okay?",
+  "Goodbye for now.",
+];
+
+/** Force the suggestion list to exactly 3: drop blanks, cap at 3, then pad
+ *  from the generic pool (avoiding duplicates). */
+function normalizeSuggestions(raw: string[]): string[] {
+  const out = raw.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+  for (const f of FALLBACK_SUGGESTIONS) {
+    if (out.length >= 3) break;
+    if (!out.includes(f)) out.push(f);
+  }
+  return out.slice(0, 3);
+}
 
 const SAFE_FALLBACK: DialogueResponse = {
   reply: "They smile gently, but the words won't come right now.",
@@ -187,7 +208,7 @@ export async function POST(req: Request) {
       moodDelta,
       itemGift,
       endsConversation: parsed.endsConversation,
-      suggestions: parsed.suggestions.slice(0, 3),
+      suggestions: normalizeSuggestions(parsed.suggestions),
     };
     return NextResponse.json(result);
   } catch (err) {

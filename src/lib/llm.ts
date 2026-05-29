@@ -188,6 +188,12 @@ async function chatAnthropic<T>(opts: ChatOptions<T>): Promise<T> {
     // it `ephemeral` opts it into Anthropic prompt caching so repeat turns
     // for the same character reuse the cached prefix (the dynamic per-turn
     // context lives in the user message, after this block).
+    //
+    // OpenAI (GPT-5+) and Gemini 3 cache the same prefix AUTOMATICALLY
+    // (implicit) with no per-request flag — only Anthropic needs this
+    // explicit marker. All three require the cached prefix to exceed a
+    // ~1024-token minimum (Gemini ≈2048), so a short single-persona system
+    // prompt may not trigger a cache hit on any provider regardless.
     system: [
       {
         type: "text",
