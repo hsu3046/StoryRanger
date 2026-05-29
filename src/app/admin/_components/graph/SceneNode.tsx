@@ -32,7 +32,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
   const accent = isEnding
     ? "bg-accent-deep text-paper"
     : isStart
-      ? "bg-emerald/20 text-emerald"
+      ? "bg-emerald text-paper"
       : "bg-paper-deep/30 text-ink-soft";
 
   return (
@@ -77,7 +77,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
           <span
             className={`rounded-pill px-1.5 py-0.5 text-[10px] font-semibold ${accent}`}
           >
-            {isEnding ? "🏁 ending" : isStart ? "▶ start" : scene.speaker}
+            {isEnding ? "🏁 ending" : isStart ? "▶ Start" : scene.speaker}
           </span>
         </div>
       </div>
