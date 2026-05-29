@@ -16,6 +16,9 @@ interface Props {
   action?: string | null;
   /** Hero is waiting for an LLM response (show typing dots). */
   loading?: boolean;
+  /** Fires once the reply has finished streaming (or was tap-skipped) — the
+   *  layer uses it to hold the choice cards back until the bubble lands. */
+  onTypingDone?: () => void;
 }
 
 /**
@@ -30,6 +33,7 @@ export function DialogueBubble({
   reply,
   action,
   loading,
+  onTypingDone,
 }: Props) {
   return (
     <motion.div
@@ -73,7 +77,12 @@ export function DialogueBubble({
             // Fast typewriter — gives the bubble a "live" feel without
             // the per-character drag of the narration pacing. Tap to skip
             // straight to the full reply.
-            <Typewriter text={reply} speed={14} skipOnClick />
+            <Typewriter
+              text={reply}
+              speed={14}
+              skipOnClick
+              onDone={onTypingDone}
+            />
           )}
         </p>
       </div>

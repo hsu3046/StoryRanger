@@ -101,8 +101,30 @@ export function SceneDialogueLayer({
     itemGift?: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  // Choices are held back until the reply has finished streaming PLUS a short
+  // beat — otherwise the buttons pop in over a half-typed bubble.
+  const [choicesReady, setChoicesReady] = useState(false);
+  const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionStartedRef = useRef<SpeakerId | null>(null);
   const handledAskKeyRef = useRef<number | null>(null);
+
+  /** ~0.7s breathing room between the reply landing and the choices. */
+  const CHOICE_REVEAL_DELAY_MS = 700;
+  function clearChoiceTimer() {
+    if (choiceTimerRef.current) {
+      clearTimeout(choiceTimerRef.current);
+      choiceTimerRef.current = null;
+    }
+  }
+  function handleReplyTyped() {
+    clearChoiceTimer();
+    choiceTimerRef.current = setTimeout(
+      () => setChoicesReady(true),
+      CHOICE_REVEAL_DELAY_MS,
+    );
+  }
+  // Clear any pending reveal timer on unmount.
+  useEffect(() => clearChoiceTimer, []);
 
   const characterMap = useMemo(() => {
     const m: Record<string, (typeof characters.characters)[number]> = {};
@@ -184,6 +206,9 @@ export function SceneDialogueLayer({
 
     setLoading(true);
     setLatestReply(null);
+    // New turn → hide the choices until this reply finishes streaming.
+    clearChoiceTimer();
+    setChoicesReady(false);
     try {
       const res = await fetch("/api/dialogue", {
         method: "POST",
@@ -236,6 +261,8 @@ export function SceneDialogueLayer({
     // closed bubble (and stops costing tokens on the server).
     abortRef.current?.abort();
     abortRef.current = null;
+    clearChoiceTimer();
+    setChoicesReady(false);
     if (active) {
       onSessionClose(active);
       sessionStartedRef.current = null;
@@ -350,12 +377,13 @@ export function SceneDialogueLayer({
             reply={latestReply?.reply ?? ""}
             action={latestReply?.action ?? null}
             loading={loading || !latestReply}
+            onTypingDone={handleReplyTyped}
           />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
-        {active && latestReply && (
+        {active && latestReply && choicesReady && (
           <DialogueChoiceCards
             key={`choices-${active}`}
             suggestions={latestReply.suggestions}
