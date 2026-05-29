@@ -9,6 +9,7 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import type { BranchT } from "@/data/schemas";
+import { MONSTERS } from "@/data/monsters";
 import { AssetThumb } from "../AssetThumb";
 
 export interface BranchEdgeData {
@@ -19,6 +20,9 @@ export interface BranchEdgeData {
   parallelCount?: number;
   /** How many battle encounters trigger on this branch. Drives the ⚔ chip. */
   encounterCount?: number;
+  /** Deduped monster ids across this branch's encounters — shown as bare
+   *  icons next to the ⚔ marker (no names). */
+  encounterMonsterIds?: string[];
   /** Story id — needed to resolve companion portrait paths
    *  (`/stories/<storyId>/dialogue/<companion>.{webp,png,…}`). */
   storyId: string;
@@ -60,6 +64,7 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
   // glyphs as the admin sidebar's Encounters / Puzzle items so authors
   // can map menu → graph at a glance.
   const encounterCount = d?.encounterCount ?? 0;
+  const encounterMonsterIds = d?.encounterMonsterIds ?? [];
   const hasPuzzle = !!branch?.puzzle;
 
   // Parallel-edge offset — when multiple branches connect the same source
@@ -139,12 +144,29 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                       ? "1 battle encounter triggers on this branch"
                       : `${encounterCount} battle encounters trigger on this branch`
                   }
-                  className="flex items-center gap-0.5 whitespace-nowrap text-ruby"
+                  className="flex items-center gap-1 whitespace-nowrap text-ruby"
                 >
                   <Sword size={20} weight="duotone" />
                   {encounterCount > 1 && (
                     <span className="text-[10px] font-semibold">×{encounterCount}</span>
                   )}
+                  {/* Monster icons only (no names). Capped so a big pool
+                      doesn't overflow the edge label. */}
+                  {storyId &&
+                    encounterMonsterIds.slice(0, 4).map((mid) => (
+                      <AssetThumb
+                        key={mid}
+                        base={
+                          MONSTERS[mid]?.image ??
+                          `/stories/${storyId}/monsters/${mid}`
+                        }
+                        alt={mid}
+                        className="h-5 w-5"
+                        shape="circle"
+                        fit="cover"
+                        ringWidth={0}
+                      />
+                    ))}
                 </span>
               )}
               {hasPuzzle && (

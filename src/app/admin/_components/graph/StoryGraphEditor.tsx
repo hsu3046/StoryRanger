@@ -192,11 +192,17 @@ function StoryGraphEditorInner({
   // Count of encounters attached per (sceneId, branchId) — drives the ⚔
   // chip on BranchEdge so authors can see at a glance which branches roll
   // a battle.
-  const encounterCountByBranch = useMemo(() => {
-    const map = new Map<string, number>();
+  const encounterInfoByBranch = useMemo(() => {
+    const map = new Map<string, { count: number; monsterIds: string[] }>();
     for (const e of encounters) {
       const key = `${e.trigger.sceneId}__${e.trigger.branchId}`;
-      map.set(key, (map.get(key) ?? 0) + 1);
+      const prev = map.get(key) ?? { count: 0, monsterIds: [] };
+      const ids = e.displayMonsters ?? e.body.monsterIds;
+      map.set(key, {
+        count: prev.count + 1,
+        // Dedupe so the same monster across multiple battles shows once.
+        monsterIds: [...new Set([...prev.monsterIds, ...ids])],
+      });
     }
     return map;
   }, [encounters]);
@@ -267,12 +273,13 @@ function StoryGraphEditorInner({
     for (const arr of groups.values()) {
       arr.forEach(({ sourceId, branch: b }, parallelIdx) => {
         const edgeId = `${sourceId}__${b.id}`;
+        const encInfo = encounterInfoByBranch.get(`${sourceId}__${b.id}`);
         const data: BranchEdgeData = {
           branch: b,
           parallelIdx,
           parallelCount: arr.length,
-          encounterCount:
-            encounterCountByBranch.get(`${sourceId}__${b.id}`) ?? 0,
+          encounterCount: encInfo?.count ?? 0,
+          encounterMonsterIds: encInfo?.monsterIds ?? [],
           storyId,
         };
         const isSelected =
@@ -296,7 +303,7 @@ function StoryGraphEditorInner({
       });
     }
     return out;
-  }, [story.scenes, encounterCountByBranch, selection, storyId]);
+  }, [story.scenes, encounterInfoByBranch, selection, storyId]);
 
   // React Flow internal state — the actual props handed to <ReactFlow>.
   // The `onNodesChange` returned here handles ALL change kinds (position
