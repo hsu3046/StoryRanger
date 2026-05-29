@@ -1021,8 +1021,11 @@ export function StoryPlayer({
       {/* In-scene dialogue — left-edge portrait rail. Suppressed while
           a battle encounter is active so the rail doesn't sit on top of
           the BattleScreen. Unmounting also resets any open dialogue
-          state safely; it remounts after the battle closes. */}
-      {!pendingEncounter && (
+          state safely; it remounts after the battle closes. Also hidden
+          during the outcome bridge — `currentSceneId` has already advanced to
+          the destination, so showing the rail there would surface the NEXT
+          scene's characters over the outgoing scene's art. */}
+      {!pendingEncounter && !showingOutcome && (
         <SceneDialogueLayer
           storyId={story.id}
           sceneId={state.currentSceneId}
