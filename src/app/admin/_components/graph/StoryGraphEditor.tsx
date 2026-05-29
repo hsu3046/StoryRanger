@@ -1976,7 +1976,7 @@ function BranchOutcomeEditor({
           className="flex items-center gap-1.5 rounded-pill bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:opacity-50"
         >
           <Sparkle size={12} weight="fill" />
-          {loading ? "Generating…" : "Ask AI"}
+          {loading ? "Generating…" : "Generate"}
         </button>
       </div>
     </Field>
