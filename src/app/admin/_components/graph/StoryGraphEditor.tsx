@@ -1263,6 +1263,7 @@ function SceneInspector({
       </div>
 
       <SceneAsksEditor
+        storyId={storyId}
         characters={characters}
         scene={scene}
         onChange={onChange}
@@ -2253,10 +2254,12 @@ function newAsk(askable: { id: string }[]): SceneAskT {
  * header next to "+ Add branch"; this only renders the existing rows.
  */
 function SceneAsksEditor({
+  storyId,
   characters,
   scene,
   onChange,
 }: {
+  storyId: string;
   characters: CharactersFile["characters"];
   scene: SceneT;
   onChange: (mut: (s: SceneT) => SceneT) => void;
@@ -2299,31 +2302,44 @@ function SceneAsksEditor({
                 ✕
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-soft/60">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wide text-ink-soft/60">
                 Answered by
               </span>
-              <StyledSelect
-                compact
-                value={ask.characterId}
-                onChange={(e) =>
-                  update(i, (a) => ({
-                    ...a,
-                    characterId: e.target.value as SceneAskT["characterId"],
-                  }))
-                }
-              >
-                {!askable.some((c) => c.id === ask.characterId) && (
-                  <option value={ask.characterId}>
-                    {ask.characterId} (no persona)
-                  </option>
-                )}
-                {askable.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </StyledSelect>
+              {/* Single-select portrait chips — mirrors the Interactive
+                  Character picker, but exactly one answerer at a time. */}
+              <div className="flex flex-wrap gap-1">
+                {askable.map((c) => {
+                  const on = ask.characterId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() =>
+                        update(i, (a) => ({
+                          ...a,
+                          characterId: c.id as SceneAskT["characterId"],
+                        }))
+                      }
+                      className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
+                        on
+                          ? "bg-accent-deep text-paper"
+                          : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                      }`}
+                    >
+                      <AssetThumb
+                        base={`/stories/${storyId}/dialogue/${c.id}`}
+                        alt={c.name}
+                        className="h-5 w-5"
+                        shape="circle"
+                        fit="cover"
+                        ringWidth={0}
+                      />
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <CharCount value={ask.label} limit={120} />
           </div>
