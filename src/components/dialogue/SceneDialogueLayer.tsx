@@ -301,19 +301,23 @@ export function SceneDialogueLayer({
               )}
               <button
                 type="button"
+                // While a dialogue is open the whole rail is inert: tapping a
+                // portrait would otherwise close (self) or abruptly switch
+                // (other) the conversation — an easy mis-tap that ends or
+                // disrupts the chat. Close via "End conversation" / a branch
+                // instead, then the rail re-activates.
+                disabled={active !== null}
                 onClick={() => {
-                  if (active === id) {
-                    closeSession();
-                  } else {
-                    if (active) closeSession();
-                    setActive(id);
-                    setLatestReply(null);
-                  }
+                  if (active !== null) return;
+                  setActive(id);
+                  setLatestReply(null);
                 }}
                 aria-label={`Talk to ${characterName(id)}`}
                 title={`Talk to ${characterName(id)}`}
-                className={`pointer-events-auto relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-pill bg-paper/55 backdrop-blur-sm transition-all ${
-                  isActive ? "scale-110" : "hover:scale-105"
+                className={`relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-pill bg-paper/55 backdrop-blur-sm transition-all ${
+                  active !== null
+                    ? `pointer-events-none ${isActive ? "scale-110" : "opacity-50"}`
+                    : "pointer-events-auto hover:scale-105"
                 }`}
                 style={{
                   // Strong, visible border — characterColor outer ring +
