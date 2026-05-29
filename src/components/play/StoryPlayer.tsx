@@ -824,17 +824,17 @@ export function StoryPlayer({
 
         </div>
 
-        {/* Ask chips — secondary "learn / ask a character" affordances shown
-            above the branch choices. Tapping one opens a seeded in-character
-            conversation (handled by SceneDialogueLayer). Hidden during
-            outcome / encounter / ending; the whole region also hides while a
-            dialogue is open (dialogueActive on the wrapper). */}
+        {/* Ask questions — rendered like branch choices (same button), shown
+            above the branches. Tapping opens a seeded in-character
+            conversation (SceneDialogueLayer). Hidden during outcome /
+            encounter / ending; the whole region also hides while a dialogue
+            is open (dialogueActive on the wrapper). */}
         {!showingOutcome &&
           !pendingEncounter &&
           !isEnding &&
           visibleAsks.length > 0 && (
             <div
-              className="flex flex-wrap items-center justify-center gap-2"
+              className="flex flex-col items-center gap-3"
               style={{
                 pointerEvents: narrationDone ? "auto" : "none",
                 opacity: narrationDone ? 1 : 0,
@@ -842,17 +842,18 @@ export function StoryPlayer({
               }}
             >
               {visibleAsks.map((ask) => (
-                <AskChip
-                  key={ask.id}
-                  label={ask.label}
-                  onSelect={() =>
-                    setAskRequest({
-                      characterId: ask.characterId,
-                      question: ask.label,
-                      key: Date.now(),
-                    })
-                  }
-                />
+                <div key={ask.id} className="w-full sm:w-2/5">
+                  <AskChip
+                    label={ask.label}
+                    onSelect={() =>
+                      setAskRequest({
+                        characterId: ask.characterId,
+                        question: ask.label,
+                        key: Date.now(),
+                      })
+                    }
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -1092,9 +1093,8 @@ export function StoryPlayer({
   );
 }
 
-/** Secondary "ask a character" chip shown above the branch choices.
- *  Deliberately lighter than ChoiceButton (translucent, outlined, "?"
- *  affordance) so it reads as "learn / ask", not a story branch. */
+/** Ask question, rendered identically to a branch ChoiceButton (the player
+ *  shouldn't have to distinguish a question from a choice visually). */
 function AskChip({
   label,
   onSelect,
@@ -1106,14 +1106,8 @@ function AskChip({
     <button
       type="button"
       onClick={onSelect}
-      className="inline-flex items-center gap-1.5 rounded-pill bg-paper/25 px-3 py-1.5 text-sm font-medium text-paper ring-1 ring-paper/40 backdrop-blur-sm transition-all hover:bg-paper/40 active:scale-[0.97]"
+      className="group relative flex h-20 w-full items-center justify-center rounded-pill bg-paper/60 px-6 text-center text-lg font-semibold leading-tight text-balance text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 hover:shadow-button-hover hover:-translate-y-0.5 hover:-translate-x-px hover:ring-accent/50 active:translate-y-0 active:translate-x-0 active:scale-[0.98] active:shadow-button-pressed"
     >
-      <span
-        aria-hidden
-        className="flex h-4 w-4 items-center justify-center rounded-full bg-paper/30 text-[10px] font-bold"
-      >
-        ?
-      </span>
       <span>{label}</span>
     </button>
   );
