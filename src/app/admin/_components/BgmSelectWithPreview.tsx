@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CaretDown, Pause, Play } from "@phosphor-icons/react";
 
-const inputCls =
-  "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";
+import { inputCls } from "./form";
 
 /**
  * BGM picker with an inline preview play button per row. Native <select>

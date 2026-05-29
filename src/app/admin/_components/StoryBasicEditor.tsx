@@ -7,6 +7,7 @@ import { CaretDown } from "@phosphor-icons/react";
 import { StorySchema, type StoryT } from "@/data/schemas";
 import { saveScenesAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
+import { Field, inputCls } from "./form";
 
 interface Props {
   storyId: string;
@@ -31,9 +32,6 @@ const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
 function withoutImageExt(path: string): string {
   return path.replace(/\.(webp|png|jpe?g)$/i, "");
 }
-
-const inputCls =
-  "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";
 
 /**
  * Story-level meta editor — title, subtitle, language, age range,
@@ -279,30 +277,6 @@ export function StoryBasicEditor({ storyId, initialStory, coverOptions }: Props)
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="flex flex-col text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        <span>{label}</span>
-        {hint && (
-          <span className="text-[10px] font-normal normal-case text-ink-soft/70">
-            {hint}
-          </span>
-        )}
-      </label>
-      {children}
     </div>
   );
 }

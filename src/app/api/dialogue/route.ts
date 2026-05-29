@@ -9,24 +9,16 @@ import {
   buildPersonaSystemPrompt,
   trimDialogueHistory,
 } from "@/lib/dialogue-personas";
-import type { DialogueResponse, SpeakerId } from "@/types/story";
+import { SpeakerIdSchema } from "@/data/schemas";
+import type { DialogueResponse } from "@/types/story";
 
 export const runtime = "nodejs";
 
-const SPEAKER_IDS = [
-  "scarecrow",
-  "tinman",
-  "lion",
-  "glinda",
-  "wicked-witch",
-  "wizard",
-  "aunt-em",
-  "toto",
-] as const satisfies readonly SpeakerId[];
-
 const RequestSchema = z.object({
   storyId: z.string(),
-  characterId: z.enum(SPEAKER_IDS),
+  // Accept any known speaker id; dialogue-ability is decided downstream by
+  // whether the resolved character has a persona (single source of truth).
+  characterId: SpeakerIdSchema,
   hero: z.object({
     name: z.string().min(1).max(40),
     gender: z.enum(["girl", "boy"]),

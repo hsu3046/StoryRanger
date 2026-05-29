@@ -6,26 +6,19 @@ import { CaretDown, User } from "@phosphor-icons/react";
 
 import {
   CharactersFileSchema,
+  SpeakerIdSchema,
   type CharacterPersonaT,
   type CharacterT,
   type CharactersFileT,
   type ItemDefT,
 } from "@/data/schemas";
+import type { SpeakerId } from "@/types/story";
 import { saveCharactersAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
 import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
-
-const SPEAKER_IDS = [
-  "narrator",
-  "dorothy",
-  "scarecrow",
-  "tinman",
-  "lion",
-  "wicked-witch",
-  "glinda",
-  "wizard",
-] as const;
+import { Field, inputCls } from "./form";
+import { ItemChipPicker } from "./ItemChipPicker";
 
 const VOICES = [
   "alloy",
@@ -36,7 +29,6 @@ const VOICES = [
   "shimmer",
 ] as const;
 
-type SpeakerId = (typeof SPEAKER_IDS)[number];
 type Voice = (typeof VOICES)[number];
 
 function characterImageBase(storyId: string, charId: string): string {
@@ -119,7 +111,7 @@ export function CharactersEditor({
   }
 
   function startCreate() {
-    const available = SPEAKER_IDS.find((sid) => !usedIds.has(sid));
+    const available = SpeakerIdSchema.options.find((sid) => !usedIds.has(sid));
     if (!available) {
       setError("All speaker ids are already used");
       return;
@@ -339,7 +331,7 @@ function CharacterForm({
                 }
                 className={`${inputCls} appearance-none pr-9`}
               >
-                {SPEAKER_IDS.map((sid) => {
+                {SpeakerIdSchema.options.map((sid) => {
                   const taken = usedIds.has(sid) && sid !== character.id;
                   return (
                     <option key={sid} value={sid} disabled={taken}>
@@ -642,32 +634,18 @@ function PersonaEditor({
         label="Giftable items"
         hint="One gift per character, at mood ≥8"
       >
-        <div className="flex flex-wrap gap-1">
-          {itemCatalog.map((it) => {
-            const on = persona.giftableItems.includes(it.id);
-            return (
-              <button
-                key={it.id}
-                type="button"
-                onClick={() =>
-                  onChange((p) => ({
-                    ...p,
-                    giftableItems: on
-                      ? p.giftableItems.filter((id) => id !== it.id)
-                      : [...p.giftableItems, it.id],
-                  }))
-                }
-                className={`rounded-pill px-2 py-0.5 text-xs transition-colors ${
-                  on
-                    ? "bg-accent-deep text-paper"
-                    : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
-                }`}
-              >
-                {it.icon ?? "🎁"} {it.name}
-              </button>
-            );
-          })}
-        </div>
+        <ItemChipPicker
+          catalog={itemCatalog}
+          selected={persona.giftableItems}
+          onToggle={(id) =>
+            onChange((p) => ({
+              ...p,
+              giftableItems: p.giftableItems.includes(id)
+                ? p.giftableItems.filter((x) => x !== id)
+                : [...p.giftableItems, id],
+            }))
+          }
+        />
       </Field>
     </div>
   );
@@ -721,30 +699,3 @@ function normalizeCharacter(c: CharacterT): CharacterT {
   };
 }
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  /** Optional smaller, normal-case sub-line under the label. */
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="flex flex-col text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        <span>{label}</span>
-        {hint && (
-          <span className="text-[10px] font-normal normal-case text-ink-soft/70">
-            {hint}
-          </span>
-        )}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";

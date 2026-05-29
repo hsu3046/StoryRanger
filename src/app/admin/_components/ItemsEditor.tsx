@@ -12,6 +12,7 @@ import {
 import { saveItemsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
 import { uniqueId } from "../_lib/uniqueId";
+import { Field, inputCls } from "./form";
 
 const CATEGORIES = [
   "trophy",
@@ -389,23 +390,3 @@ function ItemForm({
     </div>
   );
 }
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";
