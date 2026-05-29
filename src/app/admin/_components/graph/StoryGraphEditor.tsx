@@ -1145,6 +1145,7 @@ function SceneInspector({
           placeholder="e.g. {{name}} pauses at the gate. {{They}} grip {{their}} pack tighter — {{themself}} alone now."
           className={inputCls}
         />
+        <CharCount value={scene.narration} />
       </Field>
 
       <DialogueCharactersEditor
@@ -1386,6 +1387,7 @@ function EncounterCard({
               rows={5}
               className={inputClsSm}
             />
+            <CharCount value={encounter.intro.narration} />
           </MiniField>
 
           <MiniField label="Monsters">
@@ -1497,6 +1499,7 @@ function EncounterCard({
               rows={5}
               className={inputClsSm}
             />
+            <CharCount value={encounter.outro.victory} />
           </MiniField>
         </div>
       )}
@@ -1517,6 +1520,22 @@ function MiniField({
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+/** Small right-aligned character counter ("123 / 250"). The limit is a
+ *  soft guideline — saving is still allowed over it; the count just turns
+ *  red to flag an overly long passage. */
+function CharCount({ value, limit = 250 }: { value: string; limit?: number }) {
+  const over = value.length > limit;
+  return (
+    <div
+      className={`text-right text-[10px] tabular-nums ${
+        over ? "font-semibold text-ruby" : "text-ink-soft/50"
+      }`}
+    >
+      {value.length} / {limit}
     </div>
   );
 }
@@ -1836,7 +1855,8 @@ function BranchOutcomeEditor({
         placeholder="e.g. {{name}} nods and steps through. {{They}} feel {{their}} pack settle on {{their}} shoulders. (leave empty for no outcome line)"
         className={inputCls}
       />
-      <div className="mt-1 flex justify-end">
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <CharCount value={branch.outcome ?? ""} />
         <button
           type="button"
           onClick={generate}
