@@ -47,6 +47,7 @@ import {
   type ItemDefT,
   type MedalT,
   type MonsterStatsT,
+  type SceneAskT,
   type SceneT,
   type StoryT,
 } from "@/data/schemas";
@@ -1038,8 +1039,9 @@ function SceneInspector({
   isStart: boolean;
   items: ItemDefT[];
   medals: MedalT[];
-  /** Character catalog — chips display `name` instead of raw `id`. */
-  characters: { id: string; name: string }[];
+  /** Character catalog — chips display `name` instead of raw `id`; the
+   *  Asks editor reads `persona` to limit answerers. */
+  characters: CharactersFile["characters"];
   sceneImages: { value: string; label: string }[];
   bgmOptions: string[];
   onChange: (mut: (s: SceneT) => SceneT) => void;
@@ -1176,6 +1178,12 @@ function SceneInspector({
 
       <DialogueCharactersEditor
         storyId={storyId}
+        characters={characters}
+        scene={scene}
+        onChange={onChange}
+      />
+
+      <SceneAsksEditor
         characters={characters}
         scene={scene}
         onChange={onChange}
@@ -2201,6 +2209,107 @@ function DialogueCharactersEditor({
             </button>
           );
         })}
+      </div>
+    </Field>
+  );
+}
+
+/**
+ * Scene "asks" editor — authored questions surfaced in the choice area,
+ * each answered in-character. Answerers are limited to persona-bearing
+ * characters (only they can hold a dialogue).
+ */
+function SceneAsksEditor({
+  characters,
+  scene,
+  onChange,
+}: {
+  characters: CharactersFile["characters"];
+  scene: SceneT;
+  onChange: (mut: (s: SceneT) => SceneT) => void;
+}) {
+  const asks = scene.asks ?? [];
+  const askable = characters.filter((c) => !!c.persona);
+
+  function setAsks(next: SceneAskT[]) {
+    onChange((s) => ({ ...s, asks: next.length > 0 ? next : undefined }));
+  }
+  function update(i: number, mut: (a: SceneAskT) => SceneAskT) {
+    setAsks(asks.map((a, j) => (j === i ? mut(a) : a)));
+  }
+
+  return (
+    <Field label="Asks (in-story questions)">
+      <div className="flex flex-col gap-2">
+        {asks.map((ask, i) => (
+          <div
+            key={ask.id}
+            className="flex flex-col gap-1 rounded-card bg-paper-deep/30 p-2"
+          >
+            <div className="flex items-center gap-1.5">
+              <input
+                value={ask.label}
+                onChange={(e) =>
+                  update(i, (a) => ({ ...a, label: e.target.value }))
+                }
+                placeholder="e.g. What is a cyclone?"
+                className={inputClsSm}
+              />
+              <button
+                type="button"
+                onClick={() => setAsks(asks.filter((_, j) => j !== i))}
+                aria-label="Remove ask"
+                className="shrink-0 rounded-pill bg-ruby/15 px-2 py-1 text-xs text-ruby hover:bg-ruby/25"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-soft/60">
+                Answered by
+              </span>
+              <StyledSelect
+                compact
+                value={ask.characterId}
+                onChange={(e) =>
+                  update(i, (a) => ({
+                    ...a,
+                    characterId: e.target.value as SceneAskT["characterId"],
+                  }))
+                }
+              >
+                {!askable.some((c) => c.id === ask.characterId) && (
+                  <option value={ask.characterId}>
+                    {ask.characterId} (no persona)
+                  </option>
+                )}
+                {askable.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </StyledSelect>
+            </div>
+            <CharCount value={ask.label} limit={120} />
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() =>
+            setAsks([
+              ...asks,
+              {
+                id: `ask_${Math.random().toString(36).slice(2, 7)}`,
+                label: "",
+                characterId: (askable[0]?.id ??
+                  "narrator") as SceneAskT["characterId"],
+              },
+            ])
+          }
+          className="self-start rounded-pill bg-paper-deep/60 px-2.5 py-1 text-xs text-ink-soft hover:bg-paper-deep"
+        >
+          + Add ask
+        </button>
       </div>
     </Field>
   );

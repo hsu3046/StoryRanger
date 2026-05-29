@@ -48,6 +48,10 @@ interface Props {
   /** Fires whenever a dialogue opens / closes — caller hides the
    *  underlying narration + branch UI to avoid overlap. */
   onActiveChange?: (active: boolean) => void;
+  /** External request to open a SEEDED conversation (from the choice-area
+   *  "ask" chips). When `key` changes, the layer opens `characterId` and
+   *  immediately sends `question` as a normal hero turn. */
+  askRequest?: { characterId: SpeakerId; question: string; key: number } | null;
 }
 
 const IMAGE_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
@@ -77,6 +81,7 @@ export function SceneDialogueLayer({
   onApplyTurn,
   onSessionClose,
   onActiveChange,
+  askRequest,
 }: Props) {
   void storyId;
   const [active, setActive] = useState<SpeakerId | null>(null);
@@ -88,6 +93,7 @@ export function SceneDialogueLayer({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const sessionStartedRef = useRef<SpeakerId | null>(null);
+  const handledAskKeyRef = useRef<number | null>(null);
 
   const characterMap = useMemo(() => {
     const m: Record<string, (typeof characters.characters)[number]> = {};
@@ -110,8 +116,12 @@ export function SceneDialogueLayer({
     for (const id of extraDialogueCharacters) {
       if (canTalkTo(characterMap[id])) ids.add(id);
     }
+    // A seeded "ask" can target a persona character not otherwise on the
+    // rail. Surface the active character while talking so the reply bubble
+    // (gated on rail membership) anchors, and the player sees who answers.
+    if (active && canTalkTo(characterMap[active])) ids.add(active);
     return Array.from(ids);
-  }, [companions, sceneSpeaker, extraDialogueCharacters, characterMap]);
+  }, [companions, sceneSpeaker, extraDialogueCharacters, characterMap, active]);
 
   const activeRailIdx = useMemo(
     () => (active ? railIds.indexOf(active) : -1),
@@ -126,6 +136,24 @@ export function SceneDialogueLayer({
     void sendTurn(active, "", { isFirstTurn: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot per active change
   }, [active]);
+
+  // Seeded "ask" open (from the choice-area chips): open the named character
+  // and send the question as the opening turn. Pre-mark sessionStartedRef so
+  // the greeting effect above doesn't also fire for this character.
+  useEffect(() => {
+    if (!askRequest) return;
+    if (handledAskKeyRef.current === askRequest.key) return;
+    handledAskKeyRef.current = askRequest.key;
+    const { characterId, question } = askRequest;
+    if (!canTalkTo(characterMap[characterId])) return;
+    if (active && active !== characterId) closeSession();
+    sessionStartedRef.current = characterId;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- open the seeded conversation in response to an external request
+    setActive(characterId);
+    setLatestReply(null);
+    void sendTurn(characterId, question, { isFirstTurn: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot per askRequest.key
+  }, [askRequest?.key]);
 
   useEffect(() => {
     onActiveChange?.(active !== null);

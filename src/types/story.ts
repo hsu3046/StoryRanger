@@ -78,6 +78,11 @@ export interface Scene {
   /** Extra dialogue-able characters present in this scene (added to
    *  the dialogue rail on top of party companions + the scene speaker). */
   dialogueCharacters?: SpeakerId[];
+  /** Authored "ask" questions surfaced as secondary chips in the choice
+   *  area. Tapping one opens a seeded in-character conversation with the
+   *  named character (who MUST have a persona) — for educational / story
+   *  context before choosing a branch. Independent of `speaker`/the rail. */
+  asks?: { id: string; label: string; characterId: SpeakerId }[];
 }
 
 export interface Story {

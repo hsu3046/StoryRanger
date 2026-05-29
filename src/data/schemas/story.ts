@@ -46,6 +46,15 @@ export const SceneEndingSchema = z.object({
   label: z.string(),
 });
 
+/** An authored "ask" question shown in the choice area. `characterId` must
+ *  reference a persona-bearing character (validated softly at author time
+ *  + runtime; the dialogue route 400s otherwise). */
+export const SceneAskSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  characterId: SpeakerIdSchema,
+});
+
 export const SceneSchema = z.object({
   image: z.string(),
   bgm: z.string(),
@@ -60,6 +69,8 @@ export const SceneSchema = z.object({
    *  NPCs like Aunt Em on the first scene before they'd otherwise show
    *  up on the dialogue rail. */
   dialogueCharacters: z.array(SpeakerIdSchema).optional(),
+  /** Authored "ask" questions surfaced as chips in the choice area. */
+  asks: z.array(SceneAskSchema).optional(),
 });
 
 export const StorySchema = z.object({
@@ -80,5 +91,6 @@ export const StorySchema = z.object({
 export type StoryT = z.infer<typeof StorySchema>;
 export type SceneT = z.infer<typeof SceneSchema>;
 export type BranchT = z.infer<typeof BranchSchema>;
+export type SceneAskT = z.infer<typeof SceneAskSchema>;
 export type RewardT = z.infer<typeof RewardSchema>;
 export type PatternPuzzleDefT = z.infer<typeof PatternPuzzleDefSchema>;

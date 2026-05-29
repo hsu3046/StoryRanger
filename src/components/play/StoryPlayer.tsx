@@ -42,7 +42,7 @@ import { MedalShelfModal } from "../medals/MedalShelfModal";
 import { NarrationAudio } from "../audio/NarrationAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
 import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow";
-import { trimDialogueHistory } from "@/lib/dialogue-personas";
+import { canTalkTo, trimDialogueHistory } from "@/lib/dialogue-personas";
 import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
 import { itemIcon, prettyItem } from "@/data/items";
@@ -127,6 +127,12 @@ export function StoryPlayer({
   /** True while a SceneDialogueLayer bubble is open — hides the
    *  underlying narration + branch UI to avoid visual overlap. */
   const [dialogueActive, setDialogueActive] = useState(false);
+  /** Seeded-conversation request from an ask chip → SceneDialogueLayer. */
+  const [askRequest, setAskRequest] = useState<{
+    characterId: SpeakerId;
+    question: string;
+    key: number;
+  } | null>(null);
   /** Gates the choice-button entrance animation. Flips true when the
    *  narration typewriter finishes (or user taps to skip), and resets
    *  whenever the displayed narration changes (new scene / outcome). */
@@ -367,6 +373,16 @@ export function StoryPlayer({
     for (const c of characters.characters) map[c.id] = c;
     return map;
   }, [characters]);
+
+  // Authored asks whose answering character actually has a persona (defense
+  // in depth — a hand-edited scenes.json could name a non-dialogue speaker).
+  const visibleAsks = useMemo(
+    () =>
+      (currentScene.asks ?? []).filter((a) =>
+        canTalkTo(characterMap[a.characterId]),
+      ),
+    [currentScene.asks, characterMap],
+  );
 
   function handleChoose(branch: Branch) {
     // Branch puzzle gates the reward. Stage it on `interaction` — engine
@@ -808,6 +824,39 @@ export function StoryPlayer({
 
         </div>
 
+        {/* Ask chips — secondary "learn / ask a character" affordances shown
+            above the branch choices. Tapping one opens a seeded in-character
+            conversation (handled by SceneDialogueLayer). Hidden during
+            outcome / encounter / ending; the whole region also hides while a
+            dialogue is open (dialogueActive on the wrapper). */}
+        {!showingOutcome &&
+          !pendingEncounter &&
+          !isEnding &&
+          visibleAsks.length > 0 && (
+            <div
+              className="flex flex-wrap items-center justify-center gap-2"
+              style={{
+                pointerEvents: narrationDone ? "auto" : "none",
+                opacity: narrationDone ? 1 : 0,
+                transition: "opacity 0.3s",
+              }}
+            >
+              {visibleAsks.map((ask) => (
+                <AskChip
+                  key={ask.id}
+                  label={ask.label}
+                  onSelect={() =>
+                    setAskRequest({
+                      characterId: ask.characterId,
+                      question: ask.label,
+                      key: Date.now(),
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+
         {/* Choices row — horizontal at the very bottom. While an outcome
             is pending, we replace the choice row with reward chips + a
             "tap anywhere to continue" hint. */}
@@ -960,6 +1009,7 @@ export function StoryPlayer({
           heroMemory={state.heroMemory ?? []}
           journeyNote={journeyNote}
           history={(id) => state.dialogueHistory?.[id] ?? []}
+          askRequest={askRequest}
           onApplyTurn={handleApplyDialogueTurn}
           onSessionClose={() => handleDialogueClose()}
           onActiveChange={setDialogueActive}
@@ -1039,6 +1089,33 @@ export function StoryPlayer({
         onToggleMute={() => setMuted((m) => !m)}
       />
     </div>
+  );
+}
+
+/** Secondary "ask a character" chip shown above the branch choices.
+ *  Deliberately lighter than ChoiceButton (translucent, outlined, "?"
+ *  affordance) so it reads as "learn / ask", not a story branch. */
+function AskChip({
+  label,
+  onSelect,
+}: {
+  label: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="inline-flex items-center gap-1.5 rounded-pill bg-paper/25 px-3 py-1.5 text-sm font-medium text-paper ring-1 ring-paper/40 backdrop-blur-sm transition-all hover:bg-paper/40 active:scale-[0.97]"
+    >
+      <span
+        aria-hidden
+        className="flex h-4 w-4 items-center justify-center rounded-full bg-paper/30 text-[10px] font-bold"
+      >
+        ?
+      </span>
+      <span>{label}</span>
+    </button>
   );
 }
 
