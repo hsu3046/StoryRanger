@@ -29,7 +29,7 @@
       "description": "You lifted the Scarecrow down from his pole.",
       "trigger": {
         "type": "branch",
-        "branchId": "help_scarecrow",
+        "branchId": "branch_qk1d8",
         "storyId": "wizard-of-oz"
       }
     },

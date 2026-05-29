@@ -136,15 +136,14 @@ export function takeBranch(
     updatedAt: new Date().toISOString(),
   };
 
-  void options; // skipReward used to gate branch.reward — branch rewards
-                 // were removed in v3. Kept in signature for backward
-                 // compat with the puzzle "skip" callsite.
-
-  // Scene reward — one-shot on first entry to this scene.
+  // Scene reward — one-shot on first entry to this scene. A failed
+  // `skip`-mode puzzle still navigates here but must NOT grant the reward
+  // (the puzzle gates it), so honour `skipReward`. Not marked completed
+  // either, so a later clean entry can still earn it.
   let sceneReward: RewardT | undefined;
   const sceneRewardDef = (nextScene as Scene & { reward?: RewardT }).reward;
   const completed = new Set(nextState.completedSceneRewards ?? []);
-  if (sceneRewardDef && !completed.has(branch.next)) {
+  if (sceneRewardDef && !completed.has(branch.next) && !options.skipReward) {
     nextState = applyReward(nextState, sceneRewardDef);
     nextState = {
       ...nextState,
