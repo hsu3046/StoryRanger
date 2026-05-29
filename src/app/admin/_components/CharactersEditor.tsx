@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { User } from "@phosphor-icons/react";
+import { Star, User } from "@phosphor-icons/react";
 
 import {
   CharactersFileSchema,
@@ -250,7 +250,17 @@ export function CharactersEditor({
                         }
                       />
                     </td>
-                    <td className="px-4 py-3 align-middle text-ink">{c.name}</td>
+                    <td className="px-4 py-3 align-middle text-ink">
+                      <span className="inline-flex items-center gap-1.5">
+                        {c.name}
+                        {c.isHero && (
+                          <span className="inline-flex items-center gap-1 rounded-pill bg-accent-deep/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-deep">
+                            <Star size={9} weight="fill" />
+                            Hero
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 align-middle">
                       <code className="text-ink-soft">{c.voice}</code>
                     </td>
@@ -320,7 +330,17 @@ function CharacterForm({
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between">
-        <p className="font-handwritten text-base text-accent-deep">Character</p>
+        <div className="flex items-center gap-2">
+          <p className="font-handwritten text-base text-accent-deep">
+            Character
+          </p>
+          {character.isHero && (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-accent-deep px-2 py-0.5 text-[10px] font-semibold text-paper">
+              <Star size={10} weight="fill" />
+              Hero
+            </span>
+          )}
+        </div>
         <div className="flex gap-1">
           {isNew && (
             <StyledSelect
@@ -358,7 +378,14 @@ function CharacterForm({
         </div>
       </header>
 
-      <Field label="Name">
+      <Field
+        label={character.isHero ? "Name (default)" : "Name"}
+        hint={
+          character.isHero
+            ? "Players name the hero in-game — this is only the fallback/example shown if they skip it."
+            : undefined
+        }
+      >
         <input
           value={character.name}
           onChange={(e) =>

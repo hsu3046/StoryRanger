@@ -144,6 +144,10 @@ export interface CharacterPersona {
 export interface Character {
   id: SpeakerId;
   name: string;
+  /** The story's protagonist. Player names them in-game (so `name` is just a
+   *  default/fallback), no dialogue persona, sprite at `characters/hero.*`.
+   *  At most one per story. */
+  isHero?: boolean;
   /** OpenAI tts-1 voice id. */
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer";
   /** TTS playback speed (0.25–4.0). Mapped to OpenAI's `speed` param. */

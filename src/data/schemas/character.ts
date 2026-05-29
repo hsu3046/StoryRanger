@@ -34,6 +34,13 @@ export const CharacterPersonaSchema = z.object({
 export const CharacterSchema = z.object({
   id: SpeakerIdSchema,
   name: z.string(),
+  /** Marks the story's protagonist. The hero is special: the player names
+   *  them in-game (so `name` here is only a default/fallback), they have no
+   *  dialogue persona (you don't chat with yourself), and their sprite lives
+   *  at `characters/hero.*`. At most one character per story should set this.
+   *  (Phase A: admin-facing source of truth; runtime still keys on the
+   *  "dorothy" speaker id.) */
+  isHero: z.boolean().optional(),
   voice: TtsVoiceSchema,
   voiceSpeed: z.number().min(0.25).max(4.0),
   color: z.string(), // hex

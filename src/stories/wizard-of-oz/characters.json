@@ -11,6 +11,7 @@
     {
       "id": "dorothy",
       "name": "Dorothy",
+      "isHero": true,
       "voice": "shimmer",
       "color": "#a8487f",
       "voiceSpeed": 1.05,
