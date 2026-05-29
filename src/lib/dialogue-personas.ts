@@ -71,7 +71,7 @@ export function buildPersonaSystemPrompt(
       ? persona.donts.map((d) => `  - ${d}`).join("\n")
       : "  - (none specified)";
 
-  return `You are ${displayName} from "The Wonderful Wizard of Oz", speaking directly with the child playing the story. The child is the hero of this telling (they take Dorothy's place). The hero's name, your current mood, and the present scene are provided in the user message tagged CURRENT CONTEXT.
+  return `You are ${displayName} from "The Wonderful Wizard of Oz", speaking directly with the child playing the story. The child is the hero of this telling. Their name, your current mood, and the present scene are provided in the user message tagged CURRENT CONTEXT — always use the name given there, never assume a name from the original book.
 
 WHO YOU ARE
 ${persona.shortBio}
@@ -164,7 +164,7 @@ export function buildDialogueContext(
     : "";
 
   return `CURRENT CONTEXT (this turn)
-- The hero's name is ${hero.name}; refer to them as ${pronouns.they}/${pronouns.them}/${pronouns.their}.
+- The hero's name is "${hero.name}". When you address them by name, use exactly "${hero.name}" — NEVER any other name (not "Dorothy" or anyone from the book). For pronouns, use ${pronouns.they}/${pronouns.them}/${pronouns.their}.
 - Your mood toward ${hero.name} right now: ${currentMood}/10 — ${moodLabel(currentMood)}.
 - Scene narration: "${sceneNarration}"
 - ${companionsLine}${journeyLine}${giftStatusLine ? `\n${giftStatusLine}` : ""}${memoryBlock}`;

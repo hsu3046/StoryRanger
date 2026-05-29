@@ -77,7 +77,7 @@ Examples (good — short, 2nd person, past tense):
 - "You stepped onto the golden path through the cornfield."
 
 Bad (too long / 3rd person / present tense):
-- "Dorothy carefully and slowly walks across the field, looking left and right, until she finally arrives at the door of the farmhouse." (too long, wrong POV)
+- "The hero carefully and slowly walks across the field, looking left and right, until she finally arrives at the door of the farmhouse." (too long, wrong POV)
 - "She sprints through the grass." (wrong POV, wrong tense)`;
 
 export async function POST(req: Request) {
