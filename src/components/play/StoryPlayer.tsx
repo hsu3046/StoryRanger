@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -824,40 +824,6 @@ export function StoryPlayer({
 
         </div>
 
-        {/* Ask questions — rendered like branch choices (same button), shown
-            above the branches. Tapping opens a seeded in-character
-            conversation (SceneDialogueLayer). Hidden during outcome /
-            encounter / ending; the whole region also hides while a dialogue
-            is open (dialogueActive on the wrapper). */}
-        {!showingOutcome &&
-          !pendingEncounter &&
-          !isEnding &&
-          visibleAsks.length > 0 && (
-            <div
-              className="flex flex-col items-center gap-3"
-              style={{
-                pointerEvents: narrationDone ? "auto" : "none",
-                opacity: narrationDone ? 1 : 0,
-                transition: "opacity 0.3s",
-              }}
-            >
-              {visibleAsks.map((ask) => (
-                <div key={ask.id} className="w-full sm:w-2/5">
-                  <AskChip
-                    label={ask.label}
-                    onSelect={() =>
-                      setAskRequest({
-                        characterId: ask.characterId,
-                        question: ask.label,
-                        key: Date.now(),
-                      })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
         {/* Choices row — horizontal at the very bottom. While an outcome
             is pending, we replace the choice row with reward chips + a
             "tap anywhere to continue" hint. */}
@@ -909,10 +875,16 @@ export function StoryPlayer({
           }
 
           const branches = currentScene.branches;
-          if (branches.length === 0) return null;
+          // Asks render as additional choices in the SAME left-right row as
+          // the branches (not a separate stack above) — to the player an
+          // "ask" is just another choice. Hidden during an encounter, matching
+          // the rest of the bottom region.
+          const askChoices = pendingEncounter ? [] : visibleAsks;
+          const choiceCount = askChoices.length + branches.length;
+          if (choiceCount === 0) return null;
           // Buttons stay hidden until narration finishes typing, then each
           // pops in with a small stagger. `pointerEvents` is gated too so a
-          // rapid tap during the entrance can't accidentally pick a branch.
+          // rapid tap during the entrance can't accidentally pick a choice.
           const entrance = (i: number) => ({
             initial: { opacity: 0, y: 14, scale: 0.96 },
             animate: narrationDone
@@ -925,38 +897,49 @@ export function StoryPlayer({
               delay: narrationDone ? i * 0.08 : 0,
             },
           });
-          if (branches.length === 1) {
-            const branch = branches[0];
-            return (
-              <div className="flex justify-center">
-                <motion.div
-                  className="w-full sm:w-2/5"
-                  style={{ pointerEvents: narrationDone ? "auto" : "none" }}
-                  {...entrance(0)}
-                >
-                  <ChoiceButton
-                    branch={branch}
-                    onSelect={handleChoose}
-                  />
-                </motion.div>
-              </div>
-            );
-          }
+          // One choice → centered at 2/5 width. Two+ → equal-width columns in
+          // a left-right row (already sized for up to 4 via flex-1).
+          const tile = (key: string, i: number, node: ReactNode) => (
+            <motion.div
+              key={key}
+              className={choiceCount === 1 ? "w-full sm:w-2/5" : "min-w-0 flex-1"}
+              style={{ pointerEvents: narrationDone ? "auto" : "none" }}
+              {...entrance(i)}
+            >
+              {node}
+            </motion.div>
+          );
           return (
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:gap-4">
-              {branches.map((branch, i) => (
-                <motion.div
-                  key={branch.id}
-                  className="min-w-0 flex-1"
-                  style={{ pointerEvents: narrationDone ? "auto" : "none" }}
-                  {...entrance(i)}
-                >
-                  <ChoiceButton
-                    branch={branch}
-                    onSelect={handleChoose}
-                  />
-                </motion.div>
-              ))}
+            <div
+              className={
+                choiceCount === 1
+                  ? "flex justify-center"
+                  : "flex flex-col items-stretch gap-3 sm:flex-row sm:gap-4"
+              }
+            >
+              {askChoices.map((ask, i) =>
+                tile(
+                  ask.id,
+                  i,
+                  <AskChip
+                    label={ask.label}
+                    onSelect={() =>
+                      setAskRequest({
+                        characterId: ask.characterId,
+                        question: ask.label,
+                        key: Date.now(),
+                      })
+                    }
+                  />,
+                ),
+              )}
+              {branches.map((branch, i) =>
+                tile(
+                  branch.id,
+                  askChoices.length + i,
+                  <ChoiceButton branch={branch} onSelect={handleChoose} />,
+                ),
+              )}
             </div>
           );
         })()}
