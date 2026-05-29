@@ -1911,8 +1911,21 @@ function BranchOutcomeEditor({
   onChange: (mut: (b: BranchT) => BranchT) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const confirm = useConfirm();
 
   async function generate() {
+    // Guard an accidental overwrite: if there's already text, confirm first.
+    // (The current text is still sent as the request, then replaced.)
+    if ((branch.outcome ?? "").trim().length > 0) {
+      const ok = await confirm({
+        title: "Generate over current text?",
+        message:
+          "This replaces the Narration below with a fresh AI generation. Your current text is sent as the request to steer it, then overwritten.",
+        confirmLabel: "Generate",
+        tone: "default",
+      });
+      if (!ok) return;
+    }
     setLoading(true);
     try {
       // Lead-up context: scenes whose branches point INTO this source scene,
