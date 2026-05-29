@@ -422,8 +422,22 @@ export function StoryPlayer({
     const prevSceneId = state.currentSceneId;
 
     const result = takeBranch(state, branch, story, medals, opts);
-    if (result.earnedMedals.length > 0) {
-      setMedalQueue((q) => [...q, ...result.earnedMedals]);
+    // Medals to celebrate on entry: trigger-based ones (checkNewMedals) PLUS a
+    // medal granted by the entered scene's `reward.medalId` (set in the graph
+    // editor) — the latter is applied to earnedMedals but otherwise wouldn't
+    // pop a toast. Dedupe against the trigger list + already-earned.
+    const queuedMedals: Medal[] = [...result.earnedMedals];
+    const rewardMedalId = result.sceneReward?.medalId;
+    if (
+      rewardMedalId &&
+      !state.earnedMedals.includes(rewardMedalId) &&
+      !queuedMedals.some((m) => m.id === rewardMedalId)
+    ) {
+      const m = medals.medals.find((med) => med.id === rewardMedalId);
+      if (m) queuedMedals.push(m);
+    }
+    if (queuedMedals.length > 0) {
+      setMedalQueue((q) => [...q, ...queuedMedals]);
       audio.playSfx(SFX.MEDAL);
     }
 
@@ -802,7 +816,12 @@ export function StoryPlayer({
             fresh and types out as the player sees it. */}
         <div className="mx-auto w-[95%] max-w-6xl">
           <AnimatePresence mode="wait">
-            {!pendingEncounter && (
+            {/* Unmounted (not just hidden) while a dialogue is open: if it
+                stayed mounted, picking a branch mid-dialogue would change the
+                scene and leave the PREVIOUS narration exit-animating just as
+                the bottom region fades back in — a one-frame flash of the old
+                text. With it unmounted, only the new scene's narration mounts. */}
+            {!pendingEncounter && !dialogueActive && (
               <motion.div
                 key={`narr-${narrationKey}`}
                 initial={{ opacity: 0, y: 12 }}
