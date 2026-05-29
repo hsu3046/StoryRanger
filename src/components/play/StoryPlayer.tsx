@@ -992,6 +992,8 @@ export function StoryPlayer({
           hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
           heroMemory={state.heroMemory ?? []}
           journeyNote={journeyNote}
+          branches={currentScene.branches}
+          onTakeBranch={handleChoose}
           history={(id) => state.dialogueHistory?.[id] ?? []}
           askRequest={askRequest}
           onApplyTurn={handleApplyDialogueTurn}

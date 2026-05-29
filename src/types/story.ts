@@ -302,7 +302,8 @@ export interface DialogueResponse {
   itemGift: string | null;
   /** Set true when the character is wrapping up the conversation. */
   endsConversation: boolean;
-  /** Up to 3 short suggested next-replies for the hero (~3-8 words each). */
+  /** 2 short suggested next-replies for the hero (~3-8 words each). Story
+   *  branches are surfaced separately by the client. */
   suggestions: string[];
 }
 

@@ -63,28 +63,25 @@ const ResponseLLMSchema = z.object({
   itemGift: z.string().nullable(),
   endsConversation: z.boolean(),
   /** Short follow-up replies the HERO might say next (3-8 words each). The
-   *  prompt asks for exactly 3; we accept a loose range so an off-count
+   *  prompt asks for exactly 2; we accept a loose range so an off-count
    *  response doesn't discard an otherwise-valid turn, then normalise to
-   *  exactly 3 below. */
+   *  exactly 2 below. (Story-advancing choices are the scene branches, shown
+   *  by the client alongside these.) */
   suggestions: z.array(z.string()).min(1).max(6),
 });
 
-/** Generic suggestions used to pad up to 3 when the LLM returns fewer. */
-const FALLBACK_SUGGESTIONS = [
-  "Tell me more.",
-  "Are you okay?",
-  "Goodbye for now.",
-];
+/** Generic suggestions used to pad up to 2 when the LLM returns fewer. */
+const FALLBACK_SUGGESTIONS = ["Tell me more.", "Are you okay?"];
 
-/** Force the suggestion list to exactly 3: drop blanks, cap at 3, then pad
+/** Force the suggestion list to exactly 2: drop blanks, cap at 2, then pad
  *  from the generic pool (avoiding duplicates). */
 function normalizeSuggestions(raw: string[]): string[] {
-  const out = raw.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+  const out = raw.map((s) => s.trim()).filter(Boolean).slice(0, 2);
   for (const f of FALLBACK_SUGGESTIONS) {
-    if (out.length >= 3) break;
+    if (out.length >= 2) break;
     if (!out.includes(f)) out.push(f);
   }
-  return out.slice(0, 3);
+  return out.slice(0, 2);
 }
 
 const SAFE_FALLBACK: DialogueResponse = {
@@ -93,7 +90,7 @@ const SAFE_FALLBACK: DialogueResponse = {
   moodDelta: 0,
   itemGift: null,
   endsConversation: false,
-  suggestions: ["Are you okay?", "Tell me more.", "Goodbye for now."],
+  suggestions: ["Are you okay?", "Tell me more."],
 };
 
 export async function POST(req: Request) {

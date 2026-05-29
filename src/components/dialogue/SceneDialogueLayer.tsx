@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import type {
+  Branch,
   CharactersFile,
   CompanionId,
   DialogueMessage,
@@ -37,6 +38,12 @@ interface Props {
   heroMemory: string[];
   /** Deterministic "adventures so far" one-liner (medals, items, etc.). */
   journeyNote: string;
+  /** Current scene branches — surfaced as "advance the story" choices
+   *  alongside the LLM reply suggestions while a dialogue is open. */
+  branches: Branch[];
+  /** Take a branch picked mid-dialogue (the layer closes the conversation
+   *  first, then this navigates to the next scene). */
+  onTakeBranch: (branch: Branch) => void;
   /** Latest dialogue history per character (sliding window). */
   history: (id: SpeakerId) => DialogueMessage[];
   onApplyTurn: (
@@ -77,6 +84,8 @@ export function SceneDialogueLayer({
   hasGifted,
   heroMemory,
   journeyNote,
+  branches,
+  onTakeBranch,
   history,
   onApplyTurn,
   onSessionClose,
@@ -346,8 +355,16 @@ export function SceneDialogueLayer({
           <DialogueChoiceCards
             key={`choices-${active}`}
             suggestions={latestReply.suggestions}
+            branches={branches}
             loading={loading}
             onSend={(t) => sendTurn(active, t)}
+            onTakeBranch={(b) => {
+              // Navigate FIRST (commitBranch's direct setState), THEN close
+              // (onSessionClose's functional setState folds the dialogue count
+              // in on top) — the reverse order would clobber the count.
+              onTakeBranch(b);
+              closeSession();
+            }}
             onEnd={closeSession}
           />
         )}

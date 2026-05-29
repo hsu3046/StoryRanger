@@ -7,13 +7,27 @@ import {
   PaperPlaneTilt,
   PencilSimple,
 } from "@phosphor-icons/react";
-import { choiceButtonClass } from "../play/ChoiceButton";
+import type { Branch } from "@/types/story";
+import { choiceButtonClass, choiceButtonAccentClass } from "../play/ChoiceButton";
+
+/** Up to this many scene branches sit alongside the LLM reply suggestions
+ *  (2 suggestions + 2 branches = the 4-up choice row's ceiling). */
+const MAX_DIALOGUE_BRANCHES = 2;
+/** LLM reply suggestions shown in-dialogue. The route already trims to 2;
+ *  we re-cap defensively so the row never exceeds 4 tiles. */
+const MAX_DIALOGUE_SUGGESTIONS = 2;
 
 interface Props {
-  /** 3 short suggested replies from the LLM. */
+  /** Short suggested replies from the LLM (the route returns 2). */
   suggestions: string[];
+  /** Current scene branches — shown as "advance the story" choices so the
+   *  player can move on mid-conversation without ending it first. */
+  branches: Branch[];
   /** Send a hero utterance — picked card or typed text. */
   onSend: (text: string) => void;
+  /** Take a branch directly from the dialogue (advances to the next scene;
+   *  the caller closes the conversation). */
+  onTakeBranch: (branch: Branch) => void;
   /** Hero can also end the conversation at any time. */
   onEnd: () => void;
   /** Show typing input on init (collapsed by default to keep UI calm). */
@@ -29,7 +43,9 @@ const MAX_INPUT = 240;
  */
 export function DialogueChoiceCards({
   suggestions,
+  branches,
   onSend,
+  onTakeBranch,
   onEnd,
   loading,
 }: Props) {
@@ -119,17 +135,36 @@ export function DialogueChoiceCards({
               End conversation
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {suggestions.slice(0, 3).map((s, i) => (
-              <button
-                key={`${i}-${s}`}
-                type="button"
-                disabled={loading}
-                onClick={() => onSend(s)}
-                className={choiceButtonClass}
-              >
-                <span>{s}</span>
-              </button>
+          {/* Reply suggestions (continue talking) + scene branches (advance
+              the story) share one left-right row — same layout as the main
+              choice row. Branches carry an accent ring + "→" so they read as
+              "move on", not "keep chatting". */}
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:gap-3">
+            {suggestions.slice(0, MAX_DIALOGUE_SUGGESTIONS).map((s, i) => (
+              <div key={`s-${i}-${s}`} className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => onSend(s)}
+                  className={choiceButtonClass}
+                >
+                  <span>{s}</span>
+                </button>
+              </div>
+            ))}
+            {branches.slice(0, MAX_DIALOGUE_BRANCHES).map((b) => (
+              <div key={`b-${b.id}`} className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => onTakeBranch(b)}
+                  className={choiceButtonAccentClass}
+                >
+                  <span aria-hidden className="text-accent-deep">
+                    →
+                  </span>
+                  <span>{b.label}</span>
+                </button>
+              </div>
             ))}
           </div>
         </>

@@ -109,11 +109,11 @@ ACTION FIELD
 - Use SPARINGLY — only when it adds something the reply alone can't carry. Set to null otherwise.
 - For Toto specifically: \`reply\` itself must already be an action in *asterisks* (no words) — \`action\` can be null.
 
-SUGGESTIONS (always required — exactly 3 short hero replies)
-- Suggest 3 short follow-up lines the HERO might say next, in the hero's child voice.
-- 3–8 words each. Mix tones: a curious one, a warm one, and a different-direction one.
-- Make them DISTINCT — they should give the player meaningfully different conversational paths.
-- Examples for context: "Are you scared?" / "Tell me about home." / "I should go now."
+SUGGESTIONS (always required — exactly 2 short hero replies)
+- Suggest 2 short follow-up lines the HERO might say next, in the hero's child voice.
+- 3–8 words each. Make them DISTINCT — two meaningfully different conversational directions (e.g. one curious, one warm).
+- These keep the conversation going; the player has separate buttons to move the story onward, so DON'T suggest goodbyes or "I should go" lines.
+- Examples for context: "Are you scared?" / "Tell me about home."
 
 OUTPUT
 Respond with JSON only, matching the provided schema. itemGift should be null in almost every turn.`;
