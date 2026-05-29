@@ -950,6 +950,8 @@ function StoryGraphEditorInner({
                 selectedBranch && (
                   <BranchInspector
                     storyId={storyId}
+                    storyTitle={story.title}
+                    storyPremise={story.subtitle ?? ""}
                     storyScenes={story.scenes}
                     sceneId={selectedScene.id}
                     branch={selectedBranch}
@@ -1617,6 +1619,8 @@ const COMPANION_OPTIONS: { id: CompanionId }[] = [
 
 function BranchInspector({
   storyId,
+  storyTitle,
+  storyPremise,
   storyScenes,
   sceneId,
   branch,
@@ -1635,6 +1639,9 @@ function BranchInspector({
   onPreview,
 }: {
   storyId: string;
+  /** Story title + premise/tagline — passed to the outcome AI for tone. */
+  storyTitle: string;
+  storyPremise: string;
   storyScenes: Record<string, SceneT>;
   sceneId: string;
   branch: BranchT;
@@ -1768,6 +1775,10 @@ function BranchInspector({
 
       <BranchOutcomeEditor
         storyId={storyId}
+        storyTitle={storyTitle}
+        storyPremise={storyPremise}
+        storyScenes={storyScenes}
+        sceneId={sceneId}
         sourceScene={sourceScene}
         branch={branch}
         targetScene={targetScene}
@@ -1873,12 +1884,20 @@ function BranchInspector({
  */
 function BranchOutcomeEditor({
   storyId,
+  storyTitle,
+  storyPremise,
+  storyScenes,
+  sceneId,
   sourceScene,
   branch,
   targetScene,
   onChange,
 }: {
   storyId: string;
+  storyTitle: string;
+  storyPremise: string;
+  storyScenes: Record<string, SceneT>;
+  sceneId: string;
   sourceScene: SceneT;
   branch: BranchT;
   targetScene: SceneT | undefined;
@@ -1889,14 +1908,31 @@ function BranchOutcomeEditor({
   async function generate() {
     setLoading(true);
     try {
+      // Lead-up context: scenes whose branches point INTO this source scene,
+      // tagged with the choice label that arrives here (cap a few).
+      const incoming = Object.values(storyScenes)
+        .flatMap((s) =>
+          s.branches
+            .filter((b) => b.next === sceneId)
+            .map((b) => ({ label: b.label, narration: s.narration })),
+        )
+        .slice(0, 3);
+      // The author's own text doubles as the request/draft — empty means
+      // "just generate from the system prompt + context".
+      const authorRequest = (branch.outcome ?? "").trim();
       const res = await fetch("/api/branch-outcome", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyId,
+          storyTitle,
+          storyPremise,
           branchLabel: branch.label,
           sourceNarration: sourceScene.narration,
           nextNarration: targetScene?.narration ?? "",
+          nextChoices: targetScene?.branches.map((b) => b.label) ?? [],
+          incoming,
+          authorRequest: authorRequest || undefined,
         }),
       });
       if (!res.ok) throw new Error(`branch-outcome ${res.status}`);

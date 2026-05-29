@@ -7,23 +7,50 @@ export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   storyId: z.string(),
+  /** Story title + premise/tagline — give the model the overall tone. */
+  storyTitle: z.string().max(200).optional(),
+  storyPremise: z.string().max(600).optional(),
   branchLabel: z.string().min(1).max(200),
   sourceNarration: z.string().max(2000),
   nextNarration: z.string().max(2000),
+  /** Labels of the choices available on the NEXT scene (where this leads). */
+  nextChoices: z.array(z.string().max(200)).max(6).default([]),
+  /** Scenes that branch INTO the source scene — the lead-up, each with the
+   *  label of the choice that arrived here. */
+  incoming: z
+    .array(
+      z.object({
+        label: z.string().max(200),
+        narration: z.string().max(2000),
+      }),
+    )
+    .max(3)
+    .default([]),
+  /** The author's own text in the field when they hit "Ask AI" — a rough
+   *  draft to polish or an instruction to follow. Empty → generate fresh. */
+  authorRequest: z.string().max(1000).optional(),
 });
 
 const ResponseSchema = z.object({
   outcome: z.string(),
 });
 
-const SYSTEM_PROMPT = `You are helping draft a Wonderful Wizard of Oz storybook for kids.
+// Static (story-agnostic) so it stays cache-friendly — all per-story context
+// is folded into the user message. The model learns the tone from the premise
+// + surrounding scenes rather than a hardcoded setting.
+const SYSTEM_PROMPT = `You are helping an author draft narration for an interactive storybook for children.
 
-Given the current scene narration, the branch label the child picked, and the next scene's narration, write ONE short outcome line that bridges them — describing the immediate result of the choice. This plays on the page BEFORE the next scene appears. Because it's a bridge between two scenes, it MUST be very short.
+You write the ONE short "outcome" line for a branch: the immediate result of the choice the child just made. It plays on the page as a bridge AFTER the current scene and BEFORE the next scene appears, so it must be very short.
+
+Use the context you're given — the story's title and premise (for overall tone), what led up to this moment, the choice the child picked, and the scene that comes next — so the line fits the story's voice and flows naturally into what follows.
+
+If the author included a request or a rough draft, follow it: honour their intent and wording where you can, while still obeying the rules below.
 
 RULES:
 - LENGTH: prefer 1 sentence. Maximum 2 short sentences. Never longer.
 - POINT OF VIEW: 2nd person — the player IS the hero. Use "you" as the subject (the rest of the storybook is also written in 2nd person, so this must match).
 - TENSE: past tense.
+- TONE: match the story's tone (gentle, adventurous, spooky, hopeful…) inferred from the premise and surrounding scenes — don't fall back to a generic voice.
 - Don't repeat the next scene's first line verbatim — bridge into it.
 - No emojis, no markdown.
 - Output JSON only matching the schema.
@@ -49,17 +76,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "no_api_key" }, { status: 503 });
   }
 
-  const userText = [
-    `CURRENT SCENE`,
-    body.sourceNarration,
-    ``,
-    `THE CHILD PICKED: "${body.branchLabel}"`,
-    ``,
-    `NEXT SCENE`,
-    body.nextNarration || "(continuation)",
-    ``,
-    `Write the outcome line.`,
-  ].join("\n");
+  const lines: string[] = [];
+  if (body.storyTitle) lines.push(`STORY: ${body.storyTitle}`);
+  if (body.storyPremise) lines.push(`PREMISE / TONE: ${body.storyPremise}`);
+  if (lines.length > 0) lines.push("");
+
+  if (body.incoming.length > 0) {
+    lines.push("WHAT LED HERE (earlier scene + the choice taken to arrive):");
+    for (const inc of body.incoming) {
+      lines.push(`- After "${inc.label}": ${inc.narration}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("CURRENT SCENE", body.sourceNarration, "");
+  lines.push(`THE CHILD PICKED: "${body.branchLabel}"`, "");
+  lines.push("NEXT SCENE", body.nextNarration || "(continuation)");
+  if (body.nextChoices.length > 0) {
+    lines.push(
+      `Choices that follow there: ${body.nextChoices
+        .map((c) => `"${c}"`)
+        .join(", ")}`,
+    );
+  }
+  lines.push("");
+
+  if (body.authorRequest && body.authorRequest.trim().length > 0) {
+    lines.push(
+      "AUTHOR'S REQUEST (incorporate this — it may be a rough draft to polish or an instruction to follow):",
+      body.authorRequest.trim(),
+      "",
+    );
+  }
+  lines.push("Write the outcome line.");
+  const userText = lines.join("\n");
 
   try {
     const parsed = await chat({
