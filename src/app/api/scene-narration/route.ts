@@ -73,6 +73,13 @@ RULES:
 - Output JSON only matching the schema.`;
 
 export async function POST(req: Request) {
+  // Admin-only authoring helper — never exposed in production, so a public
+  // deployment with an LLM key can't be used to burn provider quota. Mirrors
+  // the `ensureDev` gate on the admin save actions.
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "disabled_in_production" }, { status: 403 });
+  }
+
   let body;
   try {
     body = RequestSchema.parse(await req.json());

@@ -202,7 +202,9 @@ function makePattern(cfg: PatternGenT): Puzzle {
 function makeOddOut(cfg: OddOutGenT): Puzzle {
   const odd = randInt(1, cfg.max) * 2 + 1;
   const evens: number[] = [];
-  while (evens.length < 3) {
+  // Bounded: a too-small `max` can't yield 3 distinct evens — cap the tries
+  // so an invalid generator config degrades to fewer choices, never hangs.
+  for (let tries = 0; evens.length < 3 && tries < 200; tries++) {
     const e = randInt(1, cfg.max) * 2;
     if (!evens.includes(e) && e !== odd) evens.push(e);
   }
@@ -217,11 +219,16 @@ function makeOddOut(cfg: OddOutGenT): Puzzle {
 
 function makeBigger(cfg: BiggerGenT): Puzzle {
   const a = randInt(cfg.min, cfg.max);
+  // Bounded loops: a degenerate range (e.g. min === max, or fewer than 4
+  // distinct values) would otherwise spin forever. Cap the tries so an
+  // invalid generator config degrades gracefully instead of hanging.
   let b = a;
-  while (b === a) b = randInt(cfg.min, cfg.max);
+  for (let tries = 0; b === a && tries < 200; tries++) {
+    b = randInt(cfg.min, cfg.max);
+  }
   const bigger = Math.max(a, b);
   const distractors: number[] = [];
-  while (distractors.length < 2) {
+  for (let tries = 0; distractors.length < 2 && tries < 200; tries++) {
     const d = randInt(cfg.min, cfg.max);
     if (d !== a && d !== b && !distractors.includes(d)) distractors.push(d);
   }
@@ -255,7 +262,9 @@ function numericPuzzle(
   // Small offsets are always available; the spread parameter controls how
   // far the wildest distractor can drift.
   const offsets = [-spread, -2, -1, 1, 2, spread];
-  while (distractors.size < 3) {
+  // Bounded: when the answer is near 0 with a small spread, fewer than 3
+  // non-negative distinct offsets exist — cap the tries so we never hang.
+  for (let tries = 0; distractors.size < 3 && tries < 200; tries++) {
     const off = pick(offsets)!;
     const d = answer + off;
     if (d !== answer && d >= 0) distractors.add(d);
