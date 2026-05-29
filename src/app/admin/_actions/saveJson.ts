@@ -126,14 +126,17 @@ export async function saveCharactersAction(
   }
 }
 
+/**
+ * Medals are a GLOBAL achievement catalog — written to
+ * src/data/global/medals.json, no storyId.
+ */
 export async function saveMedalsAction(
-  storyId: string,
   payload: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   ensureDev();
   try {
-    await writeJson(MedalsFileSchema, storyPath(storyId, "medals.json"), payload);
-    revalidatePath(`/admin/stories/${storyId}/medals`);
+    await writeJson(MedalsFileSchema, globalPath("medals.json"), payload);
+    revalidatePath(`/admin/medals`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };

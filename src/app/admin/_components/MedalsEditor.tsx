@@ -45,20 +45,26 @@ const TRIGGER_TYPE_LABEL: Record<TriggerType, string> = {
   dialogue_count: "Dialogue count",
 };
 
-/** Default-shaped trigger when switching the type dropdown. */
-function defaultTrigger(type: TriggerType): MedalTrigger {
+/** Default-shaped trigger when switching the type dropdown. Story-specific
+ *  types carry the given storyId; dialogue_count is story-agnostic. */
+function defaultTrigger(type: TriggerType, storyId: string): MedalTrigger {
   switch (type) {
     case "branch":
-      return { type: "branch", branchId: "" };
+      return { type: "branch", storyId, branchId: "" };
     case "scene":
-      return { type: "scene", sceneId: "" };
+      return { type: "scene", storyId, sceneId: "" };
     case "ending":
-      return { type: "ending", endingId: "" };
+      return { type: "ending", storyId, endingId: "" };
     case "encounter":
-      return { type: "encounter", encounterId: "" };
+      return { type: "encounter", storyId, encounterId: "" };
     case "dialogue_count":
       return { type: "dialogue_count", min: 1 };
   }
+}
+
+/** storyId of a story-specific trigger, or null for dialogue_count. */
+function triggerStoryId(t: MedalTrigger): string | null {
+  return t.type === "dialogue_count" ? null : t.storyId;
 }
 
 /** The single editable value carried by each trigger type, as a string. */
@@ -80,13 +86,13 @@ function triggerValue(t: MedalTrigger): string {
 function setTriggerValue(t: MedalTrigger, v: string): MedalTrigger {
   switch (t.type) {
     case "branch":
-      return { type: "branch", branchId: v };
+      return { type: "branch", storyId: t.storyId, branchId: v };
     case "scene":
-      return { type: "scene", sceneId: v };
+      return { type: "scene", storyId: t.storyId, sceneId: v };
     case "ending":
-      return { type: "ending", endingId: v };
+      return { type: "ending", storyId: t.storyId, endingId: v };
     case "encounter":
-      return { type: "encounter", encounterId: v };
+      return { type: "encounter", storyId: t.storyId, encounterId: v };
     case "dialogue_count":
       // Clamp to ≥1 — a min of 0 would make the medal trigger immediately
       // (always earned). Empty/invalid input falls back to 1.
@@ -97,31 +103,48 @@ function setTriggerValue(t: MedalTrigger, v: string): MedalTrigger {
   }
 }
 
+/** Set the storyId of a story-specific trigger (no-op for dialogue_count). */
+function setTriggerStory(t: MedalTrigger, storyId: string): MedalTrigger {
+  switch (t.type) {
+    case "branch":
+      return { ...t, storyId };
+    case "scene":
+      return { ...t, storyId };
+    case "ending":
+      return { ...t, storyId };
+    case "encounter":
+      return { ...t, storyId };
+    case "dialogue_count":
+      return t;
+  }
+}
+
 /** Human-readable one-liner for the table column. */
 function describeTrigger(t: MedalTrigger): string {
   switch (t.type) {
     case "branch":
-      return `branch: ${t.branchId}`;
+      return `branch: ${t.branchId} · ${t.storyId}`;
     case "scene":
-      return `scene: ${t.sceneId}`;
+      return `scene: ${t.sceneId} · ${t.storyId}`;
     case "dialogue_count":
       return `dialogue ≥ ${t.min}`;
     case "ending":
-      return `ending: ${t.endingId}`;
+      return `ending: ${t.endingId} · ${t.storyId}`;
     case "encounter":
-      return `encounter: ${t.encounterId}`;
+      return `encounter: ${t.encounterId} · ${t.storyId}`;
   }
 }
 
 interface Props {
-  storyId: string;
-  storyTitle?: string;
   initial: MedalT[];
+  /** All stories, for the trigger's story picker. First is the default. */
+  stories: { id: string; title: string }[];
 }
 
-export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
+export function MedalsEditor({ initial, stories }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
+  const firstStoryId = stories[0]?.id ?? "";
   const [medals, setMedals] = useState<MedalT[]>(initial);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +177,7 @@ export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
       ids.add(m.id);
     }
     startTransition(async () => {
-      const res = await saveMedalsAction(storyId, payload);
+      const res = await saveMedalsAction(payload);
       if (!res.ok) setError(res.error);
       else router.refresh();
     });
@@ -166,7 +189,7 @@ export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
       name: "New Medal",
       icon: "🏅",
       description: "",
-      trigger: { type: "scene", sceneId: "" },
+      trigger: { type: "scene", storyId: firstStoryId, sceneId: "" },
     };
     setMedals((prev) => [...prev, placeholder]);
     setSelectedIdx(medals.length);
@@ -196,11 +219,8 @@ export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p
-            className="font-handwritten text-base text-accent-deep"
-            title={storyId}
-          >
-            {storyTitle ?? storyId} / Medals
+          <p className="font-handwritten text-base text-accent-deep">
+            Medals
           </p>
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
             {medals.length}
@@ -299,6 +319,8 @@ export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
           <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-ink-soft/10 bg-paper p-4">
             <MedalForm
               medal={selected}
+              stories={stories}
+              firstStoryId={firstStoryId}
               onChange={updateSelected}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
@@ -312,11 +334,15 @@ export function MedalsEditor({ storyId, storyTitle, initial }: Props) {
 
 function MedalForm({
   medal,
+  stories,
+  firstStoryId,
   onChange,
   onDelete,
   onClose,
 }: {
   medal: MedalT;
+  stories: { id: string; title: string }[];
+  firstStoryId: string;
   onChange: (mut: (m: MedalT) => MedalT) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -372,7 +398,10 @@ function MedalForm({
           onChange={(e) =>
             onChange((m) => ({
               ...m,
-              trigger: defaultTrigger(e.target.value as TriggerType),
+              trigger: defaultTrigger(
+                e.target.value as TriggerType,
+                triggerStoryId(m.trigger) ?? firstStoryId,
+              ),
             }))
           }
         >
@@ -383,6 +412,34 @@ function MedalForm({
           ))}
         </StyledSelect>
       </Field>
+
+      {/* Story picker — story-specific triggers only fire while playing the
+          chosen story. dialogue_count is story-agnostic, so it's hidden. */}
+      {trigger.type !== "dialogue_count" && (
+        <Field label="Story" hint="Which story this trigger fires in">
+          <StyledSelect
+            value={trigger.storyId}
+            onChange={(e) =>
+              onChange((m) => ({
+                ...m,
+                trigger: setTriggerStory(m.trigger, e.target.value),
+              }))
+            }
+          >
+            {!stories.some((s) => s.id === trigger.storyId) && (
+              <option value={trigger.storyId}>
+                {trigger.storyId || "(none)"} (unknown)
+              </option>
+            )}
+            {stories.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </StyledSelect>
+        </Field>
+      )}
+
       <Field label={TRIGGER_LABEL[trigger.type]}>
         <input
           type={trigger.type === "dialogue_count" ? "number" : "text"}

@@ -1,25 +1,15 @@
-import type {
-  CharactersFile,
-  MedalsFile,
-  Story,
-} from "@/types/story";
+import type { CharactersFile, Story } from "@/types/story";
 
-import {
-  wizardOfOz,
-  wizardOfOzCharacters,
-  wizardOfOzMedals,
-} from "@/stories/wizard-of-oz";
+import { wizardOfOz, wizardOfOzCharacters } from "@/stories/wizard-of-oz";
 
 export interface LoadedStory {
   story: Story;
-  medals: MedalsFile;
   characters: CharactersFile;
 }
 
 const REGISTRY: Record<string, LoadedStory> = {
   "wizard-of-oz": {
     story: wizardOfOz,
-    medals: wizardOfOzMedals,
     characters: wizardOfOzCharacters,
   },
 };

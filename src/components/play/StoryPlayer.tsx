@@ -26,6 +26,7 @@ import {
 } from "@/lib/story-engine";
 import { PatternPuzzle } from "../encounter/PatternPuzzle";
 import { loadState, saveState, clearState } from "@/lib/storage";
+import { recordEarnedAchievements } from "@/lib/achievements";
 import { formatNarration } from "@/lib/narrative";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
@@ -328,6 +329,15 @@ export function StoryPlayer({
     // and re-opening the modal always starts fresh at the chosen scene.
     if (hydrated && !previewMode) saveState(state, slot);
   }, [state, hydrated, slot, previewMode]);
+
+  // Mirror earned medals into the GLOBAL achievement record (cross-story,
+  // separate localStorage key). Medals are achievements, not per-story
+  // progress — `recordEarnedAchievements` is an idempotent union, so this
+  // also seeds the global store from an existing per-story save on mount.
+  // Preview mode stays ephemeral.
+  useEffect(() => {
+    if (hydrated && !previewMode) recordEarnedAchievements(state.earnedMedals);
+  }, [state.earnedMedals, hydrated, previewMode]);
 
   // Surface every state change to the parent (Demo uses this to push undo
   // snapshots). Skip the initial render — only mutations matter.

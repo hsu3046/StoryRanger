@@ -102,13 +102,14 @@ export interface Story {
  * - "ending": fires when an ending scene is reached.
  */
 export type MedalTrigger =
-  | { type: "branch"; branchId: string }
-  | { type: "scene"; sceneId: string }
-  | { type: "ending"; endingId: string }
+  | { type: "branch"; storyId: string; branchId: string }
+  | { type: "scene"; storyId: string; sceneId: string }
+  | { type: "ending"; storyId: string; endingId: string }
   /** Awarded directly via an encounter's `rewards.medalId`. Never auto-fires
    *  through `checkNewMedals` — the encounter result pushes the id itself. */
-  | { type: "encounter"; encounterId: string }
-  /** Awarded after N companion dialogues completed (replaces free_input). */
+  | { type: "encounter"; storyId: string; encounterId: string }
+  /** Awarded after N companion dialogues completed (replaces free_input).
+   *  Story-agnostic — no storyId, fires in any story. */
   | { type: "dialogue_count"; min: number };
 
 export interface Medal {

@@ -47,7 +47,6 @@ function storyMenu(storyId: string): MenuEntry[] {
     { label: "Monsters", href: `/admin/stories/${storyId}/monsters`, icon: Ghost },
     { label: "Backgrounds", href: `/admin/stories/${storyId}/backgrounds`, icon: ImageIcon },
     { label: "Encounters", href: `/admin/stories/${storyId}/encounters`, icon: Sword },
-    { label: "Medals", href: `/admin/stories/${storyId}/medals`, icon: Medal },
     { label: "Items", href: `/admin/stories/${storyId}/items`, icon: Package },
   ];
 }
@@ -148,6 +147,7 @@ export function AdminSidebar({ stories }: Props) {
           label="Puzzles & Quizzes"
           icon={PuzzlePiece}
         />
+        <SidebarLink href="/admin/medals" label="Medals" icon={Medal} />
       </div>
 
       {stories.map((s) => {

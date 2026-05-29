@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getStory } from "@/lib/stories";
+import { MEDALS } from "@/data/medals";
 import { StoryPlayer } from "@/components/play/StoryPlayer";
 
 interface Props {
@@ -13,7 +14,7 @@ export default async function PlayPage({ params }: Props) {
   return (
     <StoryPlayer
       story={loaded.story}
-      medals={loaded.medals}
+      medals={MEDALS}
       characters={loaded.characters}
     />
   );

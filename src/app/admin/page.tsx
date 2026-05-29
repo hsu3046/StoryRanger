@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { contentRepo } from "@/lib/content-repo";
+import { listMedals } from "@/data/medals";
 
 export default function AdminDashboard() {
   const repo = contentRepo();
@@ -27,7 +28,8 @@ export default function AdminDashboard() {
             const monsters = repo.listMonsters(sid).length;
             const items = repo.listItems(sid).length;
             const encounters = repo.listEncounters(sid).length;
-            const medals = repo.getStory(sid)?.medals.medals.length ?? 0;
+            // Medals are global now — same catalog count for every story.
+            const medals = listMedals().length;
             const characters =
               repo.getStory(sid)?.characters.characters.length ?? 0;
             const backgrounds = repo.listBackgrounds(sid).length;
