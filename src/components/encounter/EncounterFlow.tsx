@@ -18,6 +18,7 @@ import { formatNarration } from "@/lib/narrative";
 
 import { BattleScreen } from "../battle/BattleScreen";
 import { MONSTERS } from "@/data/monsters";
+import { getMedal } from "@/data/medals";
 
 export interface EncounterResult {
   encounterId: string;
@@ -135,6 +136,11 @@ export function EncounterFlow({
           encounter.outro.victory
             ? formatNarration(encounter.outro.victory, hero)
             : undefined
+        }
+        victoryMedal={
+          encounter.rewards.medalId
+            ? getMedal(encounter.rewards.medalId)
+            : null
         }
         setup={{
           bg: encounter.intro.bg,

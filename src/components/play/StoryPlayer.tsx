@@ -42,6 +42,7 @@ import { CharacterSpeechBox } from "./CharacterSpeechBox";
 import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
 import { SettingsModal } from "./SettingsModal";
 import { MedalToast } from "../medals/MedalToast";
+import { ItemToast } from "./ItemToast";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
 import { NarrationAudio } from "../audio/NarrationAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
@@ -125,6 +126,16 @@ export function StoryPlayer({
     return fresh;
   });
   const [medalQueue, setMedalQueue] = useState<Medal[]>([]);
+  // Items received on the most recent scene entry — shown as a toast (below
+  // the medal toast) once the destination scene is reached.
+  const [itemToast, setItemToast] = useState<string[] | null>(null);
+  // Scene reward staged at branch-pick, displayed only on arrival at the
+  // destination scene (after any outcome page / encounters).
+  const [pendingSceneReward, setPendingSceneReward] = useState<{
+    sceneId: string;
+    items: string[];
+    medalId?: string;
+  } | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [muted, setMuted] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
@@ -422,39 +433,35 @@ export function StoryPlayer({
     const prevSceneId = state.currentSceneId;
 
     const result = takeBranch(state, branch, story, medals, opts);
-    // Medals to celebrate on entry: trigger-based ones (checkNewMedals) PLUS a
-    // medal granted by the entered scene's `reward.medalId` (set in the graph
-    // editor) — the latter is applied to earnedMedals but otherwise wouldn't
-    // pop a toast. Dedupe against the trigger list + already-earned.
-    const queuedMedals: Medal[] = [...result.earnedMedals];
-    const rewardMedalId = result.sceneReward?.medalId;
-    if (
-      rewardMedalId &&
-      !state.earnedMedals.includes(rewardMedalId) &&
-      !queuedMedals.some((m) => m.id === rewardMedalId)
-    ) {
-      const m = medals.medals.find((med) => med.id === rewardMedalId);
-      if (m) queuedMedals.push(m);
-    }
-    if (queuedMedals.length > 0) {
-      setMedalQueue((q) => [...q, ...queuedMedals]);
+    // Trigger-based medals (checkNewMedals) announce immediately. The entered
+    // scene's `reward` (items + reward.medalId) is instead DEFERRED — it shows
+    // as toasts only once the player lands on the destination scene (see the
+    // scene-reward arrival effect), never on the bridge page.
+    if (result.earnedMedals.length > 0) {
+      setMedalQueue((q) => [...q, ...result.earnedMedals]);
       audio.playSfx(SFX.MEDAL);
     }
+    const sr = result.sceneReward;
+    if (sr && ((sr.items?.length ?? 0) > 0 || sr.medalId)) {
+      setPendingSceneReward({
+        sceneId: branch.next,
+        items: sr.items ?? [],
+        medalId: sr.medalId,
+      });
+    }
 
-    // Outcome path: pause on the outgoing scene art with the branch
-    // outcome text + reward chips. Engine state already advanced; the
-    // outcome interaction holds the UI until Continue is tapped.
+    // Outcome path: pause on the outgoing scene art with the branch outcome
+    // text only. Rewards are NOT shown here — they surface as toasts on the
+    // destination scene.
     if (branch.outcome && !opts.skipReward) {
-      const newItems = result.sceneReward?.items ?? [];
-      const medalId = result.sceneReward?.medalId;
       setState({
         ...result.state,
         interaction: {
           kind: "outcome",
           sourceSceneId: prevSceneId,
           branchId: branch.id,
-          items: newItems,
-          medalId: medalId ?? undefined,
+          items: [],
+          medalId: undefined,
         },
         updatedAt: new Date().toISOString(),
       });
@@ -611,18 +618,17 @@ export function StoryPlayer({
       };
     });
 
-    if (res.medalId) {
-      // Look up medal in catalog so the toast UI can show it
-      const m = medals.medals.find((x) => x.id === res.medalId);
-      if (m) setMedalQueue((q) => [...q, m]);
-      getAudio().playSfx(SFX.MEDAL);
-    }
+    // The medal is shown on the battle victory panel itself (TerminalPanel),
+    // not as a post-Continue toast — so we only fold it into earnedMedals
+    // above and don't re-announce it here.
   }
 
   function handleReset() {
     clearState(story.id, slot);
     setState(newPlayState(story));
     setMedalQueue([]);
+    setItemToast(null);
+    setPendingSceneReward(null);
   }
 
   // Demo "skip battles" auto-resolve. When a battle would mount and
@@ -697,6 +703,28 @@ export function StoryPlayer({
   // PlayState has already advanced to the next scene; we look the prior
   // scene up by id from interaction (works even on refresh-resume).
   const showingOutcome = !!pendingOutcome;
+
+  // Scene reward arrival — fire the medal + item toasts only once the player
+  // has actually LANDED on the rewarded scene (outcome bridge dismissed, no
+  // encounter overlay). Clearing `pendingSceneReward` stops it re-firing.
+  useEffect(() => {
+    const r = pendingSceneReward;
+    if (!r || r.sceneId !== state.currentSceneId) return;
+    if (showingOutcome || pendingEncounter) return;
+    // Announce the reward once on arrival; `setPendingSceneReward(null)` below
+    // clears the trigger so these can't cascade.
+    if (r.medalId) {
+      const m = medals.medals.find((x) => x.id === r.medalId);
+      if (m) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot reward announce
+        setMedalQueue((q) => [...q, m]);
+        getAudio().playSfx(SFX.MEDAL);
+      }
+    }
+    if (r.items.length > 0) setItemToast(r.items);
+    setPendingSceneReward(null);
+  }, [pendingSceneReward, state.currentSceneId, showingOutcome, pendingEncounter, medals]);
+
   const outcomePrevScene = pendingOutcome
     ? story.scenes[pendingOutcome.sourceSceneId]
     : null;
@@ -996,6 +1024,7 @@ export function StoryPlayer({
         medal={medalQueue[0] ?? null}
         onDismiss={() => setMedalQueue((q) => q.slice(1))}
       />
+      <ItemToast items={itemToast} onDismiss={() => setItemToast(null)} />
 
       {/* In-scene dialogue — left-edge portrait rail. Suppressed while
           a battle encounter is active so the rail doesn't sit on top of

@@ -36,6 +36,7 @@ import { DamageNumber, type FloatingEffect } from "./DamageNumber";
 import type {
   Character,
   CompanionId,
+  Medal,
   PartyHp,
   SpeakerId,
 } from "@/types/story";
@@ -75,6 +76,9 @@ interface Props {
   /** Authored victory line (encounter.outro.victory, already templated).
    *  Shown on the victory panel; falls back to a default when empty. */
   victoryNarration?: string;
+  /** Medal awarded for winning this encounter — shown on the victory panel
+   *  (a separate row above the loot), so items + medal sit on one screen. */
+  victoryMedal?: Medal | null;
 }
 
 const HERO_POSITIONS: Record<number, StagePosition[]> = {
@@ -96,6 +100,7 @@ export function BattleScreen({
   onOpenSettings,
   inventory = [],
   victoryNarration,
+  victoryMedal,
 }: Props) {
   const [state, setState] = useState<BattleState>(
     () => initialState ?? setupBattle(setup),
@@ -522,6 +527,7 @@ export function BattleScreen({
                   : "escaped"
             }
             victoryNarration={victoryNarration}
+            victoryMedal={victoryMedal}
             rewards={state.rewards}
             onContinue={() =>
               onComplete({
@@ -822,11 +828,13 @@ function BattleActionButton({
 function TerminalPanel({
   outcome,
   victoryNarration,
+  victoryMedal,
   rewards,
   onContinue,
 }: {
   outcome: "victory" | "defeat" | "escaped";
   victoryNarration?: string;
+  victoryMedal?: Medal | null;
   rewards: string[];
   onContinue: () => void;
 }) {
@@ -849,6 +857,22 @@ function TerminalPanel({
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 rounded-card-lg bg-paper/55 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur">
       <p className="font-handwritten text-3xl text-accent-deep">{title}</p>
       <p className="text-base text-ink-soft">{subtitle}</p>
+      {/* Medal — its own row above the loot so the two never overlap. */}
+      {outcome === "victory" && victoryMedal && (
+        <div className="flex items-center gap-2 rounded-pill bg-amber-300/40 px-3 py-1.5 ring-1 ring-amber-700/30">
+          <span className="text-2xl leading-none" aria-hidden>
+            {victoryMedal.icon}
+          </span>
+          <span className="flex flex-col items-start text-left leading-tight">
+            <span className="font-handwritten text-xs text-amber-900">
+              New medal!
+            </span>
+            <span className="text-sm font-semibold text-amber-900">
+              {victoryMedal.name}
+            </span>
+          </span>
+        </div>
+      )}
       {rewards.length > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-1.5">
           <span className="text-sm text-ink-soft">Loot:</span>
