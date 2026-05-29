@@ -1166,10 +1166,14 @@ function SceneInspector({
           value={scene.speaker}
           // Derived from the character catalog (+ the narrator) so each story
           // offers its own cast; SelectWithCustom still surfaces any unknown
-          // stored value as a "(custom)" entry.
+          // stored value as a "(custom)" entry. Narrator is prepended once even
+          // when the catalog also defines a "narrator" character (avoid a
+          // duplicate option key).
           options={[
             { value: "narrator", label: "narrator" },
-            ...characters.map((c) => ({ value: c.id, label: c.name })),
+            ...characters
+              .filter((c) => c.id !== "narrator")
+              .map((c) => ({ value: c.id, label: c.name })),
           ]}
           onChange={(v) =>
             onChange((s) => ({
