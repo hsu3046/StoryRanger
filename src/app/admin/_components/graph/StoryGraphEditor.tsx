@@ -1057,6 +1057,7 @@ function SceneInspector({
    *  to click on in the graph). */
   onDeleteBranch: (branchId: string) => void;
 }) {
+  const confirm = useConfirm();
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between gap-2">
@@ -1196,14 +1197,27 @@ function SceneInspector({
           <input
             type="checkbox"
             checked={!!scene.ending}
-            onChange={(e) =>
+            onChange={async (e) => {
+              const checked = e.target.checked;
+              // Marking a scene as an ending stops the story here — gate it
+              // behind the same custom confirm modal as deletes. Unchecking
+              // needs no warning.
+              if (checked) {
+                const ok = await confirm({
+                  title: "Mark as ending?",
+                  message:
+                    "This makes the scene a terminal ending — the story stops here and its branches won't be reachable in play. Mark it as an ending?",
+                  confirmLabel: "Mark as ending",
+                });
+                if (!ok) return;
+              }
               onChange((s) => ({
                 ...s,
-                ending: e.target.checked
-                  ? scene.ending ?? { id: sceneId, label: "" }
+                ending: checked
+                  ? s.ending ?? { id: sceneId, label: "" }
                   : undefined,
-              }))
-            }
+              }));
+            }}
           />
           <span className="text-sm text-ink-soft">Terminal scene</span>
         </label>
