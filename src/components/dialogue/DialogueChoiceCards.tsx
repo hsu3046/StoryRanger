@@ -7,6 +7,7 @@ import {
   PaperPlaneTilt,
   PencilSimple,
 } from "@phosphor-icons/react";
+import { choiceButtonClass } from "../play/ChoiceButton";
 
 interface Props {
   /** 3 short suggested replies from the LLM. */
@@ -125,9 +126,9 @@ export function DialogueChoiceCards({
                 type="button"
                 disabled={loading}
                 onClick={() => onSend(s)}
-                className="min-h-14 rounded-pill bg-paper/90 px-4 text-base font-medium text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur transition-all hover:bg-paper hover:-translate-y-0.5 hover:shadow-button-hover active:scale-[0.98] disabled:opacity-50"
+                className={choiceButtonClass}
               >
-                {s}
+                <span>{s}</span>
               </button>
             ))}
           </div>

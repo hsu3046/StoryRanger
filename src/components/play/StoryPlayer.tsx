@@ -35,7 +35,7 @@ import { Backpack, GearSix } from "@phosphor-icons/react";
 
 import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
-import { ChoiceButton } from "./ChoiceButton";
+import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
 import { SettingsModal } from "./SettingsModal";
 import { MedalToast } from "../medals/MedalToast";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
@@ -1086,11 +1086,7 @@ function AskChip({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="group relative flex h-20 w-full items-center justify-center rounded-pill bg-paper/60 px-6 text-center text-lg font-semibold leading-tight text-balance text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 hover:shadow-button-hover hover:-translate-y-0.5 hover:-translate-x-px hover:ring-accent/50 active:translate-y-0 active:translate-x-0 active:scale-[0.98] active:shadow-button-pressed"
-    >
+    <button type="button" onClick={onSelect} className={choiceButtonClass}>
       <span>{label}</span>
     </button>
   );
