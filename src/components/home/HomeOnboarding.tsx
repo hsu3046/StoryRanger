@@ -150,7 +150,7 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
                     Continue
                   </span>
                   <span className="text-base font-medium">
-                    as {saved.hero?.name ?? "Dorothy"}
+                    as {saved.hero?.name ?? "Hero"}
                   </span>
                 </span>
                 <span className="font-handwritten text-2xl text-accent-deep/70 transition-transform group-hover:translate-x-0.5">

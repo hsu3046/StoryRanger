@@ -55,8 +55,12 @@ export function formatNarration(text: string, hero: Hero): string {
   });
 }
 
+/** Fallback hero used whenever a play session starts WITHOUT the onboarding
+ *  name step (admin scene preview, direct /play load, reset, or a save missing
+ *  its hero). The name is a neutral "Hero" rather than a story-specific name so
+ *  it never leaks into narration/dialogue as if it were the real protagonist. */
 export const DEFAULT_HERO: Hero = {
-  name: "Dorothy",
+  name: "Hero",
   gender: "girl",
 };
 
