@@ -50,6 +50,9 @@ interface Props {
     id: SpeakerId | CompanionId,
     mode?: "default" | "battle",
   ) => string;
+  /** The story's protagonist id — maps the battle "hero" attacker to its
+   *  speaker/sprite/name. */
+  heroId: SpeakerId;
   /** Character roster — forwarded to BattleScreen for sprite sizing. */
   characters: readonly Character[];
   /** Player inventory — forwarded to BattleScreen's in-battle item row. */
@@ -88,6 +91,7 @@ export function EncounterFlow({
   partyMaxHp,
   fallenAttackers,
   characterImageBase,
+  heroId,
   characters,
   inventory,
   initialBattleState,
@@ -128,6 +132,7 @@ export function EncounterFlow({
       <BattleScreen
         storyId={storyId}
         characterImageBase={(id) => characterImageBase(id, "battle")}
+        heroId={heroId}
         characters={characters}
         onOpenSettings={onOpenSettings}
         inventory={inventory}

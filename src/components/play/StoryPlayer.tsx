@@ -27,7 +27,11 @@ import {
 import { PatternPuzzle } from "../encounter/PatternPuzzle";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
-import { formatNarration } from "@/lib/narrative";
+import {
+  characterAssetSlug,
+  formatNarration,
+  resolveHeroId,
+} from "@/lib/narrative";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
 
@@ -61,9 +65,10 @@ const HERO_MEMORY_CAP = 30;
 function characterImagePath(
   storyId: string,
   id: SpeakerId | CompanionId,
+  heroId: SpeakerId,
   mode: "default" | "battle" = "default",
 ): string {
-  const filename = id === "dorothy" ? "hero" : id;
+  const filename = characterAssetSlug(id, heroId);
   const folder = mode === "battle" ? "characters/battle" : "characters";
   return `/stories/${storyId}/${folder}/${filename}`;
 }
@@ -77,9 +82,9 @@ function characterImagePath(
 function dialoguePortraitPath(
   storyId: string,
   id: SpeakerId | CompanionId,
+  heroId: SpeakerId,
 ): string {
-  const filename = id === "dorothy" ? "hero" : id;
-  return `/stories/${storyId}/dialogue/${filename}`;
+  return `/stories/${storyId}/dialogue/${characterAssetSlug(id, heroId)}`;
 }
 
 interface Props {
@@ -368,6 +373,7 @@ export function StoryPlayer({
   }, []);
 
   const currentScene: Scene = story.scenes[state.currentSceneId];
+  const heroId = useMemo(() => resolveHeroId(characters), [characters]);
   const characterMap = useMemo(() => {
     const map: Record<string, (typeof characters.characters)[number]> = {};
     for (const c of characters.characters) map[c.id] = c;
@@ -693,10 +699,11 @@ export function StoryPlayer({
     ? `outcome:${pendingOutcome.branch.id}`
     : state.currentSceneId;
 
-  // If the speaker is the hero (dorothy), swap in the player's chosen name.
+  // If the speaker is the hero, swap in the player's chosen name (the hero's
+  // catalogued name is only a default).
   const baseSpeaker = characterMap[displayedSpeakerId] ?? speaker;
   const displayedSpeaker =
-    displayedSpeakerId === "dorothy" && baseSpeaker
+    displayedSpeakerId === heroId && baseSpeaker
       ? { ...baseSpeaker, name: state.hero.name }
       : baseSpeaker;
 
@@ -986,7 +993,7 @@ export function StoryPlayer({
           extraDialogueCharacters={currentScene.dialogueCharacters ?? []}
           characters={characters}
           portraitBase={(id) =>
-            dialoguePortraitPath(story.id, id as SpeakerId | CompanionId)
+            dialoguePortraitPath(story.id, id as SpeakerId | CompanionId, heroId)
           }
           mood={(id) => state.companionMoods?.[id as CompanionId] ?? 5}
           hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
@@ -1034,8 +1041,9 @@ export function StoryPlayer({
                 const ch = characters.characters.find((c) => c.id === id);
                 if (ch?.image) return ch.image;
               }
-              return characterImagePath(story.id, id, mode);
+              return characterImagePath(story.id, id, heroId, mode);
             }}
+            heroId={heroId}
             characters={characters.characters}
             inventory={state.inventory ?? []}
             initialBattleState={persistedBattleState}

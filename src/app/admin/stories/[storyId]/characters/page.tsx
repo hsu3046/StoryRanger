@@ -5,13 +5,9 @@ import { promises as fs } from "node:fs";
 import { contentRepo } from "@/lib/content-repo";
 import { CharactersEditor } from "@/app/admin/_components/CharactersEditor";
 import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
+import { characterAssetSlug } from "@/lib/narrative";
 
 const IMAGE_EXTS = new Set([".webp", ".png", ".jpeg", ".jpg"]);
-
-function characterImageBase(storyId: string, charId: string): string {
-  const filename = charId === "dorothy" ? "hero" : charId;
-  return `/stories/${storyId}/characters/${filename}`;
-}
 
 /** Scan /public/stories/<id>/characters/ for image stems so the editor
  *  can offer them as override options. Mirrors the Scene image picker
@@ -53,9 +49,12 @@ export default async function CharactersPage({
   // Server-side pre-resolve each portrait so the browser never flickers
   // through onError fallback. `null` → no file on disk; render placeholder
   // immediately.
+  const heroId = characters.find((c) => c.isHero)?.id ?? "dorothy";
   const assetMap: Record<string, string | null> = {};
   for (const c of characters) {
-    const base = c.image ?? characterImageBase(storyId, c.id);
+    const base =
+      c.image ??
+      `/stories/${storyId}/characters/${characterAssetSlug(c.id, heroId)}`;
     assetMap[c.id] = resolveAssetPath(base);
   }
 

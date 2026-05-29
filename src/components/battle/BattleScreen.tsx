@@ -44,6 +44,9 @@ interface Props {
   setup: SetupArgs;
   storyId: string;
   characterImageBase: (id: SpeakerId | CompanionId) => string;
+  /** The story's protagonist id — the battle "hero" attacker maps to this
+   *  speaker for its sprite / name (was hardcoded "dorothy"). */
+  heroId: SpeakerId;
   /** Character roster — used for per-character sprite sizing (Toto small,
    *  Lion large, etc.). Passed in rather than imported from a specific
    *  story file so the battle component stays story-agnostic. */
@@ -82,6 +85,7 @@ export function BattleScreen({
   setup,
   storyId,
   characterImageBase,
+  heroId,
   characters,
   initialState,
   onStateChange,
@@ -308,8 +312,8 @@ export function BattleScreen({
   }, [lastLog?.text, lastLog?.tone, lastLog]);
 
   const heroPartyIds: (SpeakerId | CompanionId)[] = useMemo(
-    () => ["dorothy", ...state.companions],
-    [state.companions],
+    () => [heroId, ...state.companions],
+    [heroId, state.companions],
   );
 
   // Reorder so the active attacker takes the frontline slot (rightmost in
@@ -317,7 +321,7 @@ export function BattleScreen({
   // Active attacker also gets the top zIndex so they read as "in front".
   const partyOrder = useMemo(() => {
     const map: Record<AttackerId, SpeakerId | CompanionId> = {
-      hero: "dorothy",
+      hero: heroId,
       scarecrow: "scarecrow",
       tinman: "tinman",
       lion: "lion",
@@ -326,20 +330,20 @@ export function BattleScreen({
     if (!activeId || !heroPartyIds.includes(activeId)) return heroPartyIds;
     const rest = heroPartyIds.filter((id) => id !== activeId);
     return [...rest, activeId];
-  }, [heroPartyIds, state.activeAttacker]);
+  }, [heroPartyIds, heroId, state.activeAttacker]);
 
   const activeHeroSlot: SpeakerId | CompanionId =
-    state.activeAttacker === "hero" ? "dorothy" : state.activeAttacker;
+    state.activeAttacker === "hero" ? heroId : state.activeAttacker;
   const attackingLayerId: SpeakerId | CompanionId | null =
     attackingAttacker === null
       ? null
       : attackingAttacker === "hero"
-        ? "dorothy"
+        ? heroId
         : attackingAttacker;
   // Fallen party members render dimmed + grayscale just like defeated
   // monsters — the kid sees who is down at a glance.
   const fallenLayerIds = new Set<SpeakerId | CompanionId>(
-    state.fallenAttackers.map((a) => (a === "hero" ? "dorothy" : a)),
+    state.fallenAttackers.map((a) => (a === "hero" ? heroId : a)),
   );
   const heroLayers = partyOrder.map((id, i, arr) => ({
     id,
@@ -437,6 +441,7 @@ export function BattleScreen({
           party={["hero", ...state.companions]}
           active={state.activeAttacker}
           characterImageBase={characterImageBase}
+          heroId={heroId}
           canSwap={state.phase === "hero-choose"}
           canAct={(a) => canAttackerAct(a, state)}
           partyLives={state.partyLives}
@@ -584,6 +589,7 @@ function PartyHpRow({
   party,
   active,
   characterImageBase,
+  heroId,
   canSwap,
   canAct,
   partyLives,
@@ -594,6 +600,7 @@ function PartyHpRow({
   party: AttackerId[];
   active: AttackerId;
   characterImageBase: (id: SpeakerId | CompanionId) => string;
+  heroId: SpeakerId;
   canSwap: boolean;
   canAct: (id: AttackerId) => boolean;
   partyLives: Record<AttackerId, number>;
@@ -618,7 +625,7 @@ function PartyHpRow({
           const selected = id === active;
           const clickable = canSwap && !fallen && canAct(id) && !selected;
           const imageBase =
-            id === "hero" ? characterImageBase("dorothy") : characterImageBase(id);
+            id === "hero" ? characterImageBase(heroId) : characterImageBase(id);
           const hp = partyLives[id] ?? 0;
           const maxHp = partyMaxLives[id] ?? 3;
           return (

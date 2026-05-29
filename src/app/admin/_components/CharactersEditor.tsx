@@ -31,9 +31,14 @@ const VOICES = [
 
 type Voice = (typeof VOICES)[number];
 
-function characterImageBase(storyId: string, charId: string): string {
-  // Hero portrait lives at `hero.*` regardless of speaker id "dorothy".
-  const filename = charId === "dorothy" ? "hero" : charId;
+function characterImageBase(
+  storyId: string,
+  charId: string,
+  heroId: string,
+): string {
+  // The hero's portrait lives at `hero.*` (generic-protagonist art),
+  // regardless of which character id is flagged the hero.
+  const filename = charId === heroId ? "hero" : charId;
   return `/stories/${storyId}/characters/${filename}`;
 }
 
@@ -79,6 +84,10 @@ export function CharactersEditor({
 
   const usedIds = useMemo(
     () => new Set(characters.map((c) => c.id)),
+    [characters],
+  );
+  const heroId = useMemo(
+    () => characters.find((c) => c.isHero)?.id ?? "dorothy",
     [characters],
   );
 
@@ -237,7 +246,7 @@ export function CharactersEditor({
                   >
                     <td className="px-4 py-3 align-middle">
                       <AssetThumb
-                        base={c.image ?? characterImageBase(storyId, c.id)}
+                        base={c.image ?? characterImageBase(storyId, c.id, heroId)}
                         resolvedSrc={assetMap[c.id] ?? null}
                         alt={c.name}
                         className="h-12 w-12 p-1"
@@ -318,10 +327,9 @@ function CharacterForm({
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const defaultImageBase =
-    character.id === "dorothy"
-      ? `/stories/${storyId}/characters/hero`
-      : `/stories/${storyId}/characters/${character.id}`;
+  const defaultImageBase = character.isHero
+    ? `/stories/${storyId}/characters/hero`
+    : `/stories/${storyId}/characters/${character.id}`;
   // The select binds to the effective base path (override or convention).
   // Picking an option that matches the convention clears the override so
   // we don't store redundant data; picking anything else writes it.

@@ -212,6 +212,11 @@ function StoryGraphEditorInner({
   // SceneNode `data` prop identity. Without this, every drag frame would
   // hand each SceneNode a brand-new `data` object → React.memo bails →
   // every node re-renders → AssetThumb img remounts → flicker.
+  const heroId = useMemo(
+    () =>
+      runtimeCharactersFile.characters.find((c) => c.isHero)?.id ?? "dorothy",
+    [runtimeCharactersFile],
+  );
   const sceneDataById = useMemo(() => {
     const map: Record<string, SceneNodeData> = {};
     for (const [id, scene] of Object.entries(story.scenes)) {
@@ -220,10 +225,11 @@ function StoryGraphEditorInner({
         scene,
         isStart: id === story.startScene,
         storyId,
+        heroId,
       };
     }
     return map;
-  }, [story.scenes, story.startScene, storyId]);
+  }, [story.scenes, story.startScene, storyId, heroId]);
 
   // ─── Source-of-truth: story + positions + selection → Node[] / Edge[] ───
   //

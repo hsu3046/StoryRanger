@@ -13,20 +13,26 @@ export interface SceneNodeData {
   isStart: boolean;
   /** Story id — needed to resolve dialogue portrait paths. */
   storyId: string;
+  /** The story's protagonist id — its dialogue portrait lives at `hero.*`. */
+  heroId: SpeakerId;
   selected?: boolean;
   [key: string]: unknown;
 }
 
-function dialoguePortrait(storyId: string, id: SpeakerId): string {
-  // Hero (speakerId "dorothy") lives under `hero.*` per the player's
-  // convention; every other character matches its id 1:1.
-  const filename = id === "dorothy" ? "hero" : id;
+function dialoguePortrait(
+  storyId: string,
+  id: SpeakerId,
+  heroId: SpeakerId,
+): string {
+  // The hero's portrait lives under `hero.*` (generic-protagonist art);
+  // every other character matches its id 1:1.
+  const filename = id === heroId ? "hero" : id;
   return `/stories/${storyId}/dialogue/${filename}`;
 }
 
 export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) {
   const d = data as unknown as SceneNodeData;
-  const { sceneId, scene, isStart, storyId } = d;
+  const { sceneId, scene, isStart, storyId, heroId } = d;
   const isEnding = !!scene.ending;
   const dialogueChars = scene.dialogueCharacters ?? [];
 
@@ -114,7 +120,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
               {dialogueChars.map((id) => (
                 <AssetThumb
                   key={id}
-                  base={dialoguePortrait(storyId, id)}
+                  base={dialoguePortrait(storyId, id, heroId)}
                   alt={id}
                   className="h-5 w-5"
                   shape="circle"
