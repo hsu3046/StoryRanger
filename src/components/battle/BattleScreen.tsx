@@ -840,7 +840,7 @@ function TerminalPanel({
     outcome === "victory"
       ? // Authored victory line (encounter.outro.victory); the hardcoded
         // string is the default shown when the author left it blank.
-        (victoryNarration?.trim() || "The path is clear ahead.")
+        (victoryNarration?.trim() || "Well done! The adventure continues!")
       : outcome === "escaped"
         ? "Your friends help you find your breath."
         : "Glinda's blessing carries you to safety.";

@@ -1570,7 +1570,7 @@ function EncounterCard({
                 }))
               }
               rows={5}
-              placeholder="The path is clear ahead.  (default if left blank — shown on the battle's victory screen)"
+              placeholder="Well done! The adventure continues!  (default if left blank — shown on the battle's victory screen)"
               className={inputClsSm}
             />
             <CharCount value={encounter.outro.victory} />
