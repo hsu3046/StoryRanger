@@ -1,11 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { CaretDoubleLeft, CaretDoubleRight } from "@phosphor-icons/react";
+import {
+  CaretDoubleLeft,
+  CaretDoubleRight,
+  CaretDown,
+  CaretRight,
+  GearSix,
+  Ghost,
+  Image as ImageIcon,
+  Medal,
+  Package,
+  PuzzlePiece,
+  SquaresFour,
+  Sword,
+  TreeStructure,
+  UsersFour,
+  type Icon,
+} from "@phosphor-icons/react";
 
 interface StoryRow {
   id: string;
+  title: string;
 }
 
 interface Props {
@@ -13,15 +31,52 @@ interface Props {
 }
 
 const STORAGE_KEY = "storyranger:admin:sidebar-collapsed";
+const SECTIONS_KEY = "storyranger:admin:sidebar-open-sections";
+
+interface MenuEntry {
+  label: string;
+  href: string;
+  icon: Icon;
+}
+
+function storyMenu(storyId: string): MenuEntry[] {
+  return [
+    { label: "Basic", href: `/admin/stories/${storyId}/basic`, icon: GearSix },
+    { label: "Story Graph", href: `/admin/stories/${storyId}/graph`, icon: TreeStructure },
+    { label: "Characters", href: `/admin/stories/${storyId}/characters`, icon: UsersFour },
+    { label: "Monsters", href: `/admin/stories/${storyId}/monsters`, icon: Ghost },
+    { label: "Backgrounds", href: `/admin/stories/${storyId}/backgrounds`, icon: ImageIcon },
+    { label: "Encounters", href: `/admin/stories/${storyId}/encounters`, icon: Sword },
+    { label: "Items", href: `/admin/stories/${storyId}/items`, icon: Package },
+  ];
+}
 
 export function AdminSidebar({ stories }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  // Per-section open/closed state, keyed by section title. Story titles
+  // default to OPEN on first ever visit; Global is always open.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
+    () => {
+      const init: Record<string, boolean> = {};
+      for (const s of stories) init[s.id] = true;
+      return init;
+    },
+  );
 
-  // One-shot hydration from localStorage so the user's preference persists.
+  // One-shot hydration from localStorage so the user's preferences persist.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
     setCollapsed(window.localStorage.getItem(STORAGE_KEY) === "1");
+    try {
+      const raw = window.localStorage.getItem(SECTIONS_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Record<string, boolean>;
+        setOpenSections((prev) => ({ ...prev, ...saved }));
+      }
+    } catch {
+      /* malformed — keep defaults */
+    }
     setHydrated(true);
   }, []);
 
@@ -30,8 +85,16 @@ export function AdminSidebar({ stories }: Props) {
     window.localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(openSections));
+  }, [openSections, hydrated]);
+
+  function toggleSection(key: string) {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   if (collapsed) {
-    // Sidebar fully hidden — just a floating expand button.
     return (
       <button
         type="button"
@@ -50,9 +113,17 @@ export function AdminSidebar({ stories }: Props) {
       <div className="mb-3 flex items-start justify-between gap-2">
         <Link
           href="/admin"
-          className="block font-handwritten text-2xl text-accent-deep"
+          className="flex items-center gap-2 font-handwritten text-2xl text-accent-deep"
         >
-          Story Ranger
+          <Image
+            src="/icons/icon-192.png"
+            alt=""
+            width={28}
+            height={28}
+            className="rounded-button"
+            priority
+          />
+          <span>Story Ranger</span>
         </Link>
         <button
           type="button"
@@ -65,71 +136,71 @@ export function AdminSidebar({ stories }: Props) {
         </button>
       </div>
 
-      <SidebarSection title="Global">
-        <SidebarLink href="/admin">Dashboard</SidebarLink>
-      </SidebarSection>
+      {/* Global section is always expanded — no toggle. */}
+      <div className="mb-3 flex flex-col gap-0.5">
+        <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft/60">
+          Global
+        </p>
+        <SidebarLink href="/admin" label="Dashboard" icon={SquaresFour} />
+        <SidebarLink
+          href="/admin/puzzles"
+          label="Puzzles & Quizzes"
+          icon={PuzzlePiece}
+        />
+        <SidebarLink href="/admin/medals" label="Medals" icon={Medal} />
+      </div>
 
-      {stories.map((s) => (
-        <SidebarSection key={s.id} title={s.id}>
-          <SidebarLink href={`/admin/stories/${s.id}/graph`}>
-            Story graph
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/characters`}>
-            Characters
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/monsters`}>
-            Monsters
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/backgrounds`}>
-            Backgrounds
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/encounters`}>
-            Encounters
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/puzzles`}>
-            Puzzle routing
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/medals`}>
-            Medals
-          </SidebarLink>
-          <SidebarLink href={`/admin/stories/${s.id}/items`}>Items</SidebarLink>
-        </SidebarSection>
-      ))}
-
+      {stories.map((s) => {
+        const isOpen = openSections[s.id] ?? true;
+        return (
+          <div key={s.id} className="mb-3 flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={() => toggleSection(s.id)}
+              aria-expanded={isOpen}
+              className="flex items-center gap-1 rounded-button px-2 pb-1 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft/60 transition-colors hover:text-ink-soft"
+            >
+              {isOpen ? (
+                <CaretDown size={10} weight="bold" />
+              ) : (
+                <CaretRight size={10} weight="bold" />
+              )}
+              <span className="flex-1 truncate normal-case" title={s.id}>
+                {s.title}
+              </span>
+            </button>
+            {isOpen &&
+              storyMenu(s.id).map((entry) => (
+                <SidebarLink
+                  key={entry.href}
+                  href={entry.href}
+                  label={entry.label}
+                  icon={entry.icon}
+                />
+              ))}
+          </div>
+        );
+      })}
     </aside>
-  );
-}
-
-function SidebarSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3 flex flex-col gap-0.5">
-      <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft/60">
-        {title}
-      </p>
-      {children}
-    </div>
   );
 }
 
 function SidebarLink({
   href,
-  children,
+  label,
+  icon: Icon,
 }: {
   href: string;
-  children: React.ReactNode;
+  label: string;
+  icon: Icon;
 }) {
   return (
     <Link
       href={href}
-      className="rounded-button px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-paper-deep/60 hover:text-ink"
+      className="flex items-center gap-2 rounded-button px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-paper-deep/60 hover:text-ink"
     >
-      {children}
+      <Icon size={14} weight="duotone" />
+      <span>{label}</span>
     </Link>
   );
 }

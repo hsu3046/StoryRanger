@@ -43,9 +43,23 @@
 
 html,
 body {
-  background: var(--color-paper);
+  background: var(--color-ink);
   color: var(--color-ink);
   font-family: var(--font-storybook);
+}
+
+html,
+body {
+  /* iOS Safari, with `viewport-fit: cover` set, implicitly injects
+     padding equal to `env(safe-area-inset-*)` on the <body>. Tailwind's
+     preflight zeroes margin but NOT padding, so that implicit padding
+     leaks through and pushes our page-level wrappers in by a few
+     pixels — visible as a vertical strip of body bg (the brown sliver
+     the player was seeing on the left). Force-zero both margin AND
+     padding to take ownership of the edges. Pages that need safe-area
+     insets re-apply them locally on their own containers. */
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* iOS: prevent rubber-band overscroll showing system bg when full-screen play */

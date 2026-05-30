@@ -1,42 +1,12 @@
 {
   "encounters": [
     {
-      "id": "crow-scouts",
-      "title": "Crow Scouts",
-      "trigger": {
-        "afterScene": "s04_road",
-        "chance": 0.75,
-        "once": true
-      },
-      "intro": {
-        "bg": "road-yellow-noon",
-        "narration": "Two glossy black crows drop from the sky and land on the road, eyeing you sharply."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "crow-scout",
-          "crow-scout"
-        ]
-      },
-      "rewards": {
-        "victoryItems": [
-          "feather-of-flight"
-        ]
-      },
-      "outro": {
-        "victory": "The crows scatter into the sky. A single feather drifts down at your feet.",
-        "defeat": "The crows peck at you, then fly off cackling. You shake them off and walk on.",
-        "escape": "You duck off the road. The crows lose interest."
-      }
-    },
-    {
       "id": "cornfield-goblins",
       "title": "Cornfield Bandits",
       "trigger": {
-        "afterScene": "s05_scarecrow",
-        "chance": 0.7,
-        "once": true
+        "sceneId": "s04_road",
+        "branchId": "go_cornfield",
+        "count": 2
       },
       "intro": {
         "bg": "cornfield-tall",
@@ -49,24 +19,19 @@
           "goblin-scout"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "tarnished-coin"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The goblins drop their sticks and tumble back into the corn, leaving a coin behind.",
-        "defeat": "They snatch a button from you and vanish, giggling.",
-        "escape": "You slip through the stalks. They never find you."
+        "defeat": "They snatch a button from you and vanish, giggling."
       }
     },
     {
       "id": "orchard-tree",
       "title": "Awakened Orchard",
       "trigger": {
-        "afterScene": "s05_orchard",
-        "chance": 0.7,
-        "once": true
+        "sceneId": "s04_road",
+        "branchId": "go_orchard",
+        "count": 2
       },
       "intro": {
         "bg": "orchard-twilight",
@@ -78,24 +43,18 @@
           "fighting-tree"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "enchanted-acorn"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The tree groans, settles its roots back into the soil, and lets a glowing acorn fall.",
-        "defeat": "The tree shoves you back onto the road and goes still.",
-        "escape": "You roll under the branches and back onto the path."
+        "defeat": "The tree shoves you back onto the road and goes still."
       }
     },
     {
-      "id": "wolf-pack",
+      "id": "wolf-pack-alt__oil_tinman",
       "title": "Wolf Pack",
       "trigger": {
-        "afterScene": "s06_after_scarecrow",
-        "chance": 0.8,
-        "once": true
+        "sceneId": "s05_orchard",
+        "branchId": "oil_tinman"
       },
       "intro": {
         "bg": "forest-clearing",
@@ -110,97 +69,19 @@
         ]
       },
       "rewards": {
-        "victoryItems": [
-          "wolf-pelt"
-        ],
-        "medalId": "wolf-slayer",
-        "moodBoost": [
-          {
-            "companionId": "lion",
-            "delta": 2
-          }
-        ]
-      },
-      "outro": {
-        "victory": "The pack scatters. The Lion straightens up, tail high — he's proud of you.",
-        "defeat": "You stagger back. The wolves seem satisfied and slip away.",
-        "escape": "You break free and the wolves give up the chase."
-      }
-    },
-    {
-      "id": "wolf-pack-alt",
-      "title": "Wolf Pack",
-      "trigger": {
-        "afterScene": "s06_after_tinman",
-        "chance": 0.8,
-        "once": true
-      },
-      "intro": {
-        "bg": "forest-clearing",
-        "narration": "Snarls echo from the trees. A pack of grey wolves slips out, fanning around you."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "wolf",
-          "wolf",
-          "wolf-alpha"
-        ]
-      },
-      "rewards": {
-        "victoryItems": [
-          "wolf-pelt"
-        ],
         "medalId": "wolf-slayer"
       },
       "outro": {
         "victory": "The pack scatters. The Tin Man dabs a tear from his cheek — proud and a little shaken.",
-        "defeat": "You stagger back. The wolves seem satisfied and slip away.",
-        "escape": "You break free and the wolves give up the chase."
+        "defeat": "You stagger back. The wolves seem satisfied and slip away."
       }
-    },
-    {
-      "id": "lost-wolf-pup",
-      "title": "A Lost Pup",
-      "trigger": {
-        "afterScene": "s07_forest_edge",
-        "chance": 0.75,
-        "once": true
-      },
-      "intro": {
-        "bg": "forest-deep",
-        "narration": "A tiny wolf pup with oversized paws stumbles onto the path, whining. It's lost — and clearly afraid."
-      },
-      "body": {
-        "kind": "story",
-        "outcome": "auto-victory"
-      },
-      "rewards": {
-        "victoryItems": [
-          "lost-pup-trust"
-        ],
-        "medalId": "kind-soul",
-        "moodBoost": [
-          {
-            "companionId": "lion",
-            "delta": 1
-          }
-        ]
-      },
-      "outro": {
-        "victory": "You kneel and let the pup sniff your hand. It licks your fingers, then trots back into the forest — but you swear it'll remember you."
-      },
-      "displayMonsters": [
-        "wolf-pup"
-      ]
     },
     {
       "id": "cave-spiders",
       "title": "Crystal Spiders",
       "trigger": {
-        "afterScene": "s09_dark_forest",
-        "chance": 0.75,
-        "once": true
+        "sceneId": "s08_party",
+        "branchId": "_to_dark_forest"
       },
       "intro": {
         "bg": "cave-interior",
@@ -213,24 +94,18 @@
           "cave-spider"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "silk-thread"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The spiders retreat. The crystal walls hum — and a strand of silk catches on your sleeve.",
-        "defeat": "You stumble back out into the forest, brushing webs from your hair.",
-        "escape": "You squeeze back out the entrance. Better not to push your luck."
+        "defeat": "You stumble back out into the forest, brushing webs from your hair."
       }
     },
     {
-      "id": "swamp-beast",
+      "id": "swamp-beast__follow_fireflies",
       "title": "Bog Creature",
       "trigger": {
-        "afterScene": "s10_river",
-        "chance": 0.75,
-        "once": true
+        "sceneId": "s09a_firefly_trial",
+        "branchId": "follow_fireflies"
       },
       "intro": {
         "bg": "swamp-misty",
@@ -242,95 +117,41 @@
           "swamp-beast"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "swamp-pearl"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The creature sighs and sinks back into the water, leaving an iridescent pearl behind.",
-        "defeat": "It nudges you ashore and disappears beneath the lily pads.",
-        "escape": "You splash to the far bank and run."
+        "defeat": "It nudges you ashore and disappears beneath the lily pads."
       }
     },
     {
-      "id": "wisp-trail",
-      "title": "Following the Wisp",
+      "id": "swamp-beast__push_brambles",
+      "title": "Bog Creature",
       "trigger": {
-        "afterScene": "s11_poppies",
-        "chance": 0.85,
-        "once": true
+        "sceneId": "s09a_firefly_trial",
+        "branchId": "push_brambles"
       },
       "intro": {
-        "bg": "forest-deep",
-        "narration": "A pale blue wisp drifts down through the poppies, beckoning silently."
+        "bg": "swamp-misty",
+        "narration": "Halfway across the shallows, a mossy bog creature surges up from the water. Its huge sad eyes lock onto yours."
       },
       "body": {
-        "kind": "story",
-        "outcome": "auto-victory"
-      },
-      "rewards": {
-        "victoryItems": [
-          "wisp-light"
+        "kind": "battle",
+        "monsterIds": [
+          "swamp-beast"
         ]
       },
+      "rewards": {},
       "outro": {
-        "victory": "You reach for the wisp — it brushes your palm and dissolves into a soft glow that you can carry with you."
-      },
-      "displayMonsters": [
-        "wisp"
-      ]
-    },
-    {
-      "id": "mouse-king-blessing",
-      "title": "Audience with the Mouse King",
-      "trigger": {
-        "afterScene": "s12_poppy_field_past",
-        "chance": 0.9,
-        "once": true
-      },
-      "intro": {
-        "bg": "cornfield-tall",
-        "narration": "Hundreds of tiny mice scurry into a circle around you, and a small Mouse King in a paper crown bows graciously."
-      },
-      "body": {
-        "kind": "story",
-        "outcome": "auto-victory"
-      },
-      "rewards": {
-        "victoryItems": [
-          "mouse-call"
-        ],
-        "medalId": "friend-of-mice",
-        "moodBoost": [
-          {
-            "companionId": "scarecrow",
-            "delta": 1
-          },
-          {
-            "companionId": "tinman",
-            "delta": 1
-          },
-          {
-            "companionId": "lion",
-            "delta": 1
-          }
-        ]
-      },
-      "outro": {
-        "victory": "The Mouse King presses a tiny silver whistle into your hand. 'Call when you need us, brave one!'"
-      },
-      "displayMonsters": [
-        "mouse-king"
-      ]
+        "victory": "The creature sighs and sinks back into the water, leaving an iridescent pearl behind.",
+        "defeat": "It nudges you ashore and disappears beneath the lily pads."
+      }
     },
     {
       "id": "hammerhead-toll",
       "title": "Hammerhead's Toll",
       "trigger": {
-        "afterScene": "s13_emerald_gate",
-        "chance": 0.6,
-        "once": true
+        "sceneId": "s12_poppy_field_past",
+        "branchId": "_to_gates"
       },
       "intro": {
         "bg": "munchkin-back-alley",
@@ -342,24 +163,18 @@
           "hammerhead"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "stone-flake"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The Hammerhead chuckles, flakes a chip of stone off his shoulder for you, and steps aside.",
-        "defeat": "He shoves you firmly back the way you came.",
-        "escape": "You sidestep and dash past while he blinks."
+        "defeat": "He shoves you firmly back the way you came."
       }
     },
     {
       "id": "monkey-scout",
       "title": "Winged Monkey",
       "trigger": {
-        "afterScene": "s14_throne",
-        "chance": 0.7,
-        "once": true
+        "sceneId": "s13_emerald_gate",
+        "branchId": "go_to_throne"
       },
       "intro": {
         "bg": "abandoned-cottage",
@@ -371,24 +186,18 @@
           "winged-monkey"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "monkey-feather"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The monkey shrieks, drops a tail-feather, and flies off to tattle to the Witch.",
-        "defeat": "It snatches your hat and flies off, cackling.",
-        "escape": "You duck behind a beam and stay still until it leaves."
+        "defeat": "It snatches your hat and flies off, cackling."
       }
     },
     {
-      "id": "crow-flock-ambush",
+      "id": "crow-flock-ambush__accept_quest",
       "title": "Murder of Crows",
       "trigger": {
-        "afterScene": "s15_west_journey",
-        "chance": 0.7,
-        "once": true
+        "sceneId": "s14_throne",
+        "branchId": "accept_quest"
       },
       "intro": {
         "bg": "mountain-pass",
@@ -400,24 +209,41 @@
           "crow-flock"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "feather-bundle"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "You wave your arms and shout. The flock breaks and scatters into the grey sky.",
-        "defeat": "They drive you to the ground until you cover your head; then they leave.",
-        "escape": "You sprint into a cave mouth and they overshoot."
+        "defeat": "They drive you to the ground until you cover your head; then they leave."
+      }
+    },
+    {
+      "id": "crow-flock-ambush__argue_quest",
+      "title": "Murder of Crows",
+      "trigger": {
+        "sceneId": "s14_throne",
+        "branchId": "argue_quest"
+      },
+      "intro": {
+        "bg": "mountain-pass",
+        "narration": "A whole flock of black wings rises from the slate hills — wheeling, diving toward you."
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "crow-flock"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": "You wave your arms and shout. The flock breaks and scatters into the grey sky.",
+        "defeat": "They drive you to the ground until you cover your head; then they leave."
       }
     },
     {
       "id": "bat-swarm",
       "title": "Bat Ambush",
       "trigger": {
-        "afterScene": "s16_witch_castle",
-        "chance": 0.7,
-        "once": true
+        "sceneId": "s15_west_journey",
+        "branchId": "_to_witch"
       },
       "intro": {
         "bg": "witch-castle-corridor",
@@ -429,24 +255,18 @@
           "bat-swarm"
         ]
       },
-      "rewards": {
-        "victoryItems": [
-          "bat-wing"
-        ]
-      },
+      "rewards": {},
       "outro": {
         "victory": "The swarm thins out and vanishes into the high beams.",
-        "defeat": "You duck low until they pass. A few feathers cling to your hair.",
-        "escape": "You sprint down the corridor and lose them."
+        "defeat": "You duck low until they pass. A few feathers cling to your hair."
       }
     },
     {
       "id": "wicked-witch-boss",
       "title": "The Wicked Witch",
       "trigger": {
-        "afterScene": "s16_witch_castle",
-        "chance": 1,
-        "once": true
+        "sceneId": "s15_west_journey",
+        "branchId": "_to_witch"
       },
       "intro": {
         "bg": "witch-castle-corridor",
@@ -459,10 +279,6 @@
         ]
       },
       "rewards": {
-        "victoryItems": [
-          "witch-broom",
-          "witch-hat"
-        ],
         "medalId": "witchs_bane",
         "moodBoost": [
           {
@@ -481,19 +297,17 @@
       },
       "outro": {
         "victory": "The Witch's cackle turns to a shriek. She melts in a rush of black cloth and steam — and her broom clatters to your feet.",
-        "defeat": "She catches you in a green flash. The world spins — and Glinda's blessing pulls you back to the corridor for another try.",
-        "escape": "You slip past the Witch in the smoke, but you know you'll have to face her again."
+        "defeat": "She catches you in a green flash. The world spins — and Glinda's blessing pulls you back to the corridor for another try."
       },
       "nextSceneOnVictory": "s17_witch_melts",
       "nextSceneOnDefeat": "s16_witch_castle"
     },
     {
-      "id": "kalidah-rogue",
+      "id": "kalidah-rogue__throw_water",
       "title": "Lone Kalidah",
       "trigger": {
-        "afterScene": "s17_witch_melts",
-        "chance": 0.55,
-        "once": true
+        "sceneId": "s16_witch_castle",
+        "branchId": "throw_water"
       },
       "intro": {
         "bg": "forest-deep",
@@ -506,212 +320,59 @@
         ]
       },
       "rewards": {
-        "victoryItems": [
-          "kalidah-claw"
-        ],
         "medalId": "kalidah-tamer"
       },
       "outro": {
         "victory": "The Kalidah snorts, drops a single curved claw on the path, and disappears into the trees.",
-        "defeat": "It cuffs you off the path and lopes away.",
-        "escape": "You scramble up a slope and the Kalidah moves on."
+        "defeat": "It cuffs you off the path and lopes away."
       }
     },
     {
-      "id": "dark-forest-trial",
-      "title": "Through the Dark Forest",
+      "id": "kalidah-rogue__stand_with_friends",
+      "title": "Lone Kalidah",
       "trigger": {
-        "afterScene": "s09_dark_forest",
-        "chance": 1,
-        "once": true
+        "sceneId": "s16_witch_castle",
+        "branchId": "stand_with_friends"
       },
       "intro": {
         "bg": "forest-deep",
-        "narration": "The trees lean close. Tiny fireflies wink in a slow pattern through the gloom — left, right, right, left. The forest itself seems to be teaching you the safe path."
-      },
-      "body": {
-        "kind": "story",
-        "choices": [
-          {
-            "id": "follow_fireflies",
-            "label": "Follow the fireflies' pattern",
-            "outroNarration": "You step exactly as the lights danced — and the brambles part to either side as if welcoming you onward.",
-            "rewards": {
-              "victoryItems": [
-                "silk-thread"
-              ]
-            },
-            "puzzle": {
-              "kind": "sequence",
-              "title": "Follow the fireflies",
-              "symbols": [
-                "✨",
-                "🌿",
-                "🦋",
-                "🍄"
-              ],
-              "sequence": [
-                0,
-                1,
-                1,
-                2,
-                0
-              ]
-            },
-            "onFail": {
-              "outroNarration": "You lose the rhythm. Brambles snag your sleeves and you stumble out the far side scratched but free.",
-              "rewards": {}
-            }
-          },
-          {
-            "id": "push_through",
-            "label": "Push through the brambles",
-            "outroNarration": "Brute force it is. You break through scratched and tired, but the worst of the forest is behind you.",
-            "rewards": {}
-          }
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "The forest thins and the air clears."
-      },
-      "displayMonsters": []
-    },
-    {
-      "id": "river-crossing-trial",
-      "title": "Crossing the River",
-      "trigger": {
-        "afterScene": "s10_river",
-        "chance": 1,
-        "once": true
-      },
-      "intro": {
-        "bg": "river-bank",
-        "narration": "The river runs deep here, but a chain of mossy stepping stones rises and sinks with the rhythm of the current. Watch — the safe stones glow brighter, one by one."
-      },
-      "body": {
-        "kind": "story",
-        "choices": [
-          {
-            "id": "memorize_stones",
-            "label": "Memorise the safe stones",
-            "outroNarration": "You step exactly where the river told you. Cold spray on your face, but you reach the far bank dry-shoed and proud.",
-            "rewards": {
-              "victoryItems": [
-                "swamp-pearl"
-              ]
-            },
-            "puzzle": {
-              "kind": "sequence",
-              "title": "Step on the glowing stones",
-              "symbols": [
-                "🪨",
-                "💧",
-                "🌊",
-                "🐟"
-              ],
-              "sequence": [
-                0,
-                0,
-                2,
-                1,
-                0
-              ]
-            },
-            "onFail": {
-              "outroNarration": "Your foot slips on a hidden stone. You splash through the shallows — soaked, shivering — but make it to the other side.",
-              "rewards": {}
-            }
-          },
-          {
-            "id": "ask_tinman",
-            "label": "Have the Tin Man chop a log into a bridge",
-            "outroNarration": "The Tin Man swings his axe in steady strokes. A sturdy log bridges the rushing water and the whole party walks across together.",
-            "rewards": {
-              "moodBoost": [
-                {
-                  "companionId": "tinman",
-                  "delta": 2
-                }
-              ]
-            },
-            "requires": {
-              "companion": "tinman"
-            }
-          },
-          {
-            "id": "swim",
-            "label": "Wade through and risk it",
-            "outroNarration": "Cold water up to your knees — but you make it across, shivering and brave.",
-            "rewards": {}
-          }
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "The far bank is solid under your feet."
-      },
-      "displayMonsters": []
-    },
-    {
-      "id": "prairie-mice-farewell",
-      "title": "Tiny Send-off",
-      "trigger": {
-        "afterScene": "s19_balloon_launch",
-        "chance": 0.7,
-        "once": true
-      },
-      "intro": {
-        "bg": "prairie-storm",
-        "narration": "Out on the empty plain after the balloon vanishes, a tiny entourage of field mice catches up — bearing one last gift."
-      },
-      "body": {
-        "kind": "story",
-        "outcome": "auto-victory"
-      },
-      "rewards": {
-        "victoryItems": [
-          "silver-thread"
-        ],
-        "moodBoost": [
-          {
-            "companionId": "lion",
-            "delta": 1
-          }
-        ]
-      },
-      "outro": {
-        "victory": "The Mouse King hands you a coil of silver thread. 'For the road home,' he whispers, bowing."
-      },
-      "displayMonsters": [
-        "mouse-king"
-      ]
-    },
-    {
-      "id": "s01_kansas-battle",
-      "title": "Find Toto",
-      "trigger": {
-        "afterScene": "s01_kansas",
-        "chance": 0.7,
-        "once": true
-      },
-      "intro": {
-        "bg": "forest-clearing",
-        "narration": "(intro narration)"
+        "narration": "On the way back, a single Kalidah — bear-bodied, tiger-faced — pads onto the path. Its huge amber eyes lock onto yours."
       },
       "body": {
         "kind": "battle",
         "monsterIds": [
-          "crow-scout"
+          "kalidah"
         ]
       },
       "rewards": {
-        "victoryItems": [
-          "feather-of-flight"
-        ]
+        "medalId": "kalidah-tamer"
       },
       "outro": {
-        "victory": "(victory line)"
+        "victory": "The Kalidah snorts, drops a single curved claw on the path, and disappears into the trees.",
+        "defeat": "It cuffs you off the path and lopes away."
+      }
+    },
+    {
+      "id": "s01_kansas__rescue_toto-battle",
+      "title": "Battle with Crows",
+      "trigger": {
+        "sceneId": "s01_kansas",
+        "branchId": "rescue_toto",
+        "count": 1
+      },
+      "intro": {
+        "bg": "prairie-storm",
+        "narration": "The crows suddenly rushed at you."
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "crow-flock"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": "You barely chased the crows away."
       }
     }
   ]

@@ -1,10 +1,21 @@
 /**
  * Math + logic puzzles for the v2.0c battle system.
  *
- * Each monster has a puzzle "kind" they're solved against. Puzzles are
- * randomized but answer-deterministic; the dice flavor comes from
- * damage rolls and time-based critical bonuses.
+ * Each monster has a puzzle "kind" they're solved against. Generators
+ * pull their ranges + distractor spreads from `puzzle-routing.json`'s
+ * `generators` field (admin-editable). Anything not configured falls
+ * back to the DEFAULT_GENERATORS below.
  */
+
+import type {
+  BiggerGenT,
+  MissingGenT,
+  MultiplyGenT,
+  NumericRangeGenT,
+  OddOutGenT,
+  PatternGenT,
+  PuzzleGeneratorsT,
+} from "@/data/schemas/puzzle-routing";
 
 export type PuzzleKind =
   | "add-1d" // 1-digit addition: 3 + 4 = ?
@@ -15,6 +26,19 @@ export type PuzzleKind =
   | "odd-out" // pick the odd number (from 4)
   | "bigger" // which number is bigger
   | "missing"; // 3 + ? = 8
+
+/** Every concrete puzzle kind. Used to resolve a monster's `"random"`
+ *  preference into an actual kind at attack time. */
+export const ALL_PUZZLE_KINDS: PuzzleKind[] = [
+  "add-1d",
+  "sub-1d",
+  "add-2d",
+  "multiply",
+  "pattern",
+  "odd-out",
+  "bigger",
+  "missing",
+];
 
 export interface Puzzle {
   kind: PuzzleKind;
@@ -42,10 +66,10 @@ export function difficultyFor(monsterAc: number): "easy" | "medium" | "hard" {
  * Puzzle categories each attacker can solve. When a companion attacks,
  * their categories take priority over the monster's preferred kind.
  *
- * Loaded from JSON via the puzzle-routing schema. Admin can edit the matrix
- * at /admin/stories/<id>/puzzles.
+ * Loaded from JSON via the puzzle-routing schema. This config is GLOBAL
+ * (shared by every story). Admin can edit the matrix at /admin/puzzles.
  */
-import routingJson from "@/stories/wizard-of-oz/puzzle-routing.json";
+import routingJson from "@/data/global/puzzle-routing.json";
 import { PuzzleRoutingSchema } from "@/data/schemas/puzzle-routing";
 
 const parsedRouting = PuzzleRoutingSchema.parse(routingJson);
@@ -60,32 +84,83 @@ export const ATTACKER_KINDS: Record<
   lion: parsedRouting.attackerKinds.lion ?? ["add-1d"],
 };
 
+// ─────────────────────────────────────────────────────────────
+// Generator config — defaults match the original hardcoded ranges so
+// authors who never touch the admin tab get identical behaviour.
+// ─────────────────────────────────────────────────────────────
+
+export const DEFAULT_GENERATORS = {
+  "add-1d": { min: 1, max: 9, spread: 3 } satisfies NumericRangeGenT,
+  "sub-1d": { min: 1, max: 9, spread: 3 } satisfies NumericRangeGenT,
+  "add-2d": { min: 1, max: 19, spread: 3 } satisfies NumericRangeGenT,
+  multiply: {
+    aMin: 2,
+    aMax: 6,
+    bMin: 2,
+    bMax: 6,
+    spread: 5,
+  } satisfies MultiplyGenT,
+  pattern: {
+    startMin: 1,
+    startMax: 6,
+    steps: [1, 2, 2, 3, 5],
+    spread: 4,
+  } satisfies PatternGenT,
+  "odd-out": { max: 9 } satisfies OddOutGenT,
+  bigger: { min: 5, max: 50 } satisfies BiggerGenT,
+  missing: {
+    ansMin: 2,
+    ansMax: 9,
+    addMin: 2,
+    addMax: 9,
+    spread: 3,
+  } satisfies MissingGenT,
+} as const;
+
+function resolveGenerators(overrides?: PuzzleGeneratorsT) {
+  const o = overrides ?? parsedRouting.generators ?? {};
+  return {
+    "add-1d": o["add-1d"] ?? DEFAULT_GENERATORS["add-1d"],
+    "sub-1d": o["sub-1d"] ?? DEFAULT_GENERATORS["sub-1d"],
+    "add-2d": o["add-2d"] ?? DEFAULT_GENERATORS["add-2d"],
+    multiply: o.multiply ?? DEFAULT_GENERATORS.multiply,
+    pattern: o.pattern ?? DEFAULT_GENERATORS.pattern,
+    "odd-out": o["odd-out"] ?? DEFAULT_GENERATORS["odd-out"],
+    bigger: o.bigger ?? DEFAULT_GENERATORS.bigger,
+    missing: o.missing ?? DEFAULT_GENERATORS.missing,
+  };
+}
+
+/**
+ * Generate one puzzle. `overrides` is used by the admin Generators tab
+ * to preview unsaved param edits without round-tripping through disk.
+ */
 export function generatePuzzle(
   preferredKind?: PuzzleKind,
   difficulty: "easy" | "medium" | "hard" = "easy",
+  overrides?: PuzzleGeneratorsT,
 ): Puzzle {
   const kind =
-    preferredKind ??
-    pick(KINDS_BY_DIFFICULTY[difficulty]) ??
-    "add-1d";
+    preferredKind ?? pick(KINDS_BY_DIFFICULTY[difficulty]) ?? "add-1d";
+  const gens = resolveGenerators(overrides);
 
   switch (kind) {
     case "add-1d":
-      return makeAdd(1);
+      return makeAdd("add-1d", gens["add-1d"]);
     case "sub-1d":
-      return makeSub(1);
+      return makeSub(gens["sub-1d"]);
     case "add-2d":
-      return makeAdd(2);
+      return makeAdd("add-2d", gens["add-2d"]);
     case "multiply":
-      return makeMultiply();
+      return makeMultiply(gens.multiply);
     case "pattern":
-      return makePattern();
+      return makePattern(gens.pattern);
     case "odd-out":
-      return makeOddOut();
+      return makeOddOut(gens["odd-out"]);
     case "bigger":
-      return makeBigger();
+      return makeBigger(gens.bigger);
     case "missing":
-      return makeMissing();
+      return makeMissing(gens.missing);
   }
 }
 
@@ -93,49 +168,44 @@ export function generatePuzzle(
 // Puzzle generators
 // ─────────────────────────────────────────────────────────────
 
-function makeAdd(maxDigits: 1 | 2): Puzzle {
-  const max = maxDigits === 1 ? 9 : 19;
-  const a = randInt(1, max);
-  const b = randInt(1, max);
+function makeAdd(kind: "add-1d" | "add-2d", cfg: NumericRangeGenT): Puzzle {
+  const a = randInt(cfg.min, cfg.max);
+  const b = randInt(cfg.min, cfg.max);
   const ans = a + b;
-  return numericPuzzle(
-    "add-1d",
-    `${a} + ${b} = ?`,
-    ans,
-    /* spread */ 3,
-  );
+  return numericPuzzle(kind, `${a} + ${b} = ?`, ans, cfg.spread);
 }
 
-function makeSub(maxDigits: 1 | 2): Puzzle {
-  const max = maxDigits === 1 ? 9 : 19;
-  const a = randInt(2, max);
-  const b = randInt(1, a - 1);
+function makeSub(cfg: NumericRangeGenT): Puzzle {
+  // Guarantee a non-negative result by keeping `b` strictly less than `a`.
+  const a = randInt(Math.max(cfg.min + 1, 2), cfg.max);
+  const b = randInt(cfg.min, a - 1);
   const ans = a - b;
-  return numericPuzzle("sub-1d", `${a} − ${b} = ?`, ans, 3);
+  return numericPuzzle("sub-1d", `${a} − ${b} = ?`, ans, cfg.spread);
 }
 
-function makeMultiply(): Puzzle {
-  const a = randInt(2, 6);
-  const b = randInt(2, 6);
+function makeMultiply(cfg: MultiplyGenT): Puzzle {
+  const a = randInt(cfg.aMin, cfg.aMax);
+  const b = randInt(cfg.bMin, cfg.bMax);
   const ans = a * b;
-  return numericPuzzle("multiply", `${a} × ${b} = ?`, ans, 5);
+  return numericPuzzle("multiply", `${a} × ${b} = ?`, ans, cfg.spread);
 }
 
-function makePattern(): Puzzle {
-  const start = randInt(1, 6);
-  const step = pick([1, 2, 2, 3, 5])!;
+function makePattern(cfg: PatternGenT): Puzzle {
+  const start = randInt(cfg.startMin, cfg.startMax);
+  const step = pick(cfg.steps) ?? 1;
   const seq = [start, start + step, start + step * 2, start + step * 3];
-  const missingIdx = pick([3])!; // always last for kid clarity
+  const missingIdx = 3; // always last for kid clarity
   const question = `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`;
-  return numericPuzzle("pattern", question, seq[missingIdx], step + 1);
+  return numericPuzzle("pattern", question, seq[missingIdx], cfg.spread);
 }
 
-function makeOddOut(): Puzzle {
-  // pick three even, one odd (or vice-versa)
-  const odd = randInt(1, 9) * 2 + 1; // odd
+function makeOddOut(cfg: OddOutGenT): Puzzle {
+  const odd = randInt(1, cfg.max) * 2 + 1;
   const evens: number[] = [];
-  while (evens.length < 3) {
-    const e = randInt(1, 9) * 2;
+  // Bounded: a too-small `max` can't yield 3 distinct evens — cap the tries
+  // so an invalid generator config degrades to fewer choices, never hangs.
+  for (let tries = 0; evens.length < 3 && tries < 200; tries++) {
+    const e = randInt(1, cfg.max) * 2;
     if (!evens.includes(e) && e !== odd) evens.push(e);
   }
   const all = shuffle([odd, ...evens]);
@@ -147,15 +217,19 @@ function makeOddOut(): Puzzle {
   };
 }
 
-function makeBigger(): Puzzle {
-  const a = randInt(5, 50);
+function makeBigger(cfg: BiggerGenT): Puzzle {
+  const a = randInt(cfg.min, cfg.max);
+  // Bounded loops: a degenerate range (e.g. min === max, or fewer than 4
+  // distinct values) would otherwise spin forever. Cap the tries so an
+  // invalid generator config degrades gracefully instead of hanging.
   let b = a;
-  while (b === a) b = randInt(5, 50);
+  for (let tries = 0; b === a && tries < 200; tries++) {
+    b = randInt(cfg.min, cfg.max);
+  }
   const bigger = Math.max(a, b);
-  // Make 4 choices including both. Add 2 distractors near range.
   const distractors: number[] = [];
-  while (distractors.length < 2) {
-    const d = randInt(5, 50);
+  for (let tries = 0; distractors.length < 2 && tries < 200; tries++) {
+    const d = randInt(cfg.min, cfg.max);
     if (d !== a && d !== b && !distractors.includes(d)) distractors.push(d);
   }
   const choices = shuffle([a, b, ...distractors]);
@@ -167,11 +241,11 @@ function makeBigger(): Puzzle {
   };
 }
 
-function makeMissing(): Puzzle {
-  const ans = randInt(2, 9);
-  const total = ans + randInt(2, 9);
+function makeMissing(cfg: MissingGenT): Puzzle {
+  const ans = randInt(cfg.ansMin, cfg.ansMax);
+  const total = ans + randInt(cfg.addMin, cfg.addMax);
   const known = total - ans;
-  return numericPuzzle("missing", `${known} + ? = ${total}`, ans, 3);
+  return numericPuzzle("missing", `${known} + ? = ${total}`, ans, cfg.spread);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -185,15 +259,13 @@ function numericPuzzle(
   spread: number,
 ): Puzzle {
   const distractors = new Set<number>();
-  while (distractors.size < 3) {
-    const off = pick([
-      -spread,
-      -2,
-      -1,
-      1,
-      2,
-      spread,
-    ])!;
+  // Small offsets are always available; the spread parameter controls how
+  // far the wildest distractor can drift.
+  const offsets = [-spread, -2, -1, 1, 2, spread];
+  // Bounded: when the answer is near 0 with a small spread, fewer than 3
+  // non-negative distinct offsets exist — cap the tries so we never hang.
+  for (let tries = 0; distractors.size < 3 && tries < 200; tries++) {
+    const off = pick(offsets)!;
     const d = answer + off;
     if (d !== answer && d >= 0) distractors.add(d);
   }
@@ -207,6 +279,8 @@ function numericPuzzle(
 }
 
 function randInt(min: number, max: number): number {
+  // Guard against bad config (max < min) so we never throw at runtime.
+  if (max < min) max = min;
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 

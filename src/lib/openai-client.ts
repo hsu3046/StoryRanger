@@ -1,3 +1,9 @@
+/**
+ * OpenAI client — used ONLY for TTS now. LLM calls go through
+ * `src/lib/llm.ts` which routes between OpenAI / Gemini / Anthropic
+ * based on `LLM_PROVIDER`.
+ */
+
 import OpenAI from "openai";
 
 let cached: OpenAI | null = null;
@@ -17,7 +23,8 @@ export function getOpenAI(): OpenAI {
   return cached;
 }
 
-export const NARRATION_MODEL =
-  process.env.OPENAI_NARRATION_MODEL ?? "gpt-5-mini";
-
-export const TTS_MODEL = process.env.OPENAI_TTS_MODEL ?? "tts-1";
+// `||` (not `??`) so that an empty string in .env.local (e.g.
+// `OPENAI_TTS_MODEL=` with nothing after the `=`) falls back to the
+// default. `??` only triggers on null/undefined and would let an empty
+// string through, breaking the OpenAI call with `model: ""`.
+export const TTS_MODEL = process.env.OPENAI_TTS_MODEL?.trim() || "tts-1";

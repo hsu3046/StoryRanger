@@ -44,7 +44,8 @@ export default async function BackgroundsPage({
 }) {
   const { storyId } = await params;
   const repo = contentRepo();
-  if (!repo.getStory(storyId)) notFound();
+  const loaded = repo.getStory(storyId);
+  if (!loaded) notFound();
   const backgrounds = repo.listBackgrounds(storyId);
   const bgmOptions = await listBgmKeys(storyId);
 
@@ -56,6 +57,7 @@ export default async function BackgroundsPage({
   return (
     <BackgroundsEditor
       storyId={storyId}
+      storyTitle={loaded.story.title}
       initial={backgrounds}
       bgmOptions={bgmOptions}
       assetMap={assetMap}

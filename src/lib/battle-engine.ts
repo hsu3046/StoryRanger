@@ -20,8 +20,10 @@ import type {
   PartyHp,
 } from "@/types/story";
 import { MONSTERS, type MonsterStats } from "@/data/monsters";
+import { getItem } from "@/data/items";
+import type { ItemDefT } from "@/data/schemas";
 import { rollD20, type RollResult } from "./dice";
-import { ATTACKER_KINDS, type PuzzleKind } from "./puzzle";
+import { ALL_PUZZLE_KINDS, ATTACKER_KINDS, type PuzzleKind } from "./puzzle";
 import type { StagePosition } from "@/components/scene/ComposedScene";
 
 export type BattlePhase =
@@ -41,7 +43,8 @@ export interface BattleMonsterInstance {
   hitsRemaining: number;
   maxHits: number;
   position: StagePosition;
-  puzzleKind: PuzzleKind;
+  /** `"random"` resolves to a fresh concrete kind on each hero attack. */
+  puzzleKind: PuzzleKind | "random";
   defeated: boolean;
 }
 
@@ -90,11 +93,15 @@ export interface BattleState {
   monsterIdxThisRound: number;
   companionIdxThisRound: number;
   rewards: string[];
+  /** Item ids spent during this battle. Removed from PlayState.inventory
+   *  (one occurrence each) when the encounter resolves. */
+  itemsConsumed: string[];
 }
 
 export type HeroAction =
   | { kind: "attack"; targetIdx: number }
-  | { kind: "switch"; to: AttackerId };
+  | { kind: "switch"; to: AttackerId }
+  | { kind: "useItem"; itemId: string };
 
 export interface PuzzleOutcome {
   correct: boolean;
@@ -115,7 +122,6 @@ export interface SetupArgs {
   fallenAttackers: AttackerId[];
   companions: CompanionId[];
   companionMoods: CompanionMoods;
-  introNarration?: string;
 }
 
 const MONSTER_SLOTS: StagePosition[][] = [
@@ -140,7 +146,7 @@ export function setupBattle(args: SetupArgs): BattleState {
         hitsRemaining: stats.hits,
         maxHits: stats.hits,
         position: layout[i] ?? "right",
-        puzzleKind: stats.puzzleKind ?? "add-1d",
+        puzzleKind: stats.puzzleKind ?? "random",
         defeated: stats.hits <= 0,
       };
     })
@@ -181,14 +187,13 @@ export function setupBattle(args: SetupArgs): BattleState {
     companionMoods: args.companionMoods,
     monsters,
     bg: args.bg,
-    log: args.introNarration
-      ? [{ text: args.introNarration, tone: "neutral" }]
-      : [],
+    log: [],
     activeAttacker: firstActive,
     streak: 0,
     monsterIdxThisRound: 0,
     companionIdxThisRound: 0,
     rewards: [],
+    itemsConsumed: [],
   };
 }
 
@@ -209,12 +214,82 @@ export function chooseHeroAction(
       maxLives: state.partyMaxLives[action.to] ?? state.maxLives,
     };
   }
+  if (action.kind === "useItem") {
+    // Stays in hero-choose — using an item is a free action, the player
+    // still gets to attack/switch afterwards.
+    return applyItemEffect(state, action.itemId);
+  }
   // Attack
   return {
     ...state,
     pendingTargetIdx: action.targetIdx,
     phase: "hero-puzzle",
   };
+}
+
+/**
+ * Whether `item` can currently be used in battle. Per-effect rules live
+ * here (not in the UI) so the button enable/disable stays consistent.
+ */
+export function canUseItem(state: BattleState, item: ItemDefT): boolean {
+  switch (item.effect.kind) {
+    case "heal":
+      // No point healing the active attacker at full HP.
+      return (
+        state.partyLives[state.activeAttacker] <
+        state.partyMaxLives[state.activeAttacker]
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Apply a consumable's effect to the battle state (pure). The `switch` is
+ * the single battle extension point — add a `case` per new battle effect.
+ * No-ops on unknown id, non-battle effect, or when `canUseItem` is false.
+ */
+export function applyItemEffect(
+  state: BattleState,
+  itemId: string,
+): BattleState {
+  const item = getItem(itemId);
+  if (!item || !canUseItem(state, item)) return state;
+  const effect = item.effect;
+  switch (effect.kind) {
+    case "heal": {
+      const a = state.activeAttacker;
+      const max = state.partyMaxLives[a];
+      const healed = Math.min(max, state.partyLives[a] + effect.amount);
+      return {
+        ...state,
+        partyLives: { ...state.partyLives, [a]: healed },
+        heroLives: healed,
+        itemsConsumed: [...state.itemsConsumed, itemId],
+        log: [
+          ...state.log,
+          { text: `Used ${item.name} — healed to ${healed}/${max}.`, tone: "neutral" },
+        ],
+      };
+    }
+    default:
+      // [+EXT] handle new battle effect kinds here.
+      return state;
+  }
+}
+
+/**
+ * Resolve a monster's stored puzzle preference into a concrete kind.
+ * `"random"` picks a fresh kind from the full set; concrete values pass
+ * through unchanged.
+ */
+export function resolvePuzzleKind(kind: PuzzleKind | "random"): PuzzleKind {
+  if (kind === "random") {
+    return ALL_PUZZLE_KINDS[
+      Math.floor(Math.random() * ALL_PUZZLE_KINDS.length)
+    ];
+  }
+  return kind;
 }
 
 /**
@@ -226,7 +301,7 @@ export function puzzleKindFor(
   attacker: AttackerId,
   monster: BattleMonsterInstance,
 ): PuzzleKind {
-  if (attacker === "hero") return monster.puzzleKind;
+  if (attacker === "hero") return resolvePuzzleKind(monster.puzzleKind);
   const kinds = ATTACKER_KINDS[attacker];
   return kinds[Math.floor(Math.random() * kinds.length)];
 }
@@ -490,24 +565,9 @@ export function resolveDefense(
       tone: "defeat",
     });
 
-    // Dorothy down → defeat.
-    if (frontId === "hero") {
-      log.push({
-        text: "Glinda's blessing carries you all to safety…",
-        tone: "defeat",
-      });
-      return {
-        ...state,
-        log,
-        partyLives,
-        fallenAttackers,
-        heroLives: 0,
-        monsterIdxThisRound: state.monsterIdxThisRound + 1,
-        defendingMonsterIdx: undefined,
-        phase: "defeat",
-      };
-    }
-
+    // Find next available attacker. Hero down is no longer auto-defeat —
+    // companions can keep fighting; the battle only ends when EVERY
+    // party member has fallen.
     const partyOrder: AttackerId[] = ["hero", ...state.companions];
     const nextActive = partyOrder.find(
       (a) => !fallenAttackers.includes(a),

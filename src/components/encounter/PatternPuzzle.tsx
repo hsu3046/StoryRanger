@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-import type { PatternPuzzleDef } from "@/types/encounter";
+import type { PatternPuzzleDefT as PatternPuzzleDef } from "@/data/schemas";
 
 interface Props {
   puzzle: PatternPuzzleDef;
@@ -77,7 +77,7 @@ export function PatternPuzzle({ puzzle, onSolved }: Props) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className="pointer-events-auto fixed left-1/2 top-1/2 z-[60] flex w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper p-6 shadow-overlay ring-1 ring-ink-soft/10 sm:p-8"
+      className="pointer-events-auto fixed left-1/2 top-1/2 z-[60] flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper p-6 shadow-overlay ring-1 ring-ink-soft/10 sm:p-8"
     >
       <header className="flex flex-col items-center gap-1">
         <p className="font-handwritten text-2xl text-accent-deep">

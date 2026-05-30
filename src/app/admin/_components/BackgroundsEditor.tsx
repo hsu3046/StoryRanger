@@ -10,6 +10,10 @@ import {
 } from "@/data/schemas";
 import { saveBackgroundsAction } from "../_actions/saveJson";
 import { AssetThumb } from "./AssetThumb";
+import { BgmSelectWithPreview } from "./BgmSelectWithPreview";
+import { useConfirm } from "./ConfirmDialog";
+import { uniqueId } from "../_lib/uniqueId";
+import { Field, StyledSelect, inputCls } from "./form";
 
 const MOODS = ["calm", "tense", "magical", "spooky", "warm"] as const;
 type Mood = (typeof MOODS)[number];
@@ -20,6 +24,7 @@ function backgroundImageBase(storyId: string, key: string): string {
 
 interface Props {
   storyId: string;
+  storyTitle?: string;
   initial: BackgroundMetaT[];
   /** BGM keys that exist for this story (drives the inspector dropdown). */
   bgmOptions: string[];
@@ -29,11 +34,13 @@ interface Props {
 
 export function BackgroundsEditor({
   storyId,
+  storyTitle,
   initial,
   bgmOptions,
   assetMap,
 }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [backgrounds, setBackgrounds] = useState<BackgroundMetaT[]>(initial);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +81,10 @@ export function BackgroundsEditor({
 
   function startCreate() {
     const placeholder: BackgroundMetaT = {
-      key: `new-background-${backgrounds.length + 1}`,
+      key: uniqueId(
+        "new-background",
+        backgrounds.map((b) => b.key),
+      ),
       label: "New Background",
       bgm: bgmOptions[0] ?? "yellow-road",
       mood: "calm",
@@ -91,10 +101,14 @@ export function BackgroundsEditor({
     );
   }
 
-  function deleteSelected() {
+  async function deleteSelected() {
     if (selectedIdx === null) return;
     const b = backgrounds[selectedIdx];
-    if (!confirm(`Delete background "${b.key}"?`)) return;
+    const ok = await confirm({
+      title: "Delete background",
+      message: `Delete background "${b.key}"?\nThis cannot be undone.`,
+    });
+    if (!ok) return;
     setBackgrounds((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -103,14 +117,17 @@ export function BackgroundsEditor({
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p className="font-handwritten text-base text-accent-deep">
-            {storyId} / Backgrounds
+          <p
+            className="font-handwritten text-base text-accent-deep"
+            title={storyId}
+          >
+            {storyTitle ?? storyId} / Backgrounds
           </p>
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
             {backgrounds.length}
           </span>
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → backgrounds.json
+            backgrounds.json
           </code>
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
@@ -152,13 +169,17 @@ export function BackgroundsEditor({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        {/* Clicking empty space in the list pane closes the inspector. Row
+            clicks stopPropagation so selecting doesn't immediately re-close. */}
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3"
+          onClick={() => setSelectedIdx(null)}
+        >
           <div className="overflow-x-auto rounded-card-lg bg-paper ring-1 ring-ink-soft/10">
             <table className="w-full border-collapse text-sm">
               <thead className="border-b border-ink-soft/10 bg-paper-deep/20 text-left">
                 <tr>
                   <th className="px-3 py-2 w-24"></th>
-                  <th className="px-3 py-2 w-48">Key</th>
                   <th className="px-3 py-2">Label</th>
                   <th className="px-3 py-2 w-32">BGM</th>
                   <th className="px-3 py-2 w-24">Mood</th>
@@ -168,7 +189,10 @@ export function BackgroundsEditor({
                 {backgrounds.map((b, i) => (
                   <tr
                     key={`${b.key}-${i}`}
-                    onClick={() => setSelectedIdx(i)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedIdx(i);
+                    }}
                     className={`cursor-pointer border-b border-ink-soft/5 last:border-0 transition-colors ${
                       selectedIdx === i
                         ? "bg-accent/15 hover:bg-accent/20"
@@ -184,9 +208,6 @@ export function BackgroundsEditor({
                         shape="banner"
                       />
                     </td>
-                    <td className="px-3 py-2 align-middle">
-                      <code className="text-ink">{b.key}</code>
-                    </td>
                     <td className="px-3 py-2 align-middle text-ink">
                       {b.label}
                     </td>
@@ -195,7 +216,7 @@ export function BackgroundsEditor({
                     </td>
                     <td className="px-3 py-2 align-middle">
                       <span
-                        className={`rounded-pill px-2 py-0.5 text-xs ${moodColor(b.mood)}`}
+                        className={`rounded-pill px-2 py-0.5 text-xs capitalize ${moodColor(b.mood)}`}
                       >
                         {b.mood}
                       </span>
@@ -252,7 +273,6 @@ function BackgroundForm({
           <p className="font-handwritten text-base text-accent-deep">
             Background
           </p>
-          <code className="text-sm text-ink">{background.key}</code>
         </div>
         <div className="flex gap-1">
           <button
@@ -280,16 +300,16 @@ function BackgroundForm({
         shape="banner"
       />
 
-      <Field label="Key (kebab-case, matches filename)">
-        <input
-          value={background.key}
-          onChange={(e) =>
-            onChange((b) => ({ ...b, key: e.target.value }))
-          }
-          disabled={!isNew}
-          className={`${inputCls} ${!isNew ? "opacity-60" : ""}`}
-        />
-      </Field>
+      {isNew && (
+        <Field label="Key (kebab-case, matches image filename)">
+          <input
+            value={background.key}
+            onChange={(e) => onChange((b) => ({ ...b, key: e.target.value }))}
+            className={inputCls}
+            placeholder="e.g. emerald-gate"
+          />
+        </Field>
+      )}
 
       <Field label="Label">
         <input
@@ -302,59 +322,29 @@ function BackgroundForm({
       </Field>
 
       <Field label="BGM">
-        <select
+        <BgmSelectWithPreview
           value={background.bgm}
-          onChange={(e) =>
-            onChange((b) => ({ ...b, bgm: e.target.value }))
-          }
-          className={inputCls}
-        >
-          {/* Allow editing to a value not yet in the options list — show it
-              as a custom entry at the top so the dropdown reflects current
-              state even before the BGM catalogue is updated. */}
-          {!bgmOptions.includes(background.bgm) && (
-            <option value={background.bgm}>{background.bgm} (custom)</option>
-          )}
-          {bgmOptions.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
+          options={bgmOptions}
+          storyId={storyId}
+          placeholder="(no BGM tracks)"
+          onChange={(v) => onChange((b) => ({ ...b, bgm: v }))}
+        />
       </Field>
 
       <Field label="Mood">
-        <select
+        <StyledSelect
           value={background.mood}
           onChange={(e) =>
             onChange((b) => ({ ...b, mood: e.target.value as Mood }))
           }
-          className={inputCls}
         >
           {MOODS.map((m) => (
             <option key={m} value={m}>
-              {m}
+              {m.charAt(0).toUpperCase() + m.slice(1)}
             </option>
           ))}
-        </select>
+        </StyledSelect>
       </Field>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        {label}
-      </label>
-      {children}
     </div>
   );
 }
@@ -373,6 +363,3 @@ function moodColor(mood: BackgroundMetaT["mood"]): string {
       return "bg-amber-300/40 text-amber-800";
   }
 }
-
-const inputCls =
-  "w-full rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 focus:outline-none focus:ring-accent/50";

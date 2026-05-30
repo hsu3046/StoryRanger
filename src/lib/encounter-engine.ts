@@ -1,34 +1,38 @@
 /**
- * Encounter trigger logic — picks at most one side adventure to insert
- * after entering a main scene.
- *
- * Pure (random aside) — given current PlayState + scene id, returns
- * an EncounterDef or null.
+ * Encounter trigger logic. v3.1:
+ *   - Encounters now belong to BRANCH traversals (not scene entries). When
+ *     the player takes a branch from sceneId, every encounter whose trigger
+ *     matches (sceneId, branchId) is added to the pool. `count` decides how
+ *     many copies; the pool is shuffled and consumed before the destination
+ *     scene's narration is shown.
  */
 
-import { findEncountersFor } from "@/data/encounters";
+import { findEncountersForBranch } from "@/data/encounters";
 import type { EncounterDef } from "@/types/encounter";
 import type { PlayState } from "@/types/story";
 
-export function pickEncounterFor(
+export function buildEncounterQueue(
   sceneId: string,
+  branchId: string,
   state: PlayState,
-): EncounterDef | null {
-  const candidates = findEncountersFor(sceneId);
-  const completed = new Set(state.completedEncounters ?? []);
+): EncounterDef[] {
+  const candidates = findEncountersForBranch(sceneId, branchId);
+  const pool: EncounterDef[] = [];
 
   for (const e of candidates) {
-    if (e.trigger.once && completed.has(e.id)) continue;
-
     if (e.trigger.requires) {
       const r = e.trigger.requires;
       if (r.companion && !state.companions.includes(r.companion)) continue;
       if (r.item && !(state.inventory ?? []).includes(r.item)) continue;
     }
-
-    if (Math.random() < e.trigger.chance) {
-      return e;
-    }
+    const count = Math.max(1, e.trigger.count ?? 1);
+    for (let i = 0; i < count; i++) pool.push(e);
   }
-  return null;
+
+  // Fisher-Yates shuffle.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
 }

@@ -50,7 +50,7 @@ export function SettingsModal({
             transition={{ type: "spring", stiffness: 260, damping: 22 }}
             role="dialog"
             aria-modal="true"
-            className="pointer-events-auto fixed left-1/2 top-1/2 z-[80] flex w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper/85 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur"
+            className="pointer-events-auto fixed left-1/2 top-1/2 z-[80] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper/85 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur"
           >
             <header className="flex items-center justify-between gap-3">
               <div className="flex flex-col">

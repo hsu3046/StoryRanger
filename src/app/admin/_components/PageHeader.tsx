@@ -12,6 +12,7 @@
  */
 export function AdminPageHeader({
   storyId,
+  storyTitle,
   title,
   subtitle,
   count,
@@ -19,6 +20,9 @@ export function AdminPageHeader({
   actions,
 }: {
   storyId: string;
+  /** Human-readable story name (story.title). Falls back to id when
+   *  omitted so older callers keep working. */
+  storyTitle?: string;
   title: string;
   subtitle?: string;
   count?: number;
@@ -28,8 +32,11 @@ export function AdminPageHeader({
   return (
     <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
       <div className="flex items-center gap-2">
-        <p className="font-handwritten text-base text-accent-deep">
-          {storyId} / {title}
+        <p
+          className="font-handwritten text-base text-accent-deep"
+          title={storyId}
+        >
+          {storyTitle ?? storyId} / {title}
         </p>
         {typeof count === "number" && (
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
@@ -38,7 +45,7 @@ export function AdminPageHeader({
         )}
         {filePath && (
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
-            → {filePath}
+            {filePath}
           </code>
         )}
         {subtitle && (

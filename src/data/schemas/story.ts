@@ -5,18 +5,54 @@ import { CompanionIdSchema, SpeakerIdSchema } from "./primitives";
  * Story graph: Scene nodes connected by Branch edges.
  */
 
+export const RewardSchema = z.object({
+  items: z.array(z.string()).optional(),
+  medalId: z.string().optional(),
+  moodBoost: z
+    .array(
+      z.object({
+        companionId: CompanionIdSchema,
+        delta: z.number(),
+      }),
+    )
+    .optional(),
+});
+
+export const PatternPuzzleDefSchema = z.object({
+  kind: z.literal("sequence"),
+  title: z.string(),
+  symbols: z.array(z.string()),
+  sequence: z.array(z.number()),
+});
+
 export const BranchSchema = z.object({
   id: z.string(),
   label: z.string(),
   next: z.string(),
-  medalTrigger: z.string().nullable().optional(),
   addsCompanion: CompanionIdSchema.optional(),
   bgmOverride: z.string().optional(),
+  /** Optional mini-puzzle. `onFailMode` controls retry vs continue.
+   *  Boards are narrative only — actual rewards live on the next
+   *  scene's `reward`. */
+  puzzle: PatternPuzzleDefSchema.optional(),
+  onFailMode: z.enum(["retry", "skip"]).optional(),
+  /** Outcome narration shown AFTER the branch is taken and BEFORE
+   *  navigating to the next scene. Single tap continues. */
+  outcome: z.string().optional(),
 });
 
 export const SceneEndingSchema = z.object({
   id: z.string(),
   label: z.string(),
+});
+
+/** An authored "ask" question shown in the choice area. `characterId` must
+ *  reference a persona-bearing character (validated softly at author time
+ *  + runtime; the dialogue route 400s otherwise). */
+export const SceneAskSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  characterId: SpeakerIdSchema,
 });
 
 export const SceneSchema = z.object({
@@ -25,14 +61,25 @@ export const SceneSchema = z.object({
   speaker: SpeakerIdSchema,
   narration: z.string(),
   branches: z.array(BranchSchema),
-  allowFreeInput: z.boolean().optional(),
-  freeInputHint: z.string().optional(),
   ending: SceneEndingSchema.optional(),
+  /** One-shot reward granted on first entry to this scene. */
+  reward: RewardSchema.optional(),
+  /** Extra dialogue-able characters present in this scene (in addition
+   *  to the party companions and the scene speaker). Use this to expose
+   *  NPCs like Aunt Em on the first scene before they'd otherwise show
+   *  up on the dialogue rail. */
+  dialogueCharacters: z.array(SpeakerIdSchema).optional(),
+  /** Authored "ask" questions surfaced as chips in the choice area. */
+  asks: z.array(SceneAskSchema).optional(),
 });
 
 export const StorySchema = z.object({
   id: z.string(),
   title: z.string(),
+  /** Optional subtitle / tagline — shown under the title on the home
+   *  card and cover screens. Existing stories without this field are
+   *  still valid; the player UI falls back to title-only. */
+  subtitle: z.string().optional(),
   language: z.string(),
   ageRange: z.tuple([z.number(), z.number()]),
   estimatedMinutes: z.number(),
@@ -44,3 +91,6 @@ export const StorySchema = z.object({
 export type StoryT = z.infer<typeof StorySchema>;
 export type SceneT = z.infer<typeof SceneSchema>;
 export type BranchT = z.infer<typeof BranchSchema>;
+export type SceneAskT = z.infer<typeof SceneAskSchema>;
+export type RewardT = z.infer<typeof RewardSchema>;
+export type PatternPuzzleDefT = z.infer<typeof PatternPuzzleDefSchema>;

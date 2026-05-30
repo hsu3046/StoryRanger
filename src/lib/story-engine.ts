@@ -5,12 +5,12 @@ import type {
   Hero,
   Medal,
   MedalsFile,
-  NarrateResponse,
   PartyHp,
   PlayState,
   Scene,
   Story,
 } from "@/types/story";
+import type { RewardT } from "@/data/schemas";
 import { checkNewMedals } from "./medals-engine";
 import { DEFAULT_HERO } from "./narrative";
 
@@ -18,6 +18,8 @@ export interface TransitionResult {
   state: PlayState;
   scene: Scene;
   earnedMedals: Medal[];
+  /** Reward auto-granted on entering the new scene (1-shot per save). */
+  sceneReward?: RewardT;
 }
 
 /** Default max HP per attacker (also used as starting HP). */
@@ -35,22 +37,61 @@ export function newPlayState(story: Story, hero: Hero = DEFAULT_HERO): PlayState
     currentSceneId: story.startScene,
     earnedMedals: [],
     companions: [],
-    freeInputCount: 0,
+    dialogueCount: 0,
     branchHistory: [],
     completedEncounters: [],
+    completedSceneRewards: [],
     companionMoods: {},
     dialogueHistory: {},
     inventory: [],
     partyHp: { hero: DEFAULT_MAX_HP.hero },
     partyMaxHp: { hero: DEFAULT_MAX_HP.hero },
     fallenAttackers: [],
+    // No overlay on a fresh game — explicit so callers don't accidentally
+    // carry an old interaction over via shallow-merge.
+    interaction: undefined,
     updatedAt: new Date().toISOString(),
   };
 }
 
 /**
- * Apply a branch choice: add companion, navigate to next scene, and
- * detect newly earned medals (branch, scene, ending triggers).
+ * Apply a `Reward` to play state — folds items / medal / mood deltas in.
+ * Pure. Caller passes the resulting state along.
+ */
+export function applyReward(state: PlayState, reward: RewardT): PlayState {
+  if (!reward) return state;
+
+  const inventory =
+    reward.items && reward.items.length > 0
+      ? [...(state.inventory ?? []), ...reward.items]
+      : state.inventory;
+
+  const earnedMedals =
+    reward.medalId && !state.earnedMedals.includes(reward.medalId)
+      ? [...state.earnedMedals, reward.medalId]
+      : state.earnedMedals;
+
+  const companionMoods = { ...(state.companionMoods ?? {}) };
+  if (reward.moodBoost) {
+    for (const mb of reward.moodBoost) {
+      if (!state.companions.includes(mb.companionId)) continue;
+      const cur = companionMoods[mb.companionId] ?? 5;
+      companionMoods[mb.companionId] = Math.max(0, Math.min(10, cur + mb.delta));
+    }
+  }
+
+  return { ...state, inventory, earnedMedals, companionMoods };
+}
+
+/**
+ * Apply a branch choice: add companion, navigate to next scene, apply
+ * branch reward (if any), then auto-grant the new scene's one-shot
+ * reward (if any), and detect newly earned medals.
+ *
+ * NOTE: Caller is responsible for puzzle handling — when `branch.puzzle`
+ * exists, the UI runs the puzzle FIRST, then calls `takeBranch` with the
+ * branch only after puzzle resolution. Pass `skipReward=true` if the
+ * puzzle failed in `skip` mode.
  *
  * Pure — returns a new state. Caller persists & dispatches UI side effects.
  */
@@ -59,6 +100,7 @@ export function takeBranch(
   branch: Branch,
   story: Story,
   medalsCatalog: MedalsFile,
+  options: { skipReward?: boolean } = {},
 ): TransitionResult {
   const nextScene = story.scenes[branch.next];
   if (!nextScene) {
@@ -94,6 +136,22 @@ export function takeBranch(
     updatedAt: new Date().toISOString(),
   };
 
+  // Scene reward — one-shot on first entry to this scene. A failed
+  // `skip`-mode puzzle still navigates here but must NOT grant the reward
+  // (the puzzle gates it), so honour `skipReward`. Not marked completed
+  // either, so a later clean entry can still earn it.
+  let sceneReward: RewardT | undefined;
+  const sceneRewardDef = (nextScene as Scene & { reward?: RewardT }).reward;
+  const completed = new Set(nextState.completedSceneRewards ?? []);
+  if (sceneRewardDef && !completed.has(branch.next) && !options.skipReward) {
+    nextState = applyReward(nextState, sceneRewardDef);
+    nextState = {
+      ...nextState,
+      completedSceneRewards: [...completed, branch.next],
+    };
+    sceneReward = sceneRewardDef;
+  }
+
   const earnedMedals = checkNewMedals(medalsCatalog, nextState, {
     enteredSceneId: branch.next,
     tookBranchId: branch.id,
@@ -110,48 +168,7 @@ export function takeBranch(
     };
   }
 
-  return { state: nextState, scene: nextScene, earnedMedals };
-}
-
-/**
- * Apply an LLM narrate response: similar to takeBranch but also bumps
- * the free-input counter (which itself may trigger a medal).
- */
-export function applyNarrateResponse(
-  state: PlayState,
-  response: NarrateResponse,
-  story: Story,
-  medalsCatalog: MedalsFile,
-): TransitionResult {
-  const nextScene = story.scenes[response.nextSceneId];
-  if (!nextScene) {
-    throw new Error(`Scene not found: ${response.nextSceneId}`);
-  }
-
-  let nextState: PlayState = {
-    ...state,
-    currentSceneId: response.nextSceneId,
-    freeInputCount: state.freeInputCount + 1,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const earnedMedals = checkNewMedals(medalsCatalog, nextState, {
-    enteredSceneId: response.nextSceneId,
-    tookBranchId: response.medalTrigger ?? undefined,
-    reachedEndingId: nextScene.ending?.id,
-  });
-
-  if (earnedMedals.length > 0) {
-    nextState = {
-      ...nextState,
-      earnedMedals: [
-        ...nextState.earnedMedals,
-        ...earnedMedals.map((m) => m.id),
-      ],
-    };
-  }
-
-  return { state: nextState, scene: nextScene, earnedMedals };
+  return { state: nextState, scene: nextScene, earnedMedals, sceneReward };
 }
 
 function addCompanion(

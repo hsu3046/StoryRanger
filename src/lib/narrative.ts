@@ -1,4 +1,4 @@
-import type { Hero, HeroGender } from "@/types/story";
+import type { CharactersFile, Hero, HeroGender, SpeakerId } from "@/types/story";
 
 /**
  * Template tokens used in scenes.json narration + branch labels + hints.
@@ -55,7 +55,33 @@ export function formatNarration(text: string, hero: Hero): string {
   });
 }
 
+/** Fallback hero used whenever a play session starts WITHOUT the onboarding
+ *  name step (admin scene preview, direct /play load, reset, or a save missing
+ *  its hero). The name is a neutral "Hero" rather than a story-specific name so
+ *  it never leaks into narration/dialogue as if it were the real protagonist. */
 export const DEFAULT_HERO: Hero = {
-  name: "Dorothy",
+  name: "Hero",
   gender: "girl",
 };
+
+/**
+ * The story's protagonist is the character flagged `isHero`. Resolving it
+ * from data (rather than a hardcoded "dorothy" id) lets every story name its
+ * hero whatever it likes. Falls back to "dorothy" for legacy content that
+ * predates the flag.
+ */
+export function resolveHeroId(characters: CharactersFile): SpeakerId {
+  return characters.characters.find((c) => c.isHero)?.id ?? "dorothy";
+}
+
+/**
+ * Asset filename slug for a character. The hero's art lives at
+ * `…/hero.{ext}` (a generic-protagonist convention reused across stories),
+ * so the hero id maps to "hero"; everyone else maps to their own id.
+ */
+export function characterAssetSlug(
+  id: SpeakerId,
+  heroId: SpeakerId,
+): string {
+  return id === heroId ? "hero" : id;
+}

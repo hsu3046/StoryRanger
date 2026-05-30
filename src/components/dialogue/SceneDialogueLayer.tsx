@@ -1,0 +1,474 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+
+import type {
+  Branch,
+  CharactersFile,
+  CompanionId,
+  DialogueMessage,
+  DialogueResponse,
+  Hero,
+  SpeakerId,
+} from "@/types/story";
+import { canTalkTo } from "@/lib/dialogue-personas";
+import { DialogueBubble } from "./DialogueBubble";
+import { DialogueChoiceCards } from "./DialogueChoiceCards";
+
+interface Props {
+  storyId: string;
+  sceneId: string;
+  sceneSpeaker: SpeakerId;
+  sceneNarration: string;
+  hero: Hero;
+  companions: CompanionId[];
+  /** Extra dialogue-able characters declared on the current Scene —
+   *  added to the rail on top of companions + scene speaker. */
+  extraDialogueCharacters: SpeakerId[];
+  characters: CharactersFile;
+  /** Resolve a portrait base path (no extension) for the rail thumbnails.
+   *  Convention: `/stories/<storyId>/dialogue/<characterId>` (1024×1024). */
+  portraitBase: (id: SpeakerId) => string;
+  /** Current mood per character (from PlayState.companionMoods or 5). */
+  mood: (id: SpeakerId) => number;
+  /** Whether this character has already gifted the hero (gate input). */
+  hasGifted: (id: SpeakerId) => boolean;
+  /** Cross-character memory of things the hero has shared (global). */
+  heroMemory: string[];
+  /** Deterministic "adventures so far" one-liner (medals, items, etc.). */
+  journeyNote: string;
+  /** Current scene branches — surfaced as "advance the story" choices
+   *  alongside the LLM reply suggestions while a dialogue is open. */
+  branches: Branch[];
+  /** Take a branch picked mid-dialogue (the layer closes the conversation
+   *  first, then this navigates to the next scene). */
+  onTakeBranch: (branch: Branch) => void;
+  /** Latest dialogue history per character (sliding window). */
+  history: (id: SpeakerId) => DialogueMessage[];
+  onApplyTurn: (
+    characterId: SpeakerId,
+    resp: DialogueResponse,
+    heroText: string,
+  ) => void;
+  onSessionClose: (characterId: SpeakerId) => void;
+  /** Fires whenever a dialogue opens / closes — caller hides the
+   *  underlying narration + branch UI to avoid overlap. */
+  onActiveChange?: (active: boolean) => void;
+  /** External request to open a SEEDED conversation (from the choice-area
+   *  "ask" chips). When `key` changes, the layer opens `characterId` and
+   *  immediately sends `question` as a normal hero turn. */
+  askRequest?: { characterId: SpeakerId; question: string; key: number } | null;
+}
+
+const IMAGE_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
+
+/**
+ * Dialogue affordances + bubble. All dialogue-able characters present
+ * in the current scene (companions + dialogue-able scene speaker) are
+ * pinned as portrait chips down the left edge of the screen. Tap a
+ * portrait → a speech bubble blooms to its right. Only one active at a
+ * time.
+ */
+export function SceneDialogueLayer({
+  storyId,
+  sceneId,
+  sceneSpeaker,
+  sceneNarration,
+  hero,
+  companions,
+  extraDialogueCharacters,
+  characters,
+  portraitBase,
+  mood,
+  hasGifted,
+  heroMemory,
+  journeyNote,
+  branches,
+  onTakeBranch,
+  history,
+  onApplyTurn,
+  onSessionClose,
+  onActiveChange,
+  askRequest,
+}: Props) {
+  void storyId;
+  const [active, setActive] = useState<SpeakerId | null>(null);
+  const [latestReply, setLatestReply] = useState<{
+    reply: string;
+    action: string | null;
+    suggestions: string[];
+    itemGift?: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  // Choices are held back until the reply has finished streaming PLUS a short
+  // beat — otherwise the buttons pop in over a half-typed bubble.
+  const [choicesReady, setChoicesReady] = useState(false);
+  const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Pending auto-close (when the LLM ends the conversation). Stored so it can
+  // be cancelled if the player closes / starts a new turn first — otherwise it
+  // fires later and closes a fresh session.
+  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionStartedRef = useRef<SpeakerId | null>(null);
+  const handledAskKeyRef = useRef<number | null>(null);
+
+  /** ~0.7s breathing room between the reply landing and the choices. */
+  const CHOICE_REVEAL_DELAY_MS = 700;
+  function clearChoiceTimer() {
+    if (choiceTimerRef.current) {
+      clearTimeout(choiceTimerRef.current);
+      choiceTimerRef.current = null;
+    }
+  }
+  function clearEndTimer() {
+    if (endTimerRef.current) {
+      clearTimeout(endTimerRef.current);
+      endTimerRef.current = null;
+    }
+  }
+  function handleReplyTyped() {
+    clearChoiceTimer();
+    choiceTimerRef.current = setTimeout(
+      () => setChoicesReady(true),
+      CHOICE_REVEAL_DELAY_MS,
+    );
+  }
+  // Clear any pending timers on unmount.
+  useEffect(
+    () => () => {
+      clearChoiceTimer();
+      clearEndTimer();
+    },
+    [],
+  );
+
+  const characterMap = useMemo(() => {
+    const m: Record<string, (typeof characters.characters)[number]> = {};
+    for (const c of characters.characters) m[c.id] = c;
+    return m;
+  }, [characters]);
+
+  /** Dialogue-able characters present in the scene:
+   *    - companions in the party
+   *    - scene.speaker if dialogue-able (NPCs like Wizard, Glinda)
+   *    - extras declared on the scene (e.g. Aunt Em on s01_kansas) */
+  const railIds = useMemo<SpeakerId[]>(() => {
+    const ids = new Set<SpeakerId>();
+    // Availability is derived from persona presence (single source of
+    // truth), so a character with no persona never shows a dead button.
+    for (const c of companions) {
+      if (canTalkTo(characterMap[c])) ids.add(c as SpeakerId);
+    }
+    if (canTalkTo(characterMap[sceneSpeaker])) ids.add(sceneSpeaker);
+    for (const id of extraDialogueCharacters) {
+      if (canTalkTo(characterMap[id])) ids.add(id);
+    }
+    // A seeded "ask" can target a persona character not otherwise on the
+    // rail. Surface the active character while talking so the reply bubble
+    // (gated on rail membership) anchors, and the player sees who answers.
+    if (active && canTalkTo(characterMap[active])) ids.add(active);
+    return Array.from(ids);
+  }, [companions, sceneSpeaker, extraDialogueCharacters, characterMap, active]);
+
+  const activeRailIdx = useMemo(
+    () => (active ? railIds.indexOf(active) : -1),
+    [railIds, active],
+  );
+
+  // Kick off a first-turn greeting whenever a new character is activated.
+  useEffect(() => {
+    if (!active) return;
+    if (sessionStartedRef.current === active) return;
+    sessionStartedRef.current = active;
+    void sendTurn(active, "", { isFirstTurn: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot per active change
+  }, [active]);
+
+  // Seeded "ask" open (from the choice-area chips): open the named character
+  // and send the question as the opening turn. Pre-mark sessionStartedRef so
+  // the greeting effect above doesn't also fire for this character.
+  useEffect(() => {
+    if (!askRequest) return;
+    if (handledAskKeyRef.current === askRequest.key) return;
+    handledAskKeyRef.current = askRequest.key;
+    const { characterId, question } = askRequest;
+    if (!canTalkTo(characterMap[characterId])) return;
+    if (active && active !== characterId) closeSession();
+    sessionStartedRef.current = characterId;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- open the seeded conversation in response to an external request
+    setActive(characterId);
+    setLatestReply(null);
+    void sendTurn(characterId, question, { isFirstTurn: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot per askRequest.key
+  }, [askRequest?.key]);
+
+  useEffect(() => {
+    onActiveChange?.(active !== null);
+  }, [active, onActiveChange]);
+
+  /** Abort the in-flight dialogue fetch (close, character switch). */
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function sendTurn(
+    characterId: SpeakerId,
+    heroText: string,
+    opts: { isFirstTurn?: boolean } = {},
+  ) {
+    // Cancel any previous in-flight request so a fast double-tap doesn't
+    // race two characters' replies.
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    setLoading(true);
+    setLatestReply(null);
+    // New turn → hide the choices until this reply finishes streaming, and
+    // cancel any pending auto-close from a previous "endsConversation" turn.
+    clearChoiceTimer();
+    clearEndTimer();
+    setChoicesReady(false);
+    try {
+      const res = await fetch("/api/dialogue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
+        body: JSON.stringify({
+          storyId,
+          characterId,
+          hero,
+          sceneId,
+          sceneNarration,
+          companions,
+          currentMood: mood(characterId),
+          history: history(characterId),
+          utterance: heroText,
+          isFirstTurn: !!opts.isFirstTurn,
+          alreadyGifted: hasGifted(characterId),
+          heroMemory,
+          journeyNote,
+        }),
+      });
+      if (!res.ok) throw new Error(`dialogue ${res.status}`);
+      const data = (await res.json()) as DialogueResponse;
+      setLatestReply({
+        reply: data.reply,
+        action: data.action ?? null,
+        suggestions: data.suggestions ?? [],
+        itemGift: data.itemGift,
+      });
+      onApplyTurn(characterId, data, opts.isFirstTurn ? "" : heroText);
+      if (data.endsConversation) {
+        clearEndTimer();
+        endTimerRef.current = setTimeout(() => closeSession(), 2400);
+      }
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return;
+      console.warn("[dialogue]", err);
+    } finally {
+      // Only clear loading if THIS request is still the current one. A
+      // superseded (aborted) request must not turn off the spinner that
+      // the newer in-flight request just turned on.
+      if (abortRef.current === abort) {
+        setLoading(false);
+        abortRef.current = null;
+      }
+    }
+  }
+
+  function closeSession() {
+    // Abort any pending dialogue stream so it stops writing into the
+    // closed bubble (and stops costing tokens on the server).
+    abortRef.current?.abort();
+    abortRef.current = null;
+    clearChoiceTimer();
+    clearEndTimer();
+    setChoicesReady(false);
+    if (active) {
+      onSessionClose(active);
+      sessionStartedRef.current = null;
+    }
+    setActive(null);
+    setLatestReply(null);
+  }
+
+  function characterColor(id: SpeakerId): string {
+    return characterMap[id]?.color ?? "#5a4128";
+  }
+  function characterName(id: SpeakerId): string {
+    return characterMap[id]?.name ?? id;
+  }
+
+  /** Rail layout — kept in sync with the portrait button dimensions
+   *  (h-14 ⇒ 56px) and the `gap-5` (20px) between entries. */
+  const RAIL_LEFT_PX = 16;
+  const RAIL_TOP_PX = 30;
+  const RAIL_GAP_PX = 76;
+
+  return (
+    <>
+      {/* Left-edge portrait rail. Always visible — tap to open / switch.
+          Each entry shows a small "Tap to Speak" label above the portrait
+          while no dialogue is active; the label hides once a bubble opens. */}
+      <div
+        className="pointer-events-none fixed z-[55] flex flex-col gap-5"
+        style={{ left: `${RAIL_LEFT_PX}px`, top: `${RAIL_TOP_PX}px` }}
+      >
+        {railIds.map((id, idx) => {
+          const isActive = active === id;
+          /** "← Tap to speak" hint sits to the RIGHT of the very first
+           *  portrait whenever no dialogue is active. Keeps the rail
+           *  itself clean while still signposting that the portraits
+           *  are interactive. */
+          const showHint = !active && idx === 0;
+          return (
+            <div key={`rail-${id}`} className="relative">
+              {showHint && (
+                <motion.span
+                  className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap text-sm font-semibold text-paper"
+                  style={{
+                    textShadow:
+                      "0 2px 6px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.95)",
+                  }}
+                  // Gentle nudge — the arrow "tugs" rightward then settles,
+                  // opacity breathes slightly so the eye lands on it without
+                  // it being noisy. translateY(-50%) stays in inline style.
+                  animate={{
+                    x: [0, 6, 0],
+                    opacity: [0.85, 1, 0.85],
+                  }}
+                  transition={{
+                    duration: 1.8,
+                    ease: "easeInOut",
+                    repeat: Infinity,
+                  }}
+                  aria-hidden
+                >
+                  ← Tap to speak
+                </motion.span>
+              )}
+              <button
+                type="button"
+                // While a dialogue is open the whole rail is inert: tapping a
+                // portrait would otherwise close (self) or abruptly switch
+                // (other) the conversation — an easy mis-tap that ends or
+                // disrupts the chat. Close via "End conversation" / a branch
+                // instead, then the rail re-activates.
+                disabled={active !== null}
+                onClick={() => {
+                  if (active !== null) return;
+                  setActive(id);
+                  setLatestReply(null);
+                }}
+                aria-label={`Talk to ${characterName(id)}`}
+                title={`Talk to ${characterName(id)}`}
+                className={`relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-pill bg-paper/55 backdrop-blur-sm transition-all ${
+                  active !== null
+                    ? `pointer-events-none ${isActive ? "scale-110" : "opacity-50"}`
+                    : "pointer-events-auto hover:scale-105"
+                }`}
+                style={{
+                  // Strong, visible border — characterColor outer ring +
+                  // soft paper halo so it reads cleanly over busy art.
+                  boxShadow: isActive
+                    ? `0 0 0 3px var(--color-accent-deep, #7a4f0e), 0 0 0 6px rgba(255,250,240,0.7), 0 6px 14px rgba(0,0,0,0.28)`
+                    : `0 0 0 3px ${characterColor(id)}, 0 0 0 6px rgba(255,250,240,0.7), 0 4px 12px rgba(0,0,0,0.25)`,
+                }}
+              >
+                <PortraitImg
+                  base={portraitBase(id)}
+                  alt={characterName(id)}
+                  color={characterColor(id)}
+                />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Active dialogue bubble — always rail-positioned (right of the
+          tapped portrait). */}
+      <AnimatePresence>
+        {active && activeRailIdx >= 0 && (
+          <DialogueBubble
+            key={`bubble-rail-${active}`}
+            railTopPx={RAIL_TOP_PX + activeRailIdx * RAIL_GAP_PX}
+            characterName={characterName(active)}
+            characterColor={characterColor(active)}
+            reply={latestReply?.reply ?? ""}
+            action={latestReply?.action ?? null}
+            loading={loading || !latestReply}
+            onTypingDone={handleReplyTyped}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {active && latestReply && choicesReady && (
+          <DialogueChoiceCards
+            key={`choices-${active}`}
+            suggestions={latestReply.suggestions}
+            branches={branches}
+            loading={loading}
+            onSend={(t) => sendTurn(active, t)}
+            onTakeBranch={(b) => {
+              // Navigate FIRST (commitBranch's direct setState), THEN close
+              // (onSessionClose's functional setState folds the dialogue count
+              // in on top) — the reverse order would clobber the count.
+              onTakeBranch(b);
+              closeSession();
+            }}
+            onEnd={closeSession}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/**
+ * Small portrait with extension fallback. Falls back to a color disc
+ * when no image is found — keeps the rail visually consistent even
+ * before dialogue/ portraits exist for every character.
+ */
+function PortraitImg({
+  base,
+  alt,
+  color,
+}: {
+  base: string;
+  alt: string;
+  color: string;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const list = useMemo(() => IMAGE_EXTS.map((e) => base + e), [base]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
+    setIdx(0);
+    setFailed(false);
+  }, [base]);
+
+  if (failed) {
+    return (
+      <span
+        className="block h-full w-full"
+        style={{ backgroundColor: color }}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- extension fallback
+    <img
+      src={list[idx]}
+      alt={alt}
+      draggable={false}
+      className="block h-full w-full object-cover"
+      onError={() => {
+        if (idx + 1 < list.length) setIdx(idx + 1);
+        else setFailed(true);
+      }}
+    />
+  );
+}

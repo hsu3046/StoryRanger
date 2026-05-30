@@ -35,14 +35,17 @@ function matchesTrigger(
 ): boolean {
   const t = medal.trigger;
   switch (t.type) {
+    // Story-specific triggers only fire while playing their own story
+    // (medals are a global catalog now).
     case "branch":
-      return ctx.tookBranchId === t.branchId;
+      return t.storyId === state.storyId && ctx.tookBranchId === t.branchId;
     case "scene":
-      return ctx.enteredSceneId === t.sceneId;
-    case "free_input_count":
-      return state.freeInputCount >= t.min;
+      return t.storyId === state.storyId && ctx.enteredSceneId === t.sceneId;
     case "ending":
-      return ctx.reachedEndingId === t.endingId;
+      return t.storyId === state.storyId && ctx.reachedEndingId === t.endingId;
+    case "dialogue_count":
+      // Story-agnostic — fires in any story.
+      return state.dialogueCount >= t.min;
     case "encounter":
       // Never auto-fires from a scene transition — encounter results push
       // the id straight into earnedMedals.

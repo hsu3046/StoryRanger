@@ -1,148 +1,18 @@
 {
   "items": [
     {
-      "id": "wolf-fang",
-      "name": "Wolf Fang",
-      "icon": "🦷",
-      "description": "A single sharp fang dropped by a forest wolf. A reminder of the path you stood your ground on.",
-      "category": "trophy",
-      "rarity": "common"
+      "id": "magic-berry",
+      "name": "Magic Berry",
+      "icon": "🫐",
+      "description": "A plump, glowing berry that mends small hurts. Restores 1 heart in battle.",
+      "effect": { "kind": "heal", "amount": 1 }
     },
     {
-      "id": "wolf-pelt",
-      "name": "Wolf Pelt",
-      "icon": "🐺",
-      "description": "Thick grey fur from the pack leader. Heavy and warm — a quiet badge of courage.",
-      "category": "trophy",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "feather-of-flight",
-      "name": "Feather of Flight",
-      "icon": "🪶",
-      "description": "A glossy crow feather that catches the slightest breeze. Light as a wish.",
-      "category": "trophy",
-      "rarity": "common"
-    },
-    {
-      "id": "feather-bundle",
-      "name": "Feather Bundle",
-      "icon": "🪶",
-      "description": "A bundle of black feathers tied with a scrap of road-dust ribbon. Souvenir of the crow flock.",
-      "category": "trophy",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "tarnished-coin",
-      "name": "Tarnished Coin",
-      "icon": "🪙",
-      "description": "An old copper coin dropped by a goblin. Worthless to merchants — priceless as a memory.",
-      "category": "trophy",
-      "rarity": "common"
-    },
-    {
-      "id": "enchanted-acorn",
-      "name": "Enchanted Acorn",
-      "icon": "🌰",
-      "description": "An acorn that hums faintly when held still. Given by an old apple tree that came back to its senses.",
-      "category": "keepsake",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "lost-pup-trust",
-      "name": "Pup's Trust",
-      "icon": "🐾",
-      "description": "Not a thing you can hold — but you carry the memory of a little wolf pup licking your fingers.",
-      "category": "keepsake",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "silk-thread",
-      "name": "Crystal Silk",
-      "icon": "🕸️",
-      "description": "A single strand of impossibly fine silk from a crystal cave spider. Glints rainbow in the light.",
-      "category": "trophy",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "swamp-pearl",
-      "name": "Iridescent Pearl",
-      "icon": "🫧",
-      "description": "A pearl left behind by a gentle bog creature. Soft swirling colors inside.",
-      "category": "trophy",
-      "rarity": "rare"
-    },
-    {
-      "id": "wisp-light",
-      "name": "Wisp Light",
-      "icon": "✨",
-      "description": "A soft blue glow you can carry in your palm. Lights up dark corners — and dark moods.",
-      "category": "tool",
-      "rarity": "rare"
-    },
-    {
-      "id": "mouse-call",
-      "name": "Silver Whistle",
-      "icon": "🔔",
-      "description": "A tiny silver whistle gifted by the Mouse King. Blow it once to call the mice in time of need.",
-      "category": "tool",
-      "rarity": "rare"
-    },
-    {
-      "id": "silver-thread",
-      "name": "Silver Thread",
-      "icon": "🧵",
-      "description": "A coil of bright silver thread from the field mice. 'For the road home,' the Mouse King said.",
-      "category": "keepsake",
-      "rarity": "rare"
-    },
-    {
-      "id": "stone-flake",
-      "name": "Stone Flake",
-      "icon": "🪨",
-      "description": "A small stone chip from a Hammerhead's shoulder. Smooth as river-rock, heavy as a promise.",
-      "category": "trophy",
-      "rarity": "common"
-    },
-    {
-      "id": "monkey-feather",
-      "name": "Winged Monkey Feather",
-      "icon": "🪶",
-      "description": "A tail-feather from a winged monkey scout. Soft grey down on one side, leather-stiff on the other.",
-      "category": "trophy",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "bat-wing",
-      "name": "Bat Wing",
-      "icon": "🦇",
-      "description": "A thin leathery wing-tip from the castle bat swarm. Useful proof you walked the witch's halls.",
-      "category": "trophy",
-      "rarity": "common"
-    },
-    {
-      "id": "kalidah-claw",
-      "name": "Kalidah's Claw",
-      "icon": "🔪",
-      "description": "A long curved claw left by a Kalidah on the path. Earned by standing brave when running was easier.",
-      "category": "trophy",
-      "rarity": "rare"
-    },
-    {
-      "id": "witch-broom",
-      "name": "Witch's Broom",
-      "icon": "🧹",
-      "description": "The broomstick of the Wicked Witch of the West. Proof you faced the worst of Oz and stood tall.",
-      "category": "key-item",
-      "rarity": "unique"
-    },
-    {
-      "id": "witch-hat",
-      "name": "Witch's Hat",
-      "icon": "🎩",
-      "description": "The tall black hat of the Wicked Witch. Older than it has any right to be, light as ash.",
-      "category": "key-item",
-      "rarity": "unique"
+      "id": "honey-cake",
+      "name": "Honey Cake",
+      "icon": "🍯",
+      "description": "Aunt Em's honey cake — a big warm bite brings you back. Restores 2 hearts in battle.",
+      "effect": { "kind": "heal", "amount": 2 }
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PuzzleKindSchema, SpriteSizeSchema } from "./primitives";
+import { MonsterPuzzleKindSchema, SpriteSizeSchema } from "./primitives";
 
 export const MonsterTypeSchema = z.enum(["hostile", "neutral", "friendly"]);
 
@@ -10,9 +10,14 @@ export const MonsterStatsSchema = z.object({
   hits: z.number().min(0).max(20),
   drops: z.array(z.string()).optional(),
   size: SpriteSizeSchema,
-  puzzleKind: PuzzleKindSchema.optional(),
+  // Defaults to "random" so new monsters (and legacy JSON without the
+  // field) vary their hero puzzle on every attack.
+  puzzleKind: MonsterPuzzleKindSchema.default("random"),
   airborne: z.boolean().optional(),
   notes: z.string().optional(),
+  /** Optional sprite path override (extensionless base). Omit to use
+   *  the id-based convention `/stories/<id>/monsters/<monsterId>`. */
+  image: z.string().optional(),
 });
 
 export const MonstersFileSchema = z.object({

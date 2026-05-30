@@ -13,7 +13,7 @@ import { wizardOfOz } from "@/stories/wizard-of-oz";
 
 const NAME_MAX = 20;
 
-interface StoryCardMeta {
+export interface StoryCardMeta {
   id: string;
   title: string;
   /** Tagline shown under the title. */
@@ -22,17 +22,14 @@ interface StoryCardMeta {
   coverBase: string;
 }
 
-/** Story catalog shown on the home carousel. Add new stories here. */
-const STORIES: StoryCardMeta[] = [
-  {
-    id: "wizard-of-oz",
-    title: "The Wonderful Wizard of Oz",
-    subtitle: "A girl, a road of yellow brick, and three unlikely friends.",
-    coverBase: "/stories/wizard-of-oz/cover",
-  },
-];
+interface Props {
+  /** Story catalog assembled server-side from scenes.json — single
+   *  source of truth. Each entry mirrors `story.title`,
+   *  `story.subtitle`, and `story.coverImage` (extension stripped). */
+  stories: StoryCardMeta[];
+}
 
-export function HomeOnboarding() {
+export function HomeOnboarding({ stories: STORIES }: Props) {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [savedMap, setSavedMap] = useState<Record<string, PlayState | null>>(
@@ -77,7 +74,7 @@ export function HomeOnboarding() {
   }
 
   return (
-    <main className="relative h-dvh w-dvw overflow-hidden bg-ink">
+    <main className="fixed inset-0 z-0 overflow-hidden bg-ink">
       {/* Full-bleed cover */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -153,7 +150,7 @@ export function HomeOnboarding() {
                     Continue
                   </span>
                   <span className="text-base font-medium">
-                    as {saved.hero?.name ?? "Dorothy"}
+                    as {saved.hero?.name ?? "Hero"}
                   </span>
                 </span>
                 <span className="font-handwritten text-2xl text-accent-deep/70 transition-transform group-hover:translate-x-0.5">
@@ -214,7 +211,7 @@ export function HomeOnboarding() {
               exit={{ opacity: 0, scale: 0.97, y: 6 }}
               transition={{ type: "spring", stiffness: 260, damping: 22 }}
               onSubmit={handleSubmit}
-              className="fixed left-1/2 top-1/2 z-40 flex w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur sm:p-7"
+              className="fixed left-1/2 top-1/2 z-40 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur sm:p-7"
             >
               <header className="flex flex-col items-center gap-1">
                 <p className="font-handwritten text-xl text-accent-deep">

@@ -31,6 +31,13 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
 
     async function load() {
       setError(null);
+      console.log("[narration] mount", {
+        textPreview: text.slice(0, 40),
+        voice: character.voice,
+        voiceSpeed: character.voiceSpeed,
+        muted,
+        playKey,
+      });
 
       // Stop & dispose any previous audio.
       if (audioRef.current) {
@@ -42,13 +49,18 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
         urlRef.current = null;
       }
 
-      if (muted) return;
+      if (muted) {
+        console.log("[narration] skip — muted");
+        return;
+      }
 
       try {
         const key = await buildCacheKey(text, character.voice, character.voiceSpeed);
         let blob = await getCachedAudio(key);
+        console.log("[narration] cache lookup", { hit: !!blob, key: key.slice(0, 12) });
 
         if (!blob) {
+          console.log("[narration] fetching /api/tts");
           const res = await fetch("/api/tts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -58,32 +70,43 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
               voiceSpeed: character.voiceSpeed,
             }),
           });
+          console.log("[narration] fetch response", { status: res.status, ok: res.ok });
           if (res.status === 503) {
-            // No API key configured — silently disable narration audio.
+            console.warn("[narration] 503 — OPENAI_API_KEY not set on server");
             return;
           }
           if (!res.ok) {
-            console.warn(`[narration audio] tts ${res.status}`);
+            const errText = await res.text().catch(() => "");
+            console.warn(`[narration] tts ${res.status}`, errText.slice(0, 200));
             return;
           }
           blob = await res.blob();
+          console.log("[narration] blob received", { size: blob.size, type: blob.type });
           await setCachedAudio(key, blob);
         }
 
-        if (cancelled) return;
+        if (cancelled) {
+          console.log("[narration] cancelled before play");
+          return;
+        }
 
         const url = URL.createObjectURL(blob);
         urlRef.current = url;
         const el = new Audio(url);
+        // Narration sits at full volume; BGM is attenuated in audio-engine.ts
+        // (BGM_VOLUME = 0.18) to keep the voice clearly forward.
+        el.volume = 1.0;
         audioRef.current = el;
 
-        // Attempt autoplay. iOS Safari may reject; ignore that.
-        el.play().catch(() => {
-          /* autoplay blocked — user can tap the narration box to retry */
-        });
+        console.log("[narration] play() attempt");
+        el.play()
+          .then(() => console.log("[narration] play() ✓"))
+          .catch((err) => {
+            console.warn("[narration] play() rejected:", err?.name, err?.message);
+          });
       } catch (err) {
         if (!cancelled) {
-          console.warn("[narration audio]", err);
+          console.warn("[narration] threw:", err);
           setError("audio_failed");
         }
       }

@@ -7,19 +7,23 @@ export const EncounterTriggerRequiresSchema = z.object({
 });
 
 export const EncounterTriggerSchema = z.object({
-  afterScene: z.string(),
-  chance: z.number().min(0).max(1),
+  /** Source scene the branch originates from. */
+  sceneId: z.string(),
+  /** Branch id within `sceneId` that, when traversed, may roll this
+   *  encounter. */
+  branchId: z.string(),
+  /** How many copies of this battle to drop into the shuffle pool when
+   *  the branch is taken. Default 1. The pool is shuffled and consumed
+   *  in order before the destination scene's narration shows. */
+  count: z.number().int().min(1).optional(),
   requires: EncounterTriggerRequiresSchema.optional(),
-  once: z.boolean().optional(),
 });
 
 export const EncounterIntroSchema = z.object({
   bg: z.string(),
-  narration: z.string(),
 });
 
 export const EncounterRewardsSchema = z.object({
-  victoryItems: z.array(z.string()).optional(),
   medalId: z.string().optional(),
   moodBoost: z
     .array(
@@ -34,54 +38,20 @@ export const EncounterRewardsSchema = z.object({
 export const EncounterOutroSchema = z.object({
   victory: z.string(),
   defeat: z.string().optional(),
-  escape: z.string().optional(),
 });
-
-export const PatternPuzzleDefSchema = z.object({
-  kind: z.literal("sequence"),
-  title: z.string(),
-  symbols: z.array(z.string()),
-  sequence: z.array(z.number()),
-});
-
-export const StoryChoiceFailureSchema = z.object({
-  outroNarration: z.string(),
-  rewards: EncounterRewardsSchema.optional(),
-});
-
-export const StoryChoiceSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  outroNarration: z.string(),
-  rewards: EncounterRewardsSchema.optional(),
-  requires: EncounterTriggerRequiresSchema.optional(),
-  puzzle: PatternPuzzleDefSchema.optional(),
-  onFail: StoryChoiceFailureSchema.optional(),
-});
-
-export const EncounterKindSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("battle"),
-    monsterIds: z.array(z.string()),
-  }),
-  z.object({
-    kind: z.literal("story"),
-    outcome: z.literal("auto-victory").optional(),
-    choices: z.array(StoryChoiceSchema).optional(),
-  }),
-]);
 
 export const EncounterDefSchema = z.object({
   id: z.string(),
   title: z.string(),
   trigger: EncounterTriggerSchema,
   intro: EncounterIntroSchema,
-  body: EncounterKindSchema,
+  body: z.object({
+    kind: z.literal("battle"),
+    monsterIds: z.array(z.string()),
+  }),
   rewards: EncounterRewardsSchema,
   outro: EncounterOutroSchema,
   displayMonsters: z.array(z.string()).optional(),
-  nextSceneOnVictory: z.string().optional(),
-  nextSceneOnDefeat: z.string().optional(),
 });
 
 export const EncountersFileSchema = z.object({

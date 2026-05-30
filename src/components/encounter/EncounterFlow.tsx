@@ -1,50 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 import type {
   AttackerId,
+  Character,
   CompanionId,
   CompanionMoods,
   Hero,
   PartyHp,
   SpeakerId,
 } from "@/types/story";
-import type {
-  EncounterDef,
-  EncounterRewards,
-  StoryChoice,
-} from "@/types/encounter";
+import type { EncounterDef } from "@/types/encounter";
+import type { BattleState } from "@/lib/battle-engine";
+import { formatNarration } from "@/lib/narrative";
 
 import { BattleScreen } from "../battle/BattleScreen";
-import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
-import { PatternPuzzle } from "./PatternPuzzle";
 import { MONSTERS } from "@/data/monsters";
-import { prettyItem } from "@/data/items";
-import { characterSize, sizeScale } from "@/lib/sprite-size";
-
-function monsterSlots(count: number): StagePosition[] {
-  // Keep the centre of the canvas free for narration — push monsters to
-  // the right edge.
-  if (count <= 1) return ["far-right"];
-  if (count === 2) return ["right", "far-right"];
-  if (count === 3) return ["right-center", "right", "far-right"];
-  return ["center", "right-center", "right", "far-right"].slice(0, count) as StagePosition[];
-}
+import { getMedal } from "@/data/medals";
 
 export interface EncounterResult {
   encounterId: string;
   outcome: "victory" | "defeat" | "escaped";
-  /** Final HP per attacker — null for non-battle encounters (no HP change). */
-  partyHp: PartyHp | null;
+  /** Final HP per attacker after the battle. */
+  partyHp: PartyHp;
   /** Attackers KO'd this encounter — appended to PlayState.fallenAttackers. */
   fallenAttackers: AttackerId[];
   itemsGained: string[];
+  /** Consumables spent during the battle — removed from inventory. */
+  itemsConsumed: string[];
   medalId?: string;
   moodBoost?: { companionId: CompanionId; delta: number }[];
-  /** Encounter may force a transition to a specific main scene. */
-  forceNextSceneId?: string;
 }
 
 interface Props {
@@ -57,20 +44,42 @@ interface Props {
   partyHp: PartyHp;
   partyMaxHp: PartyHp;
   fallenAttackers: AttackerId[];
-  /** Resolves to an image base path WITHOUT extension. `mode` lets the
-   *  caller swap in the combat-stance art for the battle phase only —
-   *  intro/outro should stay in the default stance. */
+  /** Resolves to an image base path WITHOUT extension. `mode` swaps in the
+   *  battle-stance art for the combat phase. */
   characterImageBase: (
     id: SpeakerId | CompanionId,
     mode?: "default" | "battle",
   ) => string;
+  /** The story's protagonist id — maps the battle "hero" attacker to its
+   *  speaker/sprite/name. */
+  heroId: SpeakerId;
+  /** Character roster — forwarded to BattleScreen for sprite sizing. */
+  characters: readonly Character[];
+  /** Player inventory — forwarded to BattleScreen's in-battle item row. */
+  inventory: string[];
+  /** Saved battle snapshot — when present we skip the alert splash and
+   *  remount BattleScreen on this exact state (refresh-resume). */
+  initialBattleState?: BattleState;
+  /** Fires on every BattleState change so the parent can persist it. */
+  onBattleStateChange?: (state: BattleState) => void;
   onComplete: (result: EncounterResult) => void;
   /** Open the parent's Settings modal — surfaced inside battle. */
   onOpenSettings?: () => void;
 }
 
-type Phase = "intro" | "body" | "choosing" | "puzzle" | "outro";
+type Phase = "alert" | "body";
 
+/** How long the alert splash plays before the battle starts. */
+const ALERT_DURATION_MS = 2400;
+
+/**
+ * Battle encounter overlay. Dramatic alert splash (monsters + headline) →
+ * straight into the BattleScreen. No "Ready!" confirmation; the splash
+ * itself is the pacing beat.
+ *
+ * Story-style encounters were folded into Scene (`reward`) and Branch
+ * (`puzzle` / `requires` / `reward` / `onFailMode`) in v3.
+ */
 export function EncounterFlow({
   encounter,
   storyId,
@@ -81,247 +90,56 @@ export function EncounterFlow({
   partyMaxHp,
   fallenAttackers,
   characterImageBase,
+  heroId,
+  characters,
+  inventory,
+  initialBattleState,
+  onBattleStateChange,
   onComplete,
   onOpenSettings,
 }: Props) {
-  const [phase, setPhase] = useState<Phase>("intro");
-  const [outcome, setOutcome] =
-    useState<"victory" | "defeat" | "escaped" | null>(null);
-  /** Active story-choice (if a choices array is set). */
-  const [pickedChoice, setPickedChoice] = useState<StoryChoice | null>(null);
-  /** Outcome of the picked choice's puzzle (if any). */
-  const [puzzleSucceeded, setPuzzleSucceeded] = useState<boolean | null>(null);
+  void characterImageBase; // only used inside BattleScreen now
+  // Resume directly into the battle when we have a saved snapshot — the
+  // alert splash is purely intro flair, not worth replaying on refresh.
+  const [phase, setPhase] = useState<Phase>(
+    initialBattleState ? "body" : "alert",
+  );
 
-  // Intro / outro use the default stance — battle stance only inside the
-  // combat phase (BattleScreen below).
-  const heroLayer = {
-    id: "dorothy" as SpeakerId,
-    base: characterImageBase("dorothy", "default"),
-    position: "far-left" as const,
-    scale: sizeScale(characterSize("dorothy")),
-  };
+  // Auto-advance alert → body after the splash plays.
+  useEffect(() => {
+    if (phase !== "alert") return;
+    const t = setTimeout(() => setPhase("body"), ALERT_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
 
-  // displayMonsters (intro/outro sprite display) takes priority. If a
-  // battle encounter doesn't set it, fall back to the battle monsterIds.
   const monsterIds =
-    encounter.displayMonsters ??
-    (encounter.body.kind === "battle" ? encounter.body.monsterIds : []);
-  const monsterPositions = monsterSlots(monsterIds.length);
-  const monsterLayers = monsterIds.map((id, i) => ({
-    monsterId: id,
-    base: `/stories/${storyId}/monsters/${id}`,
-    position: monsterPositions[i] ?? "right",
-    flip: false,
-    airborne: MONSTERS[id]?.airborne,
-    scale: sizeScale(MONSTERS[id]?.size),
-    alt: MONSTERS[id]?.name ?? id,
-  }));
+    encounter.displayMonsters ?? encounter.body.monsterIds;
 
-  function startBody() {
-    if (encounter.body.kind === "story") {
-      const choices = encounter.body.choices;
-      if (choices && choices.length > 0) {
-        // Player picks a choice (and possibly solves a puzzle)
-        setPhase("choosing");
-      } else {
-        // No choices → auto-victory
-        setOutcome("victory");
-        setPhase("outro");
-      }
-    } else {
-      setPhase("body");
-    }
-  }
-
-  function pickChoice(choice: StoryChoice) {
-    setPickedChoice(choice);
-    if (choice.puzzle) {
-      setPhase("puzzle");
-    } else {
-      // No puzzle — direct success
-      setPuzzleSucceeded(true);
-      setOutcome("victory");
-      setPhase("outro");
-    }
-  }
-
-  function handlePuzzleSolved(correct: boolean) {
-    setPuzzleSucceeded(correct);
-    setOutcome("victory");
-    setPhase("outro");
-  }
-
-  function isChoiceLocked(choice: StoryChoice): boolean {
-    const req = choice.requires;
-    if (!req) return false;
-    if (req.companion && !companions.includes(req.companion)) return true;
-    return false;
-  }
-
-  /**
-   * Resolve which rewards block to apply. Choice-specific rewards take
-   * priority over the encounter-level rewards. If the picked choice ran a
-   * puzzle and the player failed, fall back to the choice's `onFail.rewards`.
-   */
-  function effectiveRewards(): EncounterRewards {
-    if (pickedChoice) {
-      if (puzzleSucceeded === false && pickedChoice.onFail?.rewards) {
-        return pickedChoice.onFail.rewards;
-      }
-      if (pickedChoice.rewards) return pickedChoice.rewards;
-    }
-    return encounter.rewards;
-  }
-
-  function completeWith(res: {
-    outcome: "victory" | "defeat" | "escaped";
-    /** Battle encounters supply the post-battle party state. Story (no-HP)
-     *  encounters pass `null` → caller leaves PlayState.partyHp unchanged. */
-    partyHp: PartyHp | null;
-    fallenAttackers: AttackerId[];
-  }) {
-    const forceNextSceneId =
-      res.outcome === "victory"
-        ? encounter.nextSceneOnVictory
-        : res.outcome === "defeat"
-          ? encounter.nextSceneOnDefeat
-          : undefined;
-
-    const rewards = effectiveRewards();
-
-    onComplete({
-      encounterId: encounter.id,
-      outcome: res.outcome,
-      partyHp: res.partyHp,
-      fallenAttackers: res.fallenAttackers,
-      itemsGained:
-        res.outcome === "victory" ? rewards.victoryItems ?? [] : [],
-      medalId: res.outcome === "victory" ? rewards.medalId : undefined,
-      moodBoost: res.outcome === "victory" ? rewards.moodBoost : undefined,
-      forceNextSceneId,
-    });
-  }
-
-  function finishOutro() {
-    if (!outcome) return;
-    // Story encounters don't change HP — pass null so the caller leaves it
-    // alone. Battle encounters route through BattleScreen.onComplete instead.
-    completeWith({ outcome, partyHp: null, fallenAttackers });
-  }
-
-  // Render the right phase body. All three phases share a single outer
-  // motion wrapper (defined below) so the OVERLAY fades in on mount and
-  // out on unmount — visible as a cross-fade from / back to the main scene.
   let body: React.ReactNode = null;
 
-  if (phase === "intro") {
-    body = (
-      <>
-        <ComposedScene
-          storyId={storyId}
-          bg={encounter.intro.bg}
-          characters={[heroLayer]}
-          monsters={monsterLayers}
-        />
-        <div
-          className="absolute inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-5 px-4 pb-6 sm:px-6 sm:pb-8"
-          style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
-        >
-          <p
-            className="mx-auto max-w-3xl text-center text-2xl font-semibold leading-snug text-paper text-balance sm:text-3xl"
-            style={{
-              textShadow:
-                "0 5px 18px rgba(20,12,4,0.85), 0 3px 6px rgba(20,12,4,0.95)",
-              WebkitTextStroke: "2.5px rgba(20,12,4,0.7)",
-              paintOrder: "stroke fill",
-            }}
-          >
-            {encounter.intro.narration}
-          </p>
-          <button
-            type="button"
-            onClick={startBody}
-            className="inline-flex min-h-14 items-center justify-center rounded-pill bg-accent-deep px-9 text-lg font-semibold text-paper shadow-button transition-all hover:-translate-y-0.5 hover:shadow-button-hover active:scale-[0.98]"
-          >
-            {encounter.body.kind === "battle" ? "Ready!" : "Approach"}
-          </button>
-        </div>
-      </>
-    );
-  } else if (phase === "choosing" && encounter.body.kind === "story" && encounter.body.choices) {
-    body = (
-      <>
-        <ComposedScene
-          storyId={storyId}
-          bg={encounter.intro.bg}
-          characters={[heroLayer]}
-          monsters={monsterLayers}
-        />
-        <div
-          className="absolute inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-4 px-4 pb-6 sm:px-6 sm:pb-8"
-          style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
-        >
-          <p
-            className="mx-auto max-w-3xl text-center text-xl font-semibold leading-snug text-paper text-balance sm:text-2xl"
-            style={{
-              textShadow:
-                "0 5px 18px rgba(20,12,4,0.85), 0 3px 6px rgba(20,12,4,0.95)",
-              WebkitTextStroke: "2px rgba(20,12,4,0.7)",
-              paintOrder: "stroke fill",
-            }}
-          >
-            {encounter.intro.narration}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {encounter.body.choices.map((c) => {
-              const locked = isChoiceLocked(c);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  disabled={locked}
-                  onClick={() => pickChoice(c)}
-                  className={`inline-flex min-h-14 items-center justify-center rounded-pill px-6 text-base font-semibold shadow-button transition-all ${
-                    locked
-                      ? "bg-paper/40 text-ink-soft/40 cursor-not-allowed"
-                      : "bg-paper/90 text-ink hover:-translate-y-0.5 hover:bg-paper hover:shadow-button-hover active:scale-[0.98]"
-                  }`}
-                >
-                  {c.label}
-                  {locked && <span className="ml-2 text-xs">🔒</span>}
-                  {c.puzzle && !locked && (
-                    <span className="ml-2 rounded-pill bg-accent/30 px-1.5 text-xs text-accent-deep">
-                      puzzle
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </>
-    );
-  } else if (phase === "puzzle" && pickedChoice?.puzzle) {
-    body = (
-      <>
-        <ComposedScene
-          storyId={storyId}
-          bg={encounter.intro.bg}
-          characters={[heroLayer]}
-          monsters={monsterLayers}
-        />
-        <PatternPuzzle
-          puzzle={pickedChoice.puzzle}
-          onSolved={handlePuzzleSolved}
-        />
-      </>
-    );
-  } else if (phase === "body" && encounter.body.kind === "battle") {
+  if (phase === "alert") {
+    body = <EncounterAlertSplash monsterIds={monsterIds} storyId={storyId} />;
+  } else {
     body = (
       <BattleScreen
         storyId={storyId}
         characterImageBase={(id) => characterImageBase(id, "battle")}
+        heroId={heroId}
+        characters={characters}
         onOpenSettings={onOpenSettings}
+        inventory={inventory}
+        initialState={initialBattleState}
+        onStateChange={onBattleStateChange}
+        victoryNarration={
+          encounter.outro.victory
+            ? formatNarration(encounter.outro.victory, hero)
+            : undefined
+        }
+        victoryMedal={
+          encounter.rewards.medalId
+            ? getMedal(encounter.rewards.medalId)
+            : null
+        }
         setup={{
           bg: encounter.intro.bg,
           monsterIds: encounter.body.monsterIds,
@@ -330,108 +148,160 @@ export function EncounterFlow({
           fallenAttackers,
           companions,
           companionMoods,
-          introNarration: encounter.intro.narration,
         }}
         onComplete={(res) => {
-          // Skip the outro screen for battles — the in-battle TerminalPanel
-          // already shows Victory/Defeat + loot. Going straight to the next
-          // main scene avoids a near-duplicate Continue page.
-          completeWith({
+          onComplete({
+            encounterId: encounter.id,
             outcome: res.outcome,
             partyHp: res.partyHp,
             fallenAttackers: res.fallenAttackers,
+            itemsGained: res.outcome === "victory" ? res.rewards : [],
+            itemsConsumed: res.itemsConsumed,
+            medalId:
+              res.outcome === "victory" ? encounter.rewards.medalId : undefined,
+            moodBoost:
+              res.outcome === "victory"
+                ? encounter.rewards.moodBoost
+                : undefined,
           });
         }}
       />
     );
   }
 
-  // Outro (story-encounter only — battle skips this)
-  if (phase === "outro" && outcome) {
-    const outroKey =
-      outcome === "victory"
-        ? "victory"
-        : outcome === "defeat"
-          ? "defeat"
-          : "escape";
-    // Choice-specific narration wins. Failed puzzle uses onFail.outroNarration.
-    const choiceLine =
-      pickedChoice &&
-      (puzzleSucceeded === false && pickedChoice.onFail?.outroNarration
-        ? pickedChoice.onFail.outroNarration
-        : pickedChoice.outroNarration);
-    const outroLine =
-      choiceLine ?? encounter.outro[outroKey] ?? encounter.outro.victory;
-    void hero; // reserved for future hero-name interpolation in outro
-    body = (
-      <>
-        <ComposedScene
-          storyId={storyId}
-          bg={encounter.intro.bg}
-          characters={[heroLayer]}
-          monsters={[]}
-        />
-        <div
-          className="absolute inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-5 px-4 pb-6 sm:px-6 sm:pb-8"
-          style={{
-            paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
-          }}
-        >
-          <p
-            className="mx-auto max-w-3xl text-center text-2xl font-semibold leading-snug text-paper text-balance sm:text-3xl"
-            style={{
-              textShadow:
-                "0 5px 18px rgba(20,12,4,0.85), 0 3px 6px rgba(20,12,4,0.95)",
-              WebkitTextStroke: "2.5px rgba(20,12,4,0.7)",
-              paintOrder: "stroke fill",
-            }}
-          >
-            {outroLine}
-          </p>
-          {outcome === "victory" &&
-            (() => {
-              const rewards = effectiveRewards();
-              const items = rewards.victoryItems ?? [];
-              if (items.length === 0) return null;
-              return (
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  <span className="text-sm text-paper/80">Gained:</span>
-                  {items.map((it) => (
-                    <span
-                      key={it}
-                      className="rounded-pill bg-paper/90 px-2.5 py-0.5 text-xs font-semibold text-ink shadow-soft"
-                    >
-                      {prettyItem(it)}
-                    </span>
-                  ))}
-                </div>
-              );
-            })()}
-          <button
-            type="button"
-            onClick={finishOutro}
-            className="inline-flex min-h-14 items-center justify-center rounded-pill bg-accent-deep px-9 text-lg font-semibold text-paper shadow-button transition-all hover:-translate-y-0.5 hover:shadow-button-hover active:scale-[0.98]"
-          >
-            Continue your journey
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  // Single outer wrapper — fades in/out as one piece. AnimatePresence in
-  // StoryPlayer triggers the exit fade when this component unmounts (e.g.
-  // entering or leaving a battle).
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 2.4, ease: "easeInOut" }}
-      className="fixed inset-0 z-50 h-dvh w-dvw overflow-hidden bg-ink"
+      transition={{ duration: 0.6, ease: "easeInOut" }}
+      className="fixed inset-0 z-50 overflow-hidden bg-ink"
     >
       {body}
     </motion.div>
   );
 }
 
+/**
+ * Dramatic "encounter incoming!" splash — plays for ~1.7s before the
+ * intro screen. Layers a red-flash burst + camera shake + giant
+ * monster silhouette zoom + bold "ENCOUNTER!" headline so the player
+ * actually feels something snap into focus.
+ */
+function EncounterAlertSplash({
+  monsterIds,
+  storyId,
+}: {
+  monsterIds: string[];
+  storyId: string;
+}) {
+  const primary = monsterIds[0];
+  const primaryName = primary ? MONSTERS[primary]?.name ?? primary : null;
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* Layer 1 — red alert burst. Quick fade-in then ease out. */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.7, 0.3, 0.45, 0.2] }}
+        transition={{ duration: 1.4, times: [0, 0.15, 0.35, 0.55, 1] }}
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at center, rgba(180,30,30,0.95) 0%, rgba(80,12,12,0.85) 45%, rgba(0,0,0,0.95) 100%)",
+        }}
+      />
+
+      {/* Layer 2 — slashing diagonal bars (anime-style alert lines). */}
+      <motion.div
+        initial={{ opacity: 0, x: -200 }}
+        animate={{ opacity: [0, 1, 0], x: [-200, 0, 200] }}
+        transition={{ duration: 0.7, ease: "easeOut" }}
+        className="absolute inset-0"
+        style={{
+          background:
+            "repeating-linear-gradient(115deg, rgba(255,255,255,0) 0 60px, rgba(255,255,255,0.2) 60px 70px, rgba(255,255,255,0) 70px 120px)",
+          mixBlendMode: "screen",
+        }}
+      />
+
+      {/* Layer 3 — giant monster silhouette zoom-in from afar. */}
+      {primary && (
+        <motion.div
+          initial={{ scale: 0.2, opacity: 0, filter: "brightness(0)" }}
+          animate={{
+            scale: [0.2, 1.6, 1.25],
+            opacity: [0, 1, 1],
+            filter: ["brightness(0)", "brightness(0.4)", "brightness(0.7)"],
+          }}
+          transition={{
+            duration: 1.2,
+            times: [0, 0.6, 1],
+            ease: "easeOut",
+          }}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- ext fallback */}
+          <img
+            src={`${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`}
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (!el.src.endsWith(".png")) el.src = el.src.replace(".webp", ".png");
+            }}
+            alt=""
+            draggable={false}
+            className="max-h-[70vh] max-w-[70vw] object-contain drop-shadow-[0_0_40px_rgba(0,0,0,0.9)]"
+          />
+        </motion.div>
+      )}
+
+      {/* Layer 4 — "ENCOUNTER!" headline with shake. */}
+      <motion.div
+        initial={{ scale: 0.3, opacity: 0, rotate: -6 }}
+        animate={{
+          scale: [0.3, 1.2, 1, 1.05, 1],
+          opacity: [0, 1, 1, 1, 1],
+          rotate: [-6, 2, -1, 1, 0],
+        }}
+        transition={{ duration: 1, ease: "easeOut", times: [0, 0.35, 0.6, 0.8, 1] }}
+        className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+      >
+        <p
+          className="font-handwritten text-7xl font-bold text-paper sm:text-8xl"
+          style={{
+            textShadow:
+              "0 0 30px rgba(255,80,80,0.9), 0 6px 30px rgba(0,0,0,0.95), 0 2px 0 rgba(0,0,0,0.95)",
+            WebkitTextStroke: "3px rgba(120,8,8,0.95)",
+            paintOrder: "stroke fill",
+            letterSpacing: "0.04em",
+          }}
+        >
+          ENCOUNTER!
+        </p>
+        {primaryName && (
+          <motion.p
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.4 }}
+            className="rounded-pill bg-ink/70 px-5 py-1.5 text-lg font-semibold uppercase tracking-wide text-paper sm:text-xl"
+          >
+            {monsterIds.length > 1
+              ? `${primaryName} +${monsterIds.length - 1}`
+              : primaryName}
+          </motion.p>
+        )}
+      </motion.div>
+
+      {/* Layer 6 — single screen flash at the very end to wipe into
+          the BattleScreen. */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0, 0.95, 0] }}
+        transition={{
+          duration: ALERT_DURATION_MS / 1000,
+          times: [0, 0.9, 0.97, 1],
+        }}
+        className="pointer-events-none absolute inset-0 bg-paper"
+      />
+    </div>
+  );
+}

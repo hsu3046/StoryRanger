@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+import { PuzzlePiece, Sword } from "@phosphor-icons/react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -7,6 +9,8 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import type { BranchT } from "@/data/schemas";
+import { MONSTERS } from "@/data/monsters";
+import { AssetThumb } from "../AssetThumb";
 
 export interface BranchEdgeData {
   branch: BranchT;
@@ -14,17 +18,18 @@ export interface BranchEdgeData {
   parallelIdx?: number;
   /** Total number of parallel edges in that group. */
   parallelCount?: number;
+  /** How many battle encounters trigger on this branch. Drives the ⚔ chip. */
+  encounterCount?: number;
+  /** Deduped monster ids across this branch's encounters — shown as bare
+   *  icons next to the ⚔ marker (no names). */
+  encounterMonsterIds?: string[];
+  /** Story id — needed to resolve companion portrait paths
+   *  (`/stories/<storyId>/dialogue/<companion>.{webp,png,…}`). */
+  storyId: string;
   [key: string]: unknown;
 }
 
-// Companion icon table — module level so it isn't re-allocated per render.
-const COMPANION_ICON: Record<string, string> = {
-  scarecrow: "🌾",
-  tinman: "🪓",
-  lion: "🦁",
-};
-
-export function BranchEdge(props: EdgeProps) {
+export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
   const {
     id,
     sourceX,
@@ -35,6 +40,7 @@ export function BranchEdge(props: EdgeProps) {
     targetPosition,
     selected,
     data,
+    markerEnd,
   } = props;
   const d = (data as unknown as BranchEdgeData) ?? null;
   const branch = d?.branch;
@@ -48,23 +54,18 @@ export function BranchEdge(props: EdgeProps) {
     targetPosition,
   });
 
-  // Build chips: medal trigger, companion add.
-  const chips: { text: string; cls: string; title: string }[] = [];
-  if (branch?.medalTrigger) {
-    chips.push({
-      text: `🏅 ${branch.medalTrigger}`,
-      title: `medal: ${branch.medalTrigger}`,
-      cls: "bg-amber-300/40 text-amber-800 ring-1 ring-amber-700/30",
-    });
-  }
-  if (branch?.addsCompanion) {
-    const icon = COMPANION_ICON[branch.addsCompanion] ?? "+";
-    chips.push({
-      text: `${icon} join`,
-      title: `${branch.addsCompanion} joins party`,
-      cls: "bg-accent/20 text-accent-deep",
-    });
-  }
+  // Companion-join chip: a small pill carrying the companion's portrait
+  // thumbnail + "join" label. Portrait comes from the same dialogue path
+  // the SceneNode uses, kept in sync via AssetThumb's extension fallback.
+  const companionId = branch?.addsCompanion ?? null;
+  const storyId = d?.storyId;
+  // Battle + puzzle indicators are rendered as bare icons (no background
+  // pill) so they read as graphic markers, not labels. Both use the same
+  // glyphs as the admin sidebar's Encounters / Puzzle items so authors
+  // can map menu → graph at a glance.
+  const encounterCount = d?.encounterCount ?? 0;
+  const encounterMonsterIds = d?.encounterMonsterIds ?? [];
+  const hasPuzzle = !!branch?.puzzle;
 
   // Parallel-edge offset — when multiple branches connect the same source
   // and target, the bezier midpoints coincide. Spread labels vertically so
@@ -82,6 +83,7 @@ export function BranchEdge(props: EdgeProps) {
       <BaseEdge
         id={id}
         path={edgePath}
+        markerEnd={markerEnd}
         style={{
           stroke: selected ? "#7a4f0e" : "rgba(91,65,40,0.45)",
           strokeWidth: selected ? 2 : 1.2,
@@ -101,32 +103,84 @@ export function BranchEdge(props: EdgeProps) {
           className="flex flex-col items-center gap-1"
         >
           {branch && (
+            // No `backdrop-blur` here — the filter forces the browser to
+            // re-rasterize + re-blur the canvas content behind every label
+            // on every drag frame, which lights up GPU compositing and
+            // produces visible whole-graph flicker. Solid bg + shadow is
+            // enough to keep labels legible over node art.
             <span
-              className={`max-w-[200px] truncate rounded-pill px-2.5 py-1 text-[11px] font-semibold shadow-card ring-1 backdrop-blur ${
+              className={`max-w-[200px] truncate rounded-pill px-2.5 py-1 text-[11px] font-semibold shadow-card ring-1 ${
                 selected
                   ? "bg-accent-deep text-paper ring-accent"
-                  : "bg-paper/95 text-ink ring-ink-soft/20"
+                  : "bg-paper text-ink ring-ink-soft/20"
               }`}
               title={branch.label}
             >
               {branch.label}
             </span>
           )}
-          {chips.length > 0 && (
-            <div className="flex max-w-[260px] flex-wrap justify-center gap-1.5">
-              {chips.map((c, i) => (
+          {(companionId || encounterCount > 0 || hasPuzzle) && (
+            <div className="flex max-w-[260px] flex-wrap items-center justify-center gap-2">
+              {companionId && storyId && (
                 <span
-                  key={i}
-                  title={c.title}
-                  className={`whitespace-nowrap rounded-pill px-2 py-0.5 text-[10px] font-semibold shadow-soft ${c.cls}`}
+                  title={`${companionId} joins party`}
+                  className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-accent/20 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-accent-deep shadow-soft"
                 >
-                  {c.text}
+                  <AssetThumb
+                    base={`/stories/${storyId}/dialogue/${companionId}`}
+                    alt={companionId}
+                    className="h-5 w-5"
+                    shape="circle"
+                    fit="cover"
+                    ringWidth={0}
+                  />
+                  Join
                 </span>
-              ))}
+              )}
+              {encounterCount > 0 && (
+                <span
+                  title={
+                    encounterCount === 1
+                      ? "1 battle encounter triggers on this branch"
+                      : `${encounterCount} battle encounters trigger on this branch`
+                  }
+                  className="flex items-center gap-1 whitespace-nowrap text-ruby"
+                >
+                  <Sword size={20} weight="duotone" />
+                  {encounterCount > 1 && (
+                    <span className="text-[10px] font-semibold">×{encounterCount}</span>
+                  )}
+                  {/* Monster icons only (no names). Capped so a big pool
+                      doesn't overflow the edge label. */}
+                  {storyId &&
+                    encounterMonsterIds.slice(0, 4).map((mid) => (
+                      <AssetThumb
+                        key={mid}
+                        base={
+                          MONSTERS[mid]?.image ??
+                          `/stories/${storyId}/monsters/${mid}`
+                        }
+                        alt={mid}
+                        className="h-5 w-5"
+                        shape="circle"
+                        fit="cover"
+                        ringWidth={0}
+                      />
+                    ))}
+                </span>
+              )}
+              {hasPuzzle && (
+                <span
+                  title="Gating puzzle must be solved to take this branch"
+                  className="flex items-center text-accent-deep"
+                >
+                  <PuzzlePiece size={20} weight="duotone" />
+                </span>
+              )}
             </div>
           )}
         </div>
       </EdgeLabelRenderer>
     </>
   );
-}
+});

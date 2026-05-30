@@ -58,6 +58,22 @@ function storyPath(storyId: string, filename: string): string {
   return resolved;
 }
 
+/**
+ * Build a JSON destination path for a GLOBAL (cross-story) content file
+ * under `<cwd>/src/data/global/`. Same traversal safety as `storyPath`.
+ */
+function globalPath(filename: string): string {
+  if (!FILENAME_RE.test(filename)) {
+    throw new Error(`Invalid filename: ${JSON.stringify(filename)}`);
+  }
+  const root = path.resolve(process.cwd(), "src", "data", "global");
+  const resolved = path.resolve(root, filename);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error("Resolved path escapes global data root");
+  }
+  return resolved;
+}
+
 async function writeJson<T>(
   schema: ZodType<T>,
   filePath: string,
@@ -110,14 +126,17 @@ export async function saveCharactersAction(
   }
 }
 
+/**
+ * Medals are a GLOBAL achievement catalog — written to
+ * src/data/global/medals.json, no storyId.
+ */
 export async function saveMedalsAction(
-  storyId: string,
   payload: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   ensureDev();
   try {
-    await writeJson(MedalsFileSchema, storyPath(storyId, "medals.json"), payload);
-    revalidatePath(`/admin/stories/${storyId}/medals`);
+    await writeJson(MedalsFileSchema, globalPath("medals.json"), payload);
+    revalidatePath(`/admin/medals`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -152,18 +171,21 @@ export async function saveBackgroundsAction(
   }
 }
 
+/**
+ * Puzzle routing is GLOBAL (shared across all stories) — written to
+ * src/data/global/puzzle-routing.json, no storyId.
+ */
 export async function savePuzzleRoutingAction(
-  storyId: string,
   payload: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   ensureDev();
   try {
     await writeJson(
       PuzzleRoutingSchema,
-      storyPath(storyId, "puzzle-routing.json"),
+      globalPath("puzzle-routing.json"),
       payload,
     );
-    revalidatePath(`/admin/stories/${storyId}/puzzles`);
+    revalidatePath(`/admin/puzzles`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { contentRepo } from "@/lib/content-repo";
 import { AdminSidebar } from "./_components/AdminSidebar";
+import { ConfirmDialogProvider } from "./_components/ConfirmDialog";
 
 /**
  * Admin shell. Available only in development (`NODE_ENV !== "production"`).
@@ -17,14 +18,20 @@ export default function AdminLayout({
     notFound();
   }
 
-  const stories = contentRepo()
-    .listStoryIds()
-    .map((id) => ({ id }));
+  const repo = contentRepo();
+  const stories = repo.listStoryIds().map((id) => {
+    const loaded = repo.getStory(id);
+    return { id, title: loaded?.story.title ?? id };
+  });
 
   return (
-    <div className="flex h-dvh w-dvw overflow-hidden bg-paper-deep/30 text-ink">
-      <AdminSidebar stories={stories} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <ConfirmDialogProvider>
+      <div className="flex h-dvh w-full overflow-hidden bg-paper text-ink">
+        <AdminSidebar stories={stories} />
+        <main className="flex-1 overflow-y-auto bg-paper-deep/40">
+          {children}
+        </main>
+      </div>
+    </ConfirmDialogProvider>
   );
 }

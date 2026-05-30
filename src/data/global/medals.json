@@ -7,17 +7,19 @@
       "description": "You rode the cyclone all the way to Oz.",
       "trigger": {
         "type": "scene",
-        "sceneId": "s03_munchkinland"
+        "sceneId": "s03_munchkinland",
+        "storyId": "wizard-of-oz"
       }
     },
     {
-      "id": "ruby_slippers",
-      "name": "Ruby Slippers",
-      "icon": "👠",
+      "id": "silver_shoes",
+      "name": "Silver Shoes",
+      "icon": "👟",
       "description": "Glinda's gift now glitters on your feet.",
       "trigger": {
         "type": "branch",
-        "branchId": "take_slippers"
+        "branchId": "take_slippers",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -27,7 +29,8 @@
       "description": "You lifted the Scarecrow down from his pole.",
       "trigger": {
         "type": "branch",
-        "branchId": "help_scarecrow"
+        "branchId": "branch_qk1d8",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -37,7 +40,8 @@
       "description": "You oiled the Tin Man's rusted joints.",
       "trigger": {
         "type": "branch",
-        "branchId": "oil_tinman"
+        "branchId": "oil_tinman",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -47,7 +51,8 @@
       "description": "You stood up to the great roaring beast — and made a friend.",
       "trigger": {
         "type": "branch",
-        "branchId": "befriend_lion"
+        "branchId": "befriend_lion",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -57,7 +62,8 @@
       "description": "You followed the road through fields and forests.",
       "trigger": {
         "type": "scene",
-        "sceneId": "s09_dark_forest"
+        "sceneId": "s09_dark_forest",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -67,7 +73,8 @@
       "description": "You crossed the sleeping poppies and lived to remember it.",
       "trigger": {
         "type": "scene",
-        "sceneId": "s12_poppy_field_past"
+        "sceneId": "s12_poppy_field_past",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -77,7 +84,8 @@
       "description": "You stood inside the shining green walls.",
       "trigger": {
         "type": "scene",
-        "sceneId": "s13_emerald_gate"
+        "sceneId": "s13_emerald_gate",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -87,7 +95,8 @@
       "description": "The Wicked Witch is no more.",
       "trigger": {
         "type": "scene",
-        "sceneId": "s17_witch_melts"
+        "sceneId": "s17_witch_melts",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -97,7 +106,8 @@
       "description": "You watched the great green balloon rise into the sky.",
       "trigger": {
         "type": "scene",
-        "sceneId": "s19_balloon_launch"
+        "sceneId": "s19_balloon_launch",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -107,7 +117,8 @@
       "description": "Three clicks of the heels — and Kansas again.",
       "trigger": {
         "type": "ending",
-        "endingId": "home"
+        "endingId": "home",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -116,7 +127,7 @@
       "icon": "✨",
       "description": "You told the story your own way, again and again.",
       "trigger": {
-        "type": "free_input_count",
+        "type": "dialogue_count",
         "min": 10
       }
     },
@@ -127,7 +138,8 @@
       "description": "You faced down the wolves of the forest.",
       "trigger": {
         "type": "encounter",
-        "encounterId": "forest-wolves"
+        "encounterId": "forest-wolves",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -137,7 +149,8 @@
       "description": "You showed kindness to a frightened wolf pup.",
       "trigger": {
         "type": "encounter",
-        "encounterId": "lost-wolf-pup"
+        "encounterId": "lost-wolf-pup",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -147,7 +160,8 @@
       "description": "The Field Mouse King counts you among his allies.",
       "trigger": {
         "type": "encounter",
-        "encounterId": "mouse-king-blessing"
+        "encounterId": "mouse-king-blessing",
+        "storyId": "wizard-of-oz"
       }
     },
     {
@@ -157,7 +171,30 @@
       "description": "You outwitted the fearsome Kalidah.",
       "trigger": {
         "type": "encounter",
-        "encounterId": "kalidah-bridge"
+        "encounterId": "kalidah-bridge",
+        "storyId": "wizard-of-oz"
+      }
+    },
+    {
+      "id": "poppy-survivor",
+      "name": "Through the Poppies",
+      "icon": "🌼",
+      "description": "You crossed the deadly poppy field and woke to fight another day.",
+      "trigger": {
+        "type": "scene",
+        "storyId": "wizard-of-oz",
+        "sceneId": "s11_poppies"
+      }
+    },
+    {
+      "id": "silver-thread",
+      "name": "Silver Thread",
+      "icon": "🧵",
+      "description": "A shimmering keepsake from the journey home.",
+      "trigger": {
+        "type": "scene",
+        "storyId": "wizard-of-oz",
+        "sceneId": "s19_balloon_launch"
       }
     }
   ]

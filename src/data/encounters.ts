@@ -1,8 +1,7 @@
 /**
  * Encounter catalog — loaded from JSON via Zod-validated content layer.
- * Side adventures slot between main plot scenes; each rolls based on
- * trigger.chance on scene entry. Keeps existing API surface (`ENCOUNTERS`,
- * `findEncountersFor`, `getEncounter`) intact.
+ * v3.1: encounters belong to BRANCH traversals (not scene entries), so the
+ * lookup helper now keys off (sceneId, branchId).
  */
 
 import encountersJson from "@/stories/wizard-of-oz/encounters.json";
@@ -13,8 +12,14 @@ const parsed = EncountersFileSchema.parse(encountersJson);
 
 export const ENCOUNTERS: EncounterDef[] = parsed.encounters as EncounterDef[];
 
-export function findEncountersFor(sceneId: string): EncounterDef[] {
-  return ENCOUNTERS.filter((e) => e.trigger.afterScene === sceneId);
+export function findEncountersForBranch(
+  sceneId: string,
+  branchId: string,
+): EncounterDef[] {
+  return ENCOUNTERS.filter(
+    (e) =>
+      e.trigger.sceneId === sceneId && e.trigger.branchId === branchId,
+  );
 }
 
 export function getEncounter(id: string): EncounterDef | null {
