@@ -10,8 +10,6 @@ import {
   canUseItem,
   chooseHeroAction,
   enterMonsterAttack,
-  puzzleKindFor,
-  resolvePuzzleKind,
   resolveDefense,
   resolvePuzzleAttack,
   setupBattle,
@@ -26,17 +24,16 @@ import { MONSTERS } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
 import { characterSize, sizeScale } from "@/lib/sprite-size";
+import { generateChallenge, type Challenge } from "@/lib/education";
 
 import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
 import { HitsBar } from "./HpBar";
-import { MathPuzzle } from "./MathPuzzle";
-import type { PuzzleKind } from "@/lib/puzzle";
+import { EducationalChallenge } from "../challenge/EducationalChallenge";
 import { DamageNumber, type FloatingEffect } from "./DamageNumber";
 
 import type {
   Character,
   CompanionId,
-  Medal,
   PartyHp,
   SpeakerId,
 } from "@/types/story";
@@ -76,9 +73,11 @@ interface Props {
   /** Authored victory line (encounter.outro.victory, already templated).
    *  Shown on the victory panel; falls back to a default when empty. */
   victoryNarration?: string;
-  /** Medal awarded for winning this encounter — shown on the victory panel
-   *  (a separate row above the loot), so items + medal sit on one screen. */
-  victoryMedal?: Medal | null;
+  /** Encounter-level drop items (in addition to monster drops) — folded into
+   *  the victory panel's loot. */
+  victoryItems?: string[];
+  /** Target age (story midpoint) — drives challenge difficulty tier. */
+  age: number;
 }
 
 const HERO_POSITIONS: Record<number, StagePosition[]> = {
@@ -100,7 +99,8 @@ export function BattleScreen({
   onOpenSettings,
   inventory = [],
   victoryNarration,
-  victoryMedal,
+  victoryItems,
+  age,
 }: Props) {
   const [state, setState] = useState<BattleState>(
     () => initialState ?? setupBattle(setup),
@@ -393,6 +393,16 @@ export function BattleScreen({
 
   const isTerminal = state.phase === "victory" || state.phase === "defeat";
 
+  // Hold the Victory/Defeat panel back ~0.5s after the battle resolves so the
+  // final blow lands and registers before the result card pops in — appearing
+  // the same frame the last monster falls reads as abrupt.
+  const [showTerminal, setShowTerminal] = useState(false);
+  useEffect(() => {
+    if (!isTerminal) return;
+    const t = setTimeout(() => setShowTerminal(true), 500);
+    return () => clearTimeout(t);
+  }, [isTerminal]);
+
   // Derive what (if any) puzzle is active. Two flavours: attack (hero is
   // hitting a monster) and defend (a monster is hitting the hero).
   type ActivePuzzle =
@@ -410,23 +420,22 @@ export function BattleScreen({
           }
         : null;
 
-  // Resolve the puzzle kind once per active puzzle. Doing it inline in JSX
-  // would re-roll any "random" kind on every re-render (animation state,
-  // etc.), regenerating the puzzle mid-solve. Memoizing on the puzzle's
-  // identity keeps the question stable until a new puzzle opens.
-  const activePuzzleKind = useMemo<PuzzleKind | null>(() => {
+  // Generate the challenge once per active puzzle. Doing it inline in JSX
+  // would re-roll on every re-render (animation state, etc.), regenerating
+  // the problem mid-solve. Memoizing on the puzzle's identity keeps the
+  // question stable until a new puzzle opens. Difficulty is age-driven; the
+  // category is auto-picked for the age tier.
+  const activeChallenge = useMemo<Challenge | null>(() => {
     if (!activePuzzle) return null;
-    if (activePuzzle.mode === "attack") {
-      return puzzleKindFor(state.activeAttacker, activePuzzle.monster);
-    }
-    return resolvePuzzleKind(activePuzzle.monster.puzzleKind);
+    return generateChallenge({ age, category: "auto" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-roll only on puzzle identity change
   }, [
+    age,
     activePuzzle?.mode,
     activePuzzle?.monster.monsterId,
     state.activeAttacker,
     // Key on the target INSTANCE index too, so two monsters sharing a
-    // monsterId each get a fresh "random" roll instead of a cached one.
+    // monsterId each get a fresh roll instead of a cached one.
     state.pendingTargetIdx,
     state.defendingMonsterIdx,
   ]);
@@ -517,7 +526,7 @@ export function BattleScreen({
           </>
         )}
 
-        {isTerminal && (
+        {isTerminal && showTerminal && (
           <TerminalPanel
             outcome={
               state.phase === "victory"
@@ -527,7 +536,7 @@ export function BattleScreen({
                   : "escaped"
             }
             victoryNarration={victoryNarration}
-            victoryMedal={victoryMedal}
+            victoryItems={victoryItems}
             rewards={state.rewards}
             onContinue={() =>
               onComplete({
@@ -549,10 +558,12 @@ export function BattleScreen({
 
       {/* Math puzzle overlay — attack OR defend */}
       <AnimatePresence>
-        {activePuzzle && activePuzzle.mode === "attack" && (
-          <MathPuzzle
+        {activePuzzle && activeChallenge && activePuzzle.mode === "attack" && (
+          <EducationalChallenge
+            mode="attack"
+            withTimer
+            challenge={activeChallenge}
             targetName={activePuzzle.monster.name}
-            kind={activePuzzleKind ?? "add-1d"}
             attackerLabel={attackerName(state.activeAttacker)}
             streak={state.streak}
             onSolved={(correct, durationMs) => {
@@ -563,11 +574,12 @@ export function BattleScreen({
             }}
           />
         )}
-        {activePuzzle && activePuzzle.mode === "defend" && (
-          <MathPuzzle
+        {activePuzzle && activeChallenge && activePuzzle.mode === "defend" && (
+          <EducationalChallenge
             mode="defend"
+            withTimer
+            challenge={activeChallenge}
             targetName={activePuzzle.monster.name}
-            kind={activePuzzleKind ?? "add-1d"}
             streak={0}
             onSolved={(correct, durationMs) => {
               if (correct) {
@@ -828,16 +840,19 @@ function BattleActionButton({
 function TerminalPanel({
   outcome,
   victoryNarration,
-  victoryMedal,
+  victoryItems,
   rewards,
   onContinue,
 }: {
   outcome: "victory" | "defeat" | "escaped";
   victoryNarration?: string;
-  victoryMedal?: Medal | null;
+  victoryItems?: string[];
   rewards: string[];
   onContinue: () => void;
 }) {
+  // Loot = monster drops (`rewards`) + encounter-level drops on victory.
+  const loot =
+    outcome === "victory" ? [...rewards, ...(victoryItems ?? [])] : rewards;
   const title =
     outcome === "victory"
       ? "Victory!"
@@ -857,26 +872,10 @@ function TerminalPanel({
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 rounded-card-lg bg-paper/55 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur">
       <p className="font-handwritten text-3xl text-accent-deep">{title}</p>
       <p className="text-base text-ink-soft">{subtitle}</p>
-      {/* Medal — its own row above the loot so the two never overlap. */}
-      {outcome === "victory" && victoryMedal && (
-        <div className="flex items-center gap-2 rounded-pill bg-amber-300/40 px-3 py-1.5 ring-1 ring-amber-700/30">
-          <span className="text-2xl leading-none" aria-hidden>
-            {victoryMedal.icon}
-          </span>
-          <span className="flex flex-col items-start text-left leading-tight">
-            <span className="font-handwritten text-xs text-amber-900">
-              New medal!
-            </span>
-            <span className="text-sm font-semibold text-amber-900">
-              {victoryMedal.name}
-            </span>
-          </span>
-        </div>
-      )}
-      {rewards.length > 0 && (
+      {loot.length > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-1.5">
           <span className="text-sm text-ink-soft">Loot:</span>
-          {countItems(rewards).map(({ id, count }) => (
+          {countItems(loot).map(({ id, count }) => (
             <span
               key={id}
               className="inline-flex items-center gap-1 rounded-pill bg-paper-deep/80 px-2.5 py-0.5 text-xs font-semibold text-ink ring-1 ring-ink-soft/15"

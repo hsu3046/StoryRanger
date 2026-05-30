@@ -27,7 +27,8 @@ export interface EncounterIntro {
 }
 
 export interface EncounterRewards {
-  medalId?: string;
+  /** Encounter-level drop items on victory, in addition to monster drops. */
+  items?: string[];
   moodBoost?: { companionId: CompanionId; delta: number }[];
 }
 

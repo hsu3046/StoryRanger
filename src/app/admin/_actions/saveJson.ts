@@ -12,7 +12,6 @@ import {
   ItemsFileSchema,
   MedalsFileSchema,
   MonstersFileSchema,
-  PuzzleRoutingSchema,
   StorySchema,
 } from "@/data/schemas";
 
@@ -165,27 +164,6 @@ export async function saveBackgroundsAction(
   try {
     await writeJson(BackgroundsFileSchema, storyPath(storyId, "backgrounds.json"), payload);
     revalidatePath(`/admin/stories/${storyId}`);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/**
- * Puzzle routing is GLOBAL (shared across all stories) — written to
- * src/data/global/puzzle-routing.json, no storyId.
- */
-export async function savePuzzleRoutingAction(
-  payload: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  ensureDev();
-  try {
-    await writeJson(
-      PuzzleRoutingSchema,
-      globalPath("puzzle-routing.json"),
-      payload,
-    );
-    revalidatePath(`/admin/puzzles`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };

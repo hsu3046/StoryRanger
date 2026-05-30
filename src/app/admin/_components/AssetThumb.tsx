@@ -51,6 +51,12 @@ interface Props {
   ringColor?: string;
   /** Outline width in pixels. Defaults to 1 when no `ringColor` is given. */
   ringWidth?: number;
+  /** Fill color behind the image (overrides the default paper-deep tint).
+   *  Useful with `fit="contain"` to seat a sprite on a solid disc. */
+  bgColor?: string;
+  /** Inner padding in px — shrinks a `contain` sprite inward so it doesn't get
+   *  clipped by a circular mask at the corners. */
+  pad?: number;
   /** When provided, skip the fallback chain entirely. Pass the result of
    *  `resolveAssetPath()` from a server component — `null` means "no file
    *  on disk; render the ? placeholder immediately, no flicker". */
@@ -74,6 +80,8 @@ export function AssetThumb({
   position = "center",
   ringColor,
   ringWidth,
+  bgColor,
+  pad,
   resolvedSrc,
   placeholder,
 }: Props) {
@@ -106,10 +114,13 @@ export function AssetThumb({
   // bordered control (chip pills, etc.) and a doubled outline looks busy.
   const noRing = ringWidth === 0;
   const ringClass = noRing || hasCustomRing ? "" : "ring-1 ring-ink-soft/10";
-  const wrapperStyle: React.CSSProperties =
-    hasCustomRing && !noRing
-      ? { boxShadow: `0 0 0 ${ringPx}px ${ringColor}` }
-      : {};
+  const wrapperStyle: React.CSSProperties = {};
+  if (hasCustomRing && !noRing) {
+    wrapperStyle.boxShadow = `0 0 0 ${ringPx}px ${ringColor}`;
+  }
+  // Inline backgroundColor wins over the default `bg-paper-deep/30` class.
+  if (bgColor) wrapperStyle.backgroundColor = bgColor;
+  if (pad) wrapperStyle.padding = pad;
 
   return (
     <div

@@ -5,146 +5,48 @@ import { useRouter } from "next/navigation";
 
 import {
   MedalsFileSchema,
+  type MedalMetricSchema,
   type MedalT,
   type MedalsFileT,
 } from "@/data/schemas";
+import { z } from "zod";
 import { saveMedalsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
 import { Field, StyledSelect, inputCls } from "./form";
 
-/** All medal trigger kinds, in the order shown in the type dropdown. */
-const TRIGGER_TYPES = [
-  "scene",
-  "branch",
-  "ending",
-  "encounter",
-  "dialogue_count",
-] as const;
+type MedalMetric = z.infer<typeof MedalMetricSchema>;
 
-type MedalTrigger = MedalT["trigger"];
-type TriggerType = MedalTrigger["type"];
+/** Metrics in the order shown in the dropdown + their human labels. Medals
+ *  are earned automatically once a play metric reaches the threshold — no
+ *  per-scene/branch ids, so the catalog is story-agnostic. */
+const METRICS = [
+  "friends",
+  "dialogues",
+  "battles",
+  "choices",
+  "gifts",
+] as const satisfies readonly MedalMetric[];
 
-const TRIGGER_LABEL: Record<TriggerType, string> = {
-  scene: "Scene",
-  branch: "Branch",
-  ending: "Ending",
-  encounter: "Encounter",
-  dialogue_count: "Min dialogues",
+const METRIC_LABEL: Record<MedalMetric, string> = {
+  friends: "Friends made",
+  dialogues: "Dialogues",
+  battles: "Battles cleared",
+  choices: "Choices made",
+  gifts: "Gifts received",
 };
 
-/** Uppercase only the first character (leaves ids untouched). */
-function capitalizeFirst(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-const TRIGGER_TYPE_LABEL: Record<TriggerType, string> = {
-  scene: "Scene entered",
-  branch: "Branch taken",
-  ending: "Ending reached",
-  encounter: "Encounter reward",
-  dialogue_count: "Dialogue count",
-};
-
-/** Default-shaped trigger when switching the type dropdown. Story-specific
- *  types carry the given storyId; dialogue_count is story-agnostic. */
-function defaultTrigger(type: TriggerType, storyId: string): MedalTrigger {
-  switch (type) {
-    case "branch":
-      return { type: "branch", storyId, branchId: "" };
-    case "scene":
-      return { type: "scene", storyId, sceneId: "" };
-    case "ending":
-      return { type: "ending", storyId, endingId: "" };
-    case "encounter":
-      return { type: "encounter", storyId, encounterId: "" };
-    case "dialogue_count":
-      return { type: "dialogue_count", min: 1 };
-  }
-}
-
-/** storyId of a story-specific trigger, or null for dialogue_count. */
-function triggerStoryId(t: MedalTrigger): string | null {
-  return t.type === "dialogue_count" ? null : t.storyId;
-}
-
-/** The single editable value carried by each trigger type, as a string. */
-function triggerValue(t: MedalTrigger): string {
-  switch (t.type) {
-    case "branch":
-      return t.branchId;
-    case "scene":
-      return t.sceneId;
-    case "ending":
-      return t.endingId;
-    case "encounter":
-      return t.encounterId;
-    case "dialogue_count":
-      return String(t.min);
-  }
-}
-
-function setTriggerValue(t: MedalTrigger, v: string): MedalTrigger {
-  switch (t.type) {
-    case "branch":
-      return { type: "branch", storyId: t.storyId, branchId: v };
-    case "scene":
-      return { type: "scene", storyId: t.storyId, sceneId: v };
-    case "ending":
-      return { type: "ending", storyId: t.storyId, endingId: v };
-    case "encounter":
-      return { type: "encounter", storyId: t.storyId, encounterId: v };
-    case "dialogue_count":
-      // Clamp to ≥1 — a min of 0 would make the medal trigger immediately
-      // (always earned). Empty/invalid input falls back to 1.
-      return {
-        type: "dialogue_count",
-        min: Math.max(1, Math.floor(Number(v) || 1)),
-      };
-  }
-}
-
-/** Set the storyId of a story-specific trigger (no-op for dialogue_count). */
-function setTriggerStory(t: MedalTrigger, storyId: string): MedalTrigger {
-  switch (t.type) {
-    case "branch":
-      return { ...t, storyId };
-    case "scene":
-      return { ...t, storyId };
-    case "ending":
-      return { ...t, storyId };
-    case "encounter":
-      return { ...t, storyId };
-    case "dialogue_count":
-      return t;
-  }
-}
-
-/** Human-readable one-liner for the table column. */
-function describeTrigger(t: MedalTrigger): string {
-  switch (t.type) {
-    case "branch":
-      return `branch: ${t.branchId} · ${t.storyId}`;
-    case "scene":
-      return `scene: ${t.sceneId} · ${t.storyId}`;
-    case "dialogue_count":
-      return `dialogue ≥ ${t.min}`;
-    case "ending":
-      return `ending: ${t.endingId} · ${t.storyId}`;
-    case "encounter":
-      return `encounter: ${t.encounterId} · ${t.storyId}`;
-  }
+/** One-liner for the table column. */
+function describeMedal(m: MedalT): string {
+  return `${METRIC_LABEL[m.metric]} ≥ ${m.threshold}`;
 }
 
 interface Props {
   initial: MedalT[];
-  /** All stories, for the trigger's story picker. First is the default. */
-  stories: { id: string; title: string }[];
 }
 
-export function MedalsEditor({ initial, stories }: Props) {
+export function MedalsEditor({ initial }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
-  const firstStoryId = stories[0]?.id ?? "";
   const [medals, setMedals] = useState<MedalT[]>(initial);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -189,7 +91,8 @@ export function MedalsEditor({ initial, stories }: Props) {
       name: "New Medal",
       icon: "🏅",
       description: "",
-      trigger: { type: "scene", storyId: firstStoryId, sceneId: "" },
+      metric: "friends",
+      threshold: 1,
     };
     setMedals((prev) => [...prev, placeholder]);
     setSelectedIdx(medals.length);
@@ -198,9 +101,7 @@ export function MedalsEditor({ initial, stories }: Props) {
 
   function updateSelected(mut: (m: MedalT) => MedalT) {
     if (selectedIdx === null) return;
-    setMedals((prev) =>
-      prev.map((m, i) => (i === selectedIdx ? mut(m) : m)),
-    );
+    setMedals((prev) => prev.map((m, i) => (i === selectedIdx ? mut(m) : m)));
   }
 
   async function deleteSelected() {
@@ -219,9 +120,7 @@ export function MedalsEditor({ initial, stories }: Props) {
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p className="font-handwritten text-base text-accent-deep">
-            Medals
-          </p>
+          <p className="font-handwritten text-base text-accent-deep">Medals</p>
           <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-soft">
             {medals.length}
           </span>
@@ -268,8 +167,6 @@ export function MedalsEditor({ initial, stories }: Props) {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Clicking empty space in the list pane closes the inspector. Row
-            clicks stopPropagation so selecting doesn't immediately re-close. */}
         <div
           className="flex-1 overflow-y-auto px-4 py-3"
           onClick={() => setSelectedIdx(null)}
@@ -280,7 +177,7 @@ export function MedalsEditor({ initial, stories }: Props) {
                 <tr>
                   <th className="px-3 py-2 w-10"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-64">Trigger</th>
+                  <th className="px-3 py-2 w-56">Earned when</th>
                   <th className="px-3 py-2">Description</th>
                 </tr>
               </thead>
@@ -300,14 +197,10 @@ export function MedalsEditor({ initial, stories }: Props) {
                   >
                     <td className="px-3 py-2 text-2xl">{m.icon}</td>
                     <td className="px-3 py-2 text-ink">{m.name}</td>
-                    <td className="px-3 py-2">
-                      <code className="text-ink-soft">
-                        {capitalizeFirst(describeTrigger(m.trigger))}
-                      </code>
-                    </td>
                     <td className="px-3 py-2 text-ink-soft">
-                      {m.description}
+                      {describeMedal(m)}
                     </td>
+                    <td className="px-3 py-2 text-ink-soft">{m.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -319,8 +212,6 @@ export function MedalsEditor({ initial, stories }: Props) {
           <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-ink-soft/10 bg-paper p-4">
             <MedalForm
               medal={selected}
-              stories={stories}
-              firstStoryId={firstStoryId}
               onChange={updateSelected}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
@@ -334,26 +225,19 @@ export function MedalsEditor({ initial, stories }: Props) {
 
 function MedalForm({
   medal,
-  stories,
-  firstStoryId,
   onChange,
   onDelete,
   onClose,
 }: {
   medal: MedalT;
-  stories: { id: string; title: string }[];
-  firstStoryId: string;
   onChange: (mut: (m: MedalT) => MedalT) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const trigger = medal.trigger;
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between">
-        <div>
-          <p className="font-handwritten text-base text-accent-deep">Medal</p>
-        </div>
+        <p className="font-handwritten text-base text-accent-deep">Medal</p>
         <div className="flex gap-1">
           <button
             type="button"
@@ -375,85 +259,52 @@ function MedalForm({
       <Field label="Name">
         <input
           value={medal.name}
-          onChange={(e) =>
-            onChange((m) => ({ ...m, name: e.target.value }))
-          }
+          onChange={(e) => onChange((m) => ({ ...m, name: e.target.value }))}
           className={inputCls}
         />
       </Field>
       <Field label="Emoji">
         <input
           value={medal.icon}
-          onChange={(e) =>
-            onChange((m) => ({ ...m, icon: e.target.value }))
-          }
+          onChange={(e) => onChange((m) => ({ ...m, icon: e.target.value }))}
           className={inputCls}
           placeholder="🏅"
         />
       </Field>
 
-      <Field label="Trigger">
-        <StyledSelect
-          value={trigger.type}
-          onChange={(e) =>
-            onChange((m) => ({
-              ...m,
-              trigger: defaultTrigger(
-                e.target.value as TriggerType,
-                triggerStoryId(m.trigger) ?? firstStoryId,
-              ),
-            }))
-          }
-        >
-          {TRIGGER_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {TRIGGER_TYPE_LABEL[t]}
-            </option>
-          ))}
-        </StyledSelect>
-      </Field>
-
-      {/* Story picker — story-specific triggers only fire while playing the
-          chosen story. dialogue_count is story-agnostic, so it's hidden. */}
-      {trigger.type !== "dialogue_count" && (
-        <Field label="Story" hint="Which story this trigger fires in">
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Metric" hint="Play stat this tracks">
           <StyledSelect
-            value={trigger.storyId}
+            value={medal.metric}
             onChange={(e) =>
               onChange((m) => ({
                 ...m,
-                trigger: setTriggerStory(m.trigger, e.target.value),
+                metric: e.target.value as MedalMetric,
               }))
             }
           >
-            {!stories.some((s) => s.id === trigger.storyId) && (
-              <option value={trigger.storyId}>
-                {trigger.storyId || "(none)"} (unknown)
-              </option>
-            )}
-            {stories.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
+            {METRICS.map((mt) => (
+              <option key={mt} value={mt}>
+                {METRIC_LABEL[mt]}
               </option>
             ))}
           </StyledSelect>
         </Field>
-      )}
-
-      <Field label={TRIGGER_LABEL[trigger.type]}>
-        <input
-          type={trigger.type === "dialogue_count" ? "number" : "text"}
-          min={trigger.type === "dialogue_count" ? 1 : undefined}
-          value={triggerValue(trigger)}
-          onChange={(e) =>
-            onChange((m) => ({
-              ...m,
-              trigger: setTriggerValue(m.trigger, e.target.value),
-            }))
-          }
-          className={inputCls}
-        />
-      </Field>
+        <Field label="Threshold" hint="Earn at this count">
+          <input
+            type="number"
+            min={1}
+            value={medal.threshold}
+            onChange={(e) =>
+              onChange((m) => ({
+                ...m,
+                threshold: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+              }))
+            }
+            className={inputCls}
+          />
+        </Field>
+      </div>
 
       <Field label="Description">
         <textarea

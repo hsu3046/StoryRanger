@@ -79,7 +79,9 @@ export default async function EncountersPage({
               header: "Bonus",
               render: (e) => (
                 <div className="flex flex-col gap-0.5 text-xs">
-                  {e.rewards.medalId && <span>🏅 {e.rewards.medalId}</span>}
+                  {(e.rewards.items ?? []).map((id) => (
+                    <span key={id}>🎁 {id}</span>
+                  ))}
                 </div>
               ),
             },

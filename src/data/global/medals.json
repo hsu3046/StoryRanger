@@ -1,201 +1,84 @@
 {
   "medals": [
     {
-      "id": "tornado_survivor",
-      "name": "Tornado Survivor",
-      "icon": "🌪️",
-      "description": "You rode the cyclone all the way to Oz.",
-      "trigger": {
-        "type": "scene",
-        "sceneId": "s03_munchkinland",
-        "storyId": "wizard-of-oz"
-      }
+      "id": "first_friend",
+      "name": "First Friend",
+      "icon": "🤝",
+      "description": "You made your very first companion on the journey.",
+      "metric": "friends",
+      "threshold": 1
     },
     {
-      "id": "silver_shoes",
-      "name": "Silver Shoes",
-      "icon": "👟",
-      "description": "Glinda's gift now glitters on your feet.",
-      "trigger": {
-        "type": "branch",
-        "branchId": "take_slippers",
-        "storyId": "wizard-of-oz"
-      }
+      "id": "fellowship",
+      "name": "Fellowship",
+      "icon": "👥",
+      "description": "Three friends now travel at your side.",
+      "metric": "friends",
+      "threshold": 3
     },
     {
-      "id": "brain_for_scarecrow",
-      "name": "Brain for the Scarecrow",
-      "icon": "🌽",
-      "description": "You lifted the Scarecrow down from his pole.",
-      "trigger": {
-        "type": "branch",
-        "branchId": "branch_qk1d8",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "heart_for_tinman",
-      "name": "Heart for the Tin Man",
-      "icon": "❤️",
-      "description": "You oiled the Tin Man's rusted joints.",
-      "trigger": {
-        "type": "branch",
-        "branchId": "oil_tinman",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "courage_for_lion",
-      "name": "Courage for the Lion",
-      "icon": "🦁",
-      "description": "You stood up to the great roaring beast — and made a friend.",
-      "trigger": {
-        "type": "branch",
-        "branchId": "befriend_lion",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "yellow_brick_wanderer",
-      "name": "Yellow Brick Wanderer",
-      "icon": "🛤️",
-      "description": "You followed the road through fields and forests.",
-      "trigger": {
-        "type": "scene",
-        "sceneId": "s09_dark_forest",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "field_of_flowers",
-      "name": "Field of Flowers",
-      "icon": "🌹",
-      "description": "You crossed the sleeping poppies and lived to remember it.",
-      "trigger": {
-        "type": "scene",
-        "sceneId": "s12_poppy_field_past",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "emerald_city",
-      "name": "Emerald City",
-      "icon": "🏰",
-      "description": "You stood inside the shining green walls.",
-      "trigger": {
-        "type": "scene",
-        "sceneId": "s13_emerald_gate",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "witchs_bane",
-      "name": "Witch's Bane",
-      "icon": "💧",
-      "description": "The Wicked Witch is no more.",
-      "trigger": {
-        "type": "scene",
-        "sceneId": "s17_witch_melts",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "balloon_pilot",
-      "name": "Balloon Pilot",
-      "icon": "🎈",
-      "description": "You watched the great green balloon rise into the sky.",
-      "trigger": {
-        "type": "scene",
-        "sceneId": "s19_balloon_launch",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "home_sweet_home",
-      "name": "Home Sweet Home",
-      "icon": "🏡",
-      "description": "Three clicks of the heels — and Kansas again.",
-      "trigger": {
-        "type": "ending",
-        "endingId": "home",
-        "storyId": "wizard-of-oz"
-      }
+      "id": "curious_mind",
+      "name": "Curious Mind",
+      "icon": "💬",
+      "description": "You stopped to talk and learn along the way.",
+      "metric": "dialogues",
+      "threshold": 5
     },
     {
       "id": "creative_hero",
       "name": "Creative Hero",
       "icon": "✨",
       "description": "You told the story your own way, again and again.",
-      "trigger": {
-        "type": "dialogue_count",
-        "min": 10
-      }
+      "metric": "dialogues",
+      "threshold": 15
     },
     {
-      "id": "wolf-slayer",
-      "name": "Wolf Slayer",
-      "icon": "🐺",
-      "description": "You faced down the wolves of the forest.",
-      "trigger": {
-        "type": "encounter",
-        "encounterId": "forest-wolves",
-        "storyId": "wizard-of-oz"
-      }
+      "id": "first_victory",
+      "name": "First Victory",
+      "icon": "⚔️",
+      "description": "You won your first battle.",
+      "metric": "battles",
+      "threshold": 1
     },
     {
-      "id": "kind-soul",
+      "id": "battle_hardened",
+      "name": "Battle-Hardened",
+      "icon": "🛡️",
+      "description": "Three battles fought and won.",
+      "metric": "battles",
+      "threshold": 3
+    },
+    {
+      "id": "pathfinder",
+      "name": "Pathfinder",
+      "icon": "🧭",
+      "description": "You chose your own path five times over.",
+      "metric": "choices",
+      "threshold": 5
+    },
+    {
+      "id": "trailblazer",
+      "name": "Trailblazer",
+      "icon": "🗺️",
+      "description": "A dozen choices shaped your adventure.",
+      "metric": "choices",
+      "threshold": 12
+    },
+    {
+      "id": "generous_heart",
+      "name": "Generous Heart",
+      "icon": "🎁",
+      "description": "You gave a gift to a friend in need.",
+      "metric": "gifts",
+      "threshold": 1
+    },
+    {
+      "id": "kind_soul",
       "name": "Kind Soul",
-      "icon": "🌟",
-      "description": "You showed kindness to a frightened wolf pup.",
-      "trigger": {
-        "type": "encounter",
-        "encounterId": "lost-wolf-pup",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "friend-of-mice",
-      "name": "Friend of Mice",
-      "icon": "🐭",
-      "description": "The Field Mouse King counts you among his allies.",
-      "trigger": {
-        "type": "encounter",
-        "encounterId": "mouse-king-blessing",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "kalidah-tamer",
-      "name": "Kalidah Tamer",
-      "icon": "🐅",
-      "description": "You outwitted the fearsome Kalidah.",
-      "trigger": {
-        "type": "encounter",
-        "encounterId": "kalidah-bridge",
-        "storyId": "wizard-of-oz"
-      }
-    },
-    {
-      "id": "poppy-survivor",
-      "name": "Through the Poppies",
-      "icon": "🌼",
-      "description": "You crossed the deadly poppy field and woke to fight another day.",
-      "trigger": {
-        "type": "scene",
-        "storyId": "wizard-of-oz",
-        "sceneId": "s11_poppies"
-      }
-    },
-    {
-      "id": "silver-thread",
-      "name": "Silver Thread",
-      "icon": "🧵",
-      "description": "A shimmering keepsake from the journey home.",
-      "trigger": {
-        "type": "scene",
-        "storyId": "wizard-of-oz",
-        "sceneId": "s19_balloon_launch"
-      }
+      "icon": "💝",
+      "description": "Kindness shared three times over.",
+      "metric": "gifts",
+      "threshold": 3
     }
   ]
 }

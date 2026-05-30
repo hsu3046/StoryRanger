@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import {
   Copy,
   Flag,
+  GitBranch,
   PencilSimple,
   Play,
   Sparkle,
@@ -45,7 +46,6 @@ import {
   type BranchT,
   type EncounterDefT,
   type ItemDefT,
-  type MedalT,
   type MonsterStatsT,
   type SceneAskT,
   type SceneT,
@@ -62,7 +62,10 @@ import {
   saveEncountersAction,
   saveScenesAction,
 } from "../../_actions/saveJson";
+import { isTerminalScene } from "@/lib/story-engine";
+import type { ChallengeCategory } from "@/lib/education";
 import { AssetThumb } from "../AssetThumb";
+import { ItemChipPicker } from "../ItemChipPicker";
 import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
 import { useAlert, useConfirm } from "../ConfirmDialog";
 import { Field, StyledSelect, inputCls, inputClsSm } from "../form";
@@ -80,8 +83,6 @@ interface Props {
   items: ItemDefT[];
   /** Background catalog used in the scene/encounter `bg` dropdowns. */
   backgrounds: BackgroundMetaT[];
-  /** Medal catalog used by the medal-id dropdowns. */
-  medals: MedalT[];
   /** Scene image options — `value` = full path, `label` = short stem. */
   sceneImages: { value: string; label: string }[];
   /** BGM track keys discovered under /public/stories/<id>/audio/bgm/. */
@@ -117,7 +118,6 @@ function StoryGraphEditorInner({
   monsters,
   items,
   backgrounds,
-  medals,
   sceneImages,
   bgmOptions,
   runtimeStory,
@@ -184,6 +184,47 @@ function StoryGraphEditorInner({
     [positionKey, posHydrated],
   );
 
+  // Manual edge-curve control points — dragging a selected edge's handle bends
+  // it (push/pull) so authors can untangle loops by hand. Stored as a perp/free
+  // offset from the edge's natural midpoint, persisted to localStorage like
+  // node positions (and only on drag-end, not every frame).
+  const edgeOffsetKey = `storyranger:graph-edge-offsets:${storyId}`;
+  const [edgeOffsets, setEdgeOffsets] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(edgeOffsetKey);
+      if (raw) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot hydration
+        setEdgeOffsets(JSON.parse(raw));
+      }
+    } catch {
+      /* swallow malformed storage */
+    }
+  }, [edgeOffsetKey]);
+
+  /** Update one edge's curve offset. `commit` persists to localStorage (call on
+   *  drag-end); pass `offset: null` to reset the edge to its default curve. */
+  const setEdgeOffset = useCallback(
+    (id: string, offset: { x: number; y: number } | null, commit: boolean) => {
+      setEdgeOffsets((prev) => {
+        const next = { ...prev };
+        if (offset === null) delete next[id];
+        else next[id] = offset;
+        if (commit) {
+          try {
+            window.localStorage.setItem(edgeOffsetKey, JSON.stringify(next));
+          } catch {
+            /* swallow quota */
+          }
+        }
+        return next;
+      });
+    },
+    [edgeOffsetKey],
+  );
+
   // New scenes get their default position assigned in `addScene` directly,
   // so we don't need an effect to sync. Inline fallback in the node builder
   // covers the unlikely case of a scene appearing without a recorded
@@ -192,17 +233,23 @@ function StoryGraphEditorInner({
   // Count of encounters attached per (sceneId, branchId) — drives the ⚔
   // chip on BranchEdge so authors can see at a glance which branches roll
   // a battle.
+  // Per-branch list of encounters, each carrying its OWN battle count
+  // (`trigger.count`, default 1 — the admin's "Number of battles") and its
+  // deduped monster icons. NOT merged across encounters: the edge marker shows
+  // each encounter as its own group + its own ×count, so a branch with two
+  // single-battle encounters reads as two enemies (no ×2), while one encounter
+  // with count 2 reads as ×2.
   const encounterInfoByBranch = useMemo(() => {
-    const map = new Map<string, { count: number; monsterIds: string[] }>();
+    const map = new Map<string, { count: number; monsterIds: string[] }[]>();
     for (const e of encounters) {
       const key = `${e.trigger.sceneId}__${e.trigger.branchId}`;
-      const prev = map.get(key) ?? { count: 0, monsterIds: [] };
+      const arr = map.get(key) ?? [];
       const ids = e.displayMonsters ?? e.body.monsterIds;
-      map.set(key, {
-        count: prev.count + 1,
-        // Dedupe so the same monster across multiple battles shows once.
-        monsterIds: [...new Set([...prev.monsterIds, ...ids])],
+      arr.push({
+        count: e.trigger.count ?? 1,
+        monsterIds: [...new Set(ids)],
       });
+      map.set(key, arr);
     }
     return map;
   }, [encounters]);
@@ -231,6 +278,11 @@ function StoryGraphEditorInner({
         sceneId: id,
         scene,
         isStart: id === story.startScene,
+        // Ending = manually marked AND terminal (no branch leads onward). The
+        // terminal gate hides the badge automatically once a branch connects;
+        // requiring the manual flag keeps orphan/WIP nodes from all reading as
+        // endings.
+        isEnding: !!scene.ending && isTerminalScene(scene, story.scenes),
         storyId,
         heroId,
       };
@@ -278,9 +330,10 @@ function StoryGraphEditorInner({
           branch: b,
           parallelIdx,
           parallelCount: arr.length,
-          encounterCount: encInfo?.count ?? 0,
-          encounterMonsterIds: encInfo?.monsterIds ?? [],
+          encounters: encInfo ?? [],
           storyId,
+          offset: edgeOffsets[edgeId],
+          onOffsetChange: setEdgeOffset,
         };
         const isSelected =
           selection?.kind === "branch" &&
@@ -293,6 +346,11 @@ function StoryGraphEditorInner({
           type: "branch",
           data: data as unknown as Record<string, unknown>,
           selected: isSelected,
+          // Only the arrowhead (target) end is draggable — reconnecting
+          // repoints the branch's `next` to a different scene. The source end
+          // is fixed (a branch belongs to its scene); moving it would mean
+          // relocating the choice + cascading its encounters.
+          reconnectable: "target",
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 18,
@@ -303,7 +361,14 @@ function StoryGraphEditorInner({
       });
     }
     return out;
-  }, [story.scenes, encounterInfoByBranch, selection, storyId]);
+  }, [
+    story.scenes,
+    encounterInfoByBranch,
+    selection,
+    storyId,
+    edgeOffsets,
+    setEdgeOffset,
+  ]);
 
   // React Flow internal state — the actual props handed to <ReactFlow>.
   // The `onNodesChange` returned here handles ALL change kinds (position
@@ -433,6 +498,38 @@ function StoryGraphEditorInner({
   }, []);
 
   const onPaneClick = useCallback(() => setSelection(null), []);
+
+  // Delete/Backspace removes the selected scene or branch. We route through a
+  // ref so the window listener (subscribed once) always sees the latest
+  // selection + handlers without re-subscribing every render. Returns whether
+  // it acted, so we only swallow the keystroke when something was deleted.
+  const deleteSelectedRef = useRef<() => boolean>(() => false);
+  useEffect(() => {
+    deleteSelectedRef.current = () => {
+      if (!selection) return false;
+      if (selection.kind === "scene") void deleteScene(selection.sceneId);
+      else void deleteBranch(selection.sceneId, selection.branchId);
+      return true;
+    };
+  });
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      // Don't hijack the key while typing in the inspector's fields.
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      )
+        return;
+      if (deleteSelectedRef.current()) e.preventDefault();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   function updateScene(sceneId: string, mut: (s: SceneT) => SceneT) {
     setStory((prev) => ({
@@ -724,6 +821,38 @@ function StoryGraphEditorInner({
     [story.scenes],
   );
 
+  /** Edge reconnect (arrowhead dragged to another node) — repoints the
+   *  branch's `next` to the new target scene. Only the target end is
+   *  reconnectable (see the `reconnectable: "target"` on each edge), so the
+   *  source scene never changes here. */
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConn: Connection) => {
+      const [sourceId, branchId] = oldEdge.id.split("__");
+      const target = newConn.target;
+      if (!sourceId || !branchId || !target) return;
+      if (target === sourceId) return; // no self-loop
+      if (!story.scenes[sourceId] || !story.scenes[target]) return;
+      setStory((prev) => {
+        const scene = prev.scenes[sourceId];
+        if (!scene) return prev;
+        return {
+          ...prev,
+          scenes: {
+            ...prev.scenes,
+            [sourceId]: {
+              ...scene,
+              branches: scene.branches.map((b) =>
+                b.id === branchId ? { ...b, next: target } : b,
+              ),
+            },
+          },
+        };
+      });
+      setSelection({ kind: "branch", sceneId: sourceId, branchId });
+    },
+    [story.scenes],
+  );
+
   function save() {
     setError(null);
     const parsedStory = StorySchema.safeParse(story);
@@ -906,7 +1035,12 @@ function StoryGraphEditorInner({
             onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onConnect={onConnect}
+            onReconnect={onReconnect}
             onInit={onInit}
+            // Disable React Flow's built-in delete — we handle Delete/Backspace
+            // ourselves (below) so deletes go through the cascade + confirm
+            // logic instead of silently mutating RF's internal node/edge arrays.
+            deleteKeyCode={null}
             fitView
             minZoom={0.2}
             maxZoom={1.5}
@@ -942,7 +1076,6 @@ function StoryGraphEditorInner({
                   scene={selectedScene.scene}
                   isStart={selectedScene.id === story.startScene}
                   items={items}
-                  medals={medals}
                   sceneImages={sceneImages}
                   bgmOptions={bgmOptions}
                   onChange={(mut) => updateScene(selectedScene.id, mut)}
@@ -951,6 +1084,13 @@ function StoryGraphEditorInner({
                   onDelete={() => deleteScene(selectedScene.id)}
                   onDeleteBranch={(branchId) =>
                     deleteBranch(selectedScene.id, branchId)
+                  }
+                  onEditBranch={(branchId) =>
+                    setSelection({
+                      kind: "branch",
+                      sceneId: selectedScene.id,
+                      branchId,
+                    })
                   }
                   onPreview={() => setPreviewSceneId(selectedScene.id)}
                   onSetStart={() =>
@@ -981,7 +1121,7 @@ function StoryGraphEditorInner({
                     )}
                     monsters={monsters}
                     backgrounds={backgrounds}
-                    medals={medals}
+                    items={items}
                     bgmOptions={bgmOptions}
                     characters={runtimeCharactersFile.characters}
                     onChange={(mut) =>
@@ -1042,7 +1182,6 @@ function SceneInspector({
   scene,
   isStart,
   items,
-  medals,
   characters,
   sceneImages,
   bgmOptions,
@@ -1051,6 +1190,7 @@ function SceneInspector({
   onDuplicate,
   onDelete,
   onDeleteBranch,
+  onEditBranch,
   onPreview,
   onSetStart,
 }: {
@@ -1066,7 +1206,6 @@ function SceneInspector({
   /** Whether this scene is the story's start scene — disables Delete. */
   isStart: boolean;
   items: ItemDefT[];
-  medals: MedalT[];
   /** Character catalog — chips display `name` instead of raw `id`; the
    *  Asks editor reads `persona` to limit answerers. */
   characters: CharactersFile["characters"];
@@ -1084,8 +1223,9 @@ function SceneInspector({
    *  scene first and the now-orphan branch only shows up here (no edge
    *  to click on in the graph). */
   onDeleteBranch: (branchId: string) => void;
+  /** Open a branch's full editor (selects it → BranchInspector). */
+  onEditBranch: (branchId: string) => void;
 }) {
-  const confirm = useConfirm();
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between gap-2">
@@ -1213,70 +1353,66 @@ function SceneInspector({
       <RewardEditor
         label="Reward"
         items={items}
-        medals={medals}
         reward={scene.reward}
         onChange={(reward) => onChange((s) => ({ ...s, reward }))}
       />
 
-      <Field label="Ending">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!scene.ending}
-            onChange={async (e) => {
-              const checked = e.target.checked;
-              // Marking a scene as an ending stops the story here — gate it
-              // behind the same custom confirm modal as deletes. Unchecking
-              // needs no warning.
-              if (checked) {
-                const ok = await confirm({
-                  title: "Mark as ending?",
-                  message:
-                    "This makes the scene a terminal ending — the story stops here and its branches won't be reachable in play. Mark it as an ending?",
-                  confirmLabel: "Mark as ending",
-                });
-                if (!ok) return;
-              }
-              onChange((s) => ({
-                ...s,
-                ending: checked
-                  ? s.ending ?? { id: sceneId, label: "" }
-                  : undefined,
-              }));
-            }}
-          />
-          <span className="text-sm text-ink-soft">Terminal scene</span>
-        </label>
-        {scene.ending && (
-          <div className="mt-2 flex flex-col gap-2 rounded-card bg-paper-deep/30 p-2">
+      {/* Ending is a MANUAL mark, shown only while the scene is terminal (no
+          branch leads to an existing scene). Connecting a branch onward hides
+          this whole section automatically; the stored `ending` data is kept
+          (dormant) so medal references can't dangle. Orphan/WIP nodes stay
+          unmarked until the author checks them. */}
+      {isTerminalScene(scene, storyScenes) && (
+        <Field label="Ending">
+          <label className="flex items-center gap-2">
             <input
-              value={scene.ending.id}
+              type="checkbox"
+              checked={!!scene.ending}
               onChange={(e) =>
                 onChange((s) => ({
                   ...s,
-                  ending: { ...s.ending!, id: e.target.value },
+                  ending: e.target.checked
+                    ? s.ending ?? { id: sceneId, label: "" }
+                    : undefined,
                 }))
               }
-              placeholder="ending id"
-              className={inputCls}
             />
-            <input
-              value={scene.ending.label}
-              onChange={(e) =>
-                onChange((s) => ({
-                  ...s,
-                  ending: { ...s.ending!, label: e.target.value },
-                }))
-              }
-              placeholder="ending label"
-              className={inputCls}
-            />
-          </div>
-        )}
-      </Field>
+            <span className="text-sm text-ink-soft">
+              Terminal scene (story ends here)
+            </span>
+          </label>
+          {scene.ending && (
+            <div className="mt-2 flex flex-col gap-2 rounded-card bg-paper-deep/30 p-2">
+              <input
+                value={scene.ending.id}
+                onChange={(e) =>
+                  onChange((s) => ({
+                    ...s,
+                    ending: { ...s.ending!, id: e.target.value },
+                  }))
+                }
+                placeholder="ending id"
+                className={inputCls}
+              />
+              <input
+                value={scene.ending.label}
+                onChange={(e) =>
+                  onChange((s) => ({
+                    ...s,
+                    ending: { ...s.ending!, label: e.target.value },
+                  }))
+                }
+                placeholder="ending label"
+                className={inputCls}
+              />
+            </div>
+          )}
+        </Field>
+      )}
 
       {/* Branch choices + ask chips are authored together — the player sees
           both in the same choice area at runtime. */}
+      <hr className="border-0 border-t border-ink-soft/15" />
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -1316,37 +1452,49 @@ function SceneInspector({
             return (
               <li
                 key={b.id}
-                className={`flex items-center justify-between gap-2 rounded-card px-2 py-1 text-xs ring-1 ${
+                className={`flex items-center justify-between gap-2 rounded-card px-2 py-1.5 text-xs ring-1 ${
                   missingTarget
                     ? "bg-ruby/10 ring-ruby/30"
                     : "bg-paper ring-ink-soft/10"
                 }`}
               >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">{b.label}</p>
-                  <p className="text-[10px] text-ink-soft/70">
-                    <code>{b.id}</code>{" "}
-                    <span
-                      className={missingTarget ? "text-ruby" : undefined}
-                      title={
-                        missingTarget
-                          ? `Target scene "${b.next}" no longer exists — this branch is dangling. Use the delete button to clean it up.`
-                          : undefined
-                      }
-                    >
-                      → {missingTarget ? `⚠ ${b.next}` : b.next}
-                    </span>
-                  </p>
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <GitBranch
+                    size={14}
+                    weight="bold"
+                    className={`shrink-0 ${missingTarget ? "text-ruby" : "text-ink-soft/60"}`}
+                  />
+                  <span
+                    className="truncate text-sm text-ink"
+                    title={
+                      missingTarget
+                        ? `Target scene "${b.next}" no longer exists — this branch is dangling. Delete it or repoint it.`
+                        : b.label
+                    }
+                  >
+                    {b.label}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onDeleteBranch(b.id)}
-                  title={`Delete branch "${b.id}"`}
-                  aria-label={`Delete branch ${b.id}`}
-                  className="shrink-0 rounded-pill bg-ruby/15 px-1.5 py-0.5 text-[10px] text-ruby hover:bg-ruby/25"
-                >
-                  ✕
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onEditBranch(b.id)}
+                    title="Edit branch"
+                    aria-label={`Edit branch ${b.id}`}
+                    className="flex h-5 w-5 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                  >
+                    <PencilSimple size={10} weight="bold" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteBranch(b.id)}
+                    title={`Delete branch "${b.id}"`}
+                    aria-label={`Delete branch ${b.id}`}
+                    className="flex h-5 w-5 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25"
+                  >
+                    <TrashSimple size={10} weight="bold" />
+                  </button>
+                </div>
               </li>
             );
           })}
@@ -1361,7 +1509,7 @@ function EncounterCard({
   encounter,
   monsters,
   backgrounds,
-  medals,
+  items,
   onChange,
   onDelete,
 }: {
@@ -1369,7 +1517,7 @@ function EncounterCard({
   encounter: EncounterDefT;
   monsters: MonsterStatsT[];
   backgrounds: BackgroundMetaT[];
-  medals: MedalT[];
+  items: ItemDefT[];
   onChange: (mut: (e: EncounterDefT) => EncounterDefT) => void;
   onDelete: () => void;
 }) {
@@ -1530,41 +1678,24 @@ function EncounterCard({
           </MiniField>
 
           <MiniField label="Reward items">
-            <p className="rounded-button bg-paper-deep/30 px-2 py-1.5 text-[11px] italic text-ink-soft/70">
-              Battle drops are sourced from each monster&apos;s{" "}
-              <code>drops</code> field — edit per monster on the Monsters
-              page.
-            </p>
-          </MiniField>
-
-          <MiniField label="Medal (optional)">
-            <div className="flex flex-wrap gap-1">
-              {medals.map((m) => {
-                const on = encounter.rewards.medalId === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() =>
-                      onChange((x) => ({
-                        ...x,
-                        rewards: {
-                          ...x.rewards,
-                          medalId: on ? undefined : m.id,
-                        },
-                      }))
-                    }
-                    className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
-                      on
-                        ? "bg-accent-deep text-paper"
-                        : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
-                    }`}
-                  >
-                    {m.icon} {m.name}
-                  </button>
-                );
-              })}
-            </div>
+            <ItemChipPicker
+              catalog={items}
+              selected={encounter.rewards.items ?? []}
+              onToggle={(id) =>
+                onChange((x) => {
+                  const set = new Set(x.rewards.items ?? []);
+                  if (set.has(id)) set.delete(id);
+                  else set.add(id);
+                  return {
+                    ...x,
+                    rewards: {
+                      ...x.rewards,
+                      items: set.size > 0 ? [...set] : undefined,
+                    },
+                  };
+                })
+              }
+            />
           </MiniField>
 
           <MiniField label="Narration on victory">
@@ -1628,6 +1759,28 @@ const COMPANION_OPTIONS: { id: CompanionId }[] = [
   { id: "lion" },
 ];
 
+/** Merge a clause patch into a branch's `condition`, dropping the whole
+ *  `condition` object when no clause remains — keeps saved JSON minimal and
+ *  `isBranchVisible` treats "no condition" as always-visible. */
+function withCondition(
+  b: BranchT,
+  patch: Partial<NonNullable<BranchT["condition"]>>,
+): BranchT {
+  const merged = { ...b.condition, ...patch };
+  const hasItems =
+    merged.hasItems && merged.hasItems.length > 0 ? merged.hasItems : undefined;
+  const hasCompanions =
+    merged.hasCompanions && merged.hasCompanions.length > 0
+      ? merged.hasCompanions
+      : undefined;
+  if (!hasItems && !hasCompanions) {
+    const next = { ...b };
+    delete next.condition;
+    return next;
+  }
+  return { ...b, condition: { hasItems, hasCompanions } };
+}
+
 function BranchInspector({
   storyId,
   storyLanguage,
@@ -1640,7 +1793,7 @@ function BranchInspector({
   encounters,
   monsters,
   backgrounds,
-  medals,
+  items,
   characters,
   bgmOptions,
   onChange,
@@ -1663,7 +1816,8 @@ function BranchInspector({
   encounters: EncounterDefT[];
   monsters: MonsterStatsT[];
   backgrounds: BackgroundMetaT[];
-  medals: MedalT[];
+  /** Item catalog — for the per-encounter reward-items picker. */
+  items: ItemDefT[];
   /** Character catalog — Add-companion chips show `name` not raw id. */
   characters: { id: string; name: string }[];
   bgmOptions: string[];
@@ -1787,6 +1941,80 @@ function BranchInspector({
         </div>
       </Field>
 
+      {/* Condition — branch only appears as a choice when the player meets
+          every clause (AND). Empty clauses = always shown. */}
+      <Field
+        label="Condition (show only if…)"
+        hint="Branch stays hidden until the player meets every clause"
+      >
+        <div className="flex flex-col gap-2">
+          <div>
+            <p className="mb-1 text-[11px] font-medium text-ink-soft/80">
+              Requires items
+            </p>
+            <ItemChipPicker
+              catalog={items}
+              selected={branch.condition?.hasItems ?? []}
+              onToggle={(id) =>
+                onChange((b) => {
+                  const set = new Set(b.condition?.hasItems ?? []);
+                  if (set.has(id)) set.delete(id);
+                  else set.add(id);
+                  return withCondition(b, {
+                    hasItems: set.size > 0 ? [...set] : undefined,
+                  });
+                })
+              }
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-medium text-ink-soft/80">
+              Requires companions
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {COMPANION_OPTIONS.map((c) => {
+                const on = (branch.condition?.hasCompanions ?? []).includes(
+                  c.id,
+                );
+                const name =
+                  characters.find((ch) => ch.id === c.id)?.name ?? c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() =>
+                      onChange((b) => {
+                        const set = new Set(b.condition?.hasCompanions ?? []);
+                        if (set.has(c.id)) set.delete(c.id);
+                        else set.add(c.id);
+                        return withCondition(b, {
+                          hasCompanions: set.size > 0 ? [...set] : undefined,
+                        });
+                      })
+                    }
+                    className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
+                      on
+                        ? "bg-accent-deep text-paper"
+                        : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                    }`}
+                  >
+                    <AssetThumb
+                      base={`/stories/${storyId}/dialogue/${c.id}`}
+                      alt={name}
+                      className="h-5 w-5"
+                      shape="circle"
+                      fit="cover"
+                      ringWidth={0}
+                    />
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </Field>
+
       <BranchOutcomeEditor
         storyId={storyId}
         storyLanguage={storyLanguage}
@@ -1800,7 +2028,10 @@ function BranchInspector({
         onChange={onChange}
       />
 
-      <Field label="BGM override (optional)">
+      <Field
+        label="BGM override (optional)"
+        hint="Plays through this branch's transition (outcome bridge / battle), until the next scene's BGM takes over on arrival"
+      >
         <BgmSelectWithPreview
           value={branch.bgmOverride ?? ""}
           options={bgmOptions}
@@ -1816,13 +2047,13 @@ function BranchInspector({
       </Field>
 
       {/* Encounters rolled when the player takes THIS branch.
-          The gating puzzle is conceptually one of these — it lives in
-          `branch.puzzle` (not the encounters JSON) but renders as a card
-          here alongside battle encounters. */}
+          The gating educational challenge is conceptually one of these — it
+          lives in `branch.challenge` (not the encounters JSON) but renders as a
+          card here alongside battle encounters. */}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase text-ink-soft">
-            Encounters ({encounters.length + (branch.puzzle ? 1 : 0)})
+            Encounters ({encounters.length + (branch.challenge?.enabled ? 1 : 0)})
           </p>
           <div className="flex items-center gap-1">
             <button
@@ -1835,39 +2066,43 @@ function BranchInspector({
             </button>
             <button
               type="button"
-              disabled={!!branch.puzzle}
+              disabled={!!branch.challenge?.enabled}
               onClick={() =>
                 onChange((b) => ({
                   ...b,
-                  puzzle: b.puzzle ?? DEFAULT_BRANCH_PUZZLE,
+                  challenge: b.challenge ?? {
+                    enabled: true,
+                    category: "auto",
+                    count: 1,
+                  },
                   onFailMode: b.onFailMode ?? "retry",
                 }))
               }
               className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
               title={
-                branch.puzzle
-                  ? "This branch already has a gating puzzle"
-                  : "Add a gating puzzle players must solve to take this branch"
+                branch.challenge?.enabled
+                  ? "This branch already has a gating challenge"
+                  : "Add an educational challenge players must solve to take this branch"
               }
             >
-              + Puzzle
+              + Challenge
             </button>
           </div>
         </div>
-        {encounters.length === 0 && !branch.puzzle ? (
+        {encounters.length === 0 && !branch.challenge?.enabled ? (
           <p className="px-1 py-2 text-xs text-ink-soft/60">
             No encounters trigger on this branch.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {branch.puzzle && (
-              <BranchPuzzleCard
+            {branch.challenge?.enabled && (
+              <BranchChallengeCard
                 branch={branch}
                 onChange={onChange}
                 onRemove={() =>
                   onChange((b) => ({
                     ...b,
-                    puzzle: undefined,
+                    challenge: undefined,
                     onFailMode: undefined,
                   }))
                 }
@@ -1880,7 +2115,7 @@ function BranchInspector({
                 encounter={enc}
                 monsters={monsters}
                 backgrounds={backgrounds}
-                medals={medals}
+                items={items}
                 onChange={(mut) => onUpdateEncounter(enc.id, mut)}
                 onDelete={() => onDeleteEncounter(enc.id)}
               />
@@ -1986,7 +2221,7 @@ function BranchOutcomeEditor({
             outcome: e.target.value || undefined,
           }))
         }
-        rows={5}
+        rows={8}
         placeholder="e.g. {{name}} nods and steps through. {{They}} feel {{their}} pack settle on {{their}} shoulders. (leave empty for no outcome line)"
         className={inputCls}
       />
@@ -2094,7 +2329,7 @@ function SceneNarrationEditor({
         onChange={(e) =>
           onChange((s) => ({ ...s, narration: e.target.value }))
         }
-        rows={5}
+        rows={8}
         placeholder="e.g. {{name}} pauses at the gate. {{They}} grip {{their}} pack tighter — {{themself}} alone now."
         className={inputCls}
       />
@@ -2114,15 +2349,25 @@ function SceneNarrationEditor({
   );
 }
 
-/** Default puzzle shape used when the author clicks "+ Puzzle". */
-const DEFAULT_BRANCH_PUZZLE = {
-  kind: "sequence" as const,
-  title: "Repeat the pattern",
-  symbols: ["🔵", "🟡", "🔴"],
-  sequence: [0, 1, 2],
-};
+/** Challenge category options for the branch-gate picker. `auto` lets the
+ *  generator pick an age-appropriate category at runtime (the default). */
+const CHALLENGE_CATEGORIES: { value: "auto" | ChallengeCategory; label: string }[] = [
+  { value: "auto", label: "Auto (age-appropriate)" },
+  { value: "add", label: "Addition" },
+  { value: "sub", label: "Subtraction" },
+  { value: "multiply", label: "Multiplication" },
+  { value: "divide", label: "Division" },
+  { value: "missing", label: "Missing number" },
+  { value: "compare", label: "Compare (which is bigger)" },
+  { value: "counting", label: "Counting" },
+  { value: "pattern", label: "Number pattern" },
+  { value: "geometry", label: "Shapes / geometry" },
+  { value: "fraction", label: "Fractions" },
+  { value: "word", label: "Word / thinking" },
+  { value: "odd-one-out", label: "Odd one out" },
+];
 
-function BranchPuzzleCard({
+function BranchChallengeCard({
   branch,
   onChange,
   onRemove,
@@ -2132,8 +2377,11 @@ function BranchPuzzleCard({
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const puzzle = branch.puzzle;
-  if (!puzzle) return null;
+  const challenge = branch.challenge;
+  if (!challenge?.enabled) return null;
+  const catLabel =
+    CHALLENGE_CATEGORIES.find((c) => c.value === challenge.category)?.label ??
+    "Auto";
   return (
     <li className="rounded-card bg-paper ring-1 ring-ink-soft/10">
       <div className="flex items-center justify-between gap-2 px-2 py-1.5">
@@ -2142,20 +2390,19 @@ function BranchPuzzleCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex-1 text-left"
         >
-          <code className="text-xs text-ink">puzzle</code>
-          <p className="text-[11px] text-ink-soft">{puzzle.title}</p>
+          <code className="text-xs text-ink">challenge</code>
+          <p className="text-[11px] text-ink-soft">Educational gate</p>
           <p className="text-[10px] text-ink-soft/70">
-            🧩 pattern memory · {puzzle.symbols.length} symbol
-            {puzzle.symbols.length === 1 ? "" : "s"} · {puzzle.sequence.length} step
-            {puzzle.sequence.length === 1 ? "" : "s"}
+            🧩 {catLabel} · {challenge.count ?? 1} problem
+            {(challenge.count ?? 1) === 1 ? "" : "s"} · difficulty auto from age
           </p>
         </button>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            title={expanded ? "Hide details" : "Edit puzzle"}
-            aria-label={expanded ? "Hide details" : "Edit puzzle"}
+            title={expanded ? "Hide details" : "Edit challenge"}
+            aria-label={expanded ? "Hide details" : "Edit challenge"}
             className="flex h-5 w-5 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
           >
             <PencilSimple size={10} weight="bold" />
@@ -2163,8 +2410,8 @@ function BranchPuzzleCard({
           <button
             type="button"
             onClick={onRemove}
-            title="Remove puzzle"
-            aria-label="Remove puzzle"
+            title="Remove challenge"
+            aria-label="Remove challenge"
             className="flex h-5 w-5 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25"
           >
             <TrashSimple size={10} weight="bold" />
@@ -2174,75 +2421,79 @@ function BranchPuzzleCard({
       {expanded && (
         <div className="border-t border-ink-soft/10 p-3">
           <div className="flex flex-col gap-2">
-          <input
-            value={puzzle.title}
-            onChange={(e) =>
-              onChange((b) =>
-                b.puzzle
-                  ? { ...b, puzzle: { ...b.puzzle, title: e.target.value } }
-                  : b,
-              )
-            }
-            className={inputCls}
-            placeholder="puzzle title (in-world framing)"
-          />
-          <input
-            value={puzzle.symbols.join(" ")}
-            onChange={(e) =>
-              onChange((b) =>
-                b.puzzle
-                  ? {
-                      ...b,
-                      puzzle: {
-                        ...b.puzzle,
-                        symbols: e.target.value
-                          .split(/\s+/)
-                          .filter((s) => s.length > 0),
-                      },
-                    }
-                  : b,
-              )
-            }
-            className={inputCls}
-            placeholder="symbols (space-separated emojis)"
-          />
-          <input
-            value={puzzle.sequence.join(",")}
-            onChange={(e) =>
-              onChange((b) =>
-                b.puzzle
-                  ? {
-                      ...b,
-                      puzzle: {
-                        ...b.puzzle,
-                        sequence: e.target.value
-                          .split(",")
-                          .map((s) => Number(s.trim()))
-                          .filter((n) => Number.isFinite(n)),
-                      },
-                    }
-                  : b,
-              )
-            }
-            className={inputCls}
-            placeholder="sequence as indices (e.g. 0,1,2,1)"
-          />
-          <label className="flex items-center gap-2 text-xs">
-            <span className="text-ink-soft">On fail:</span>
-            <StyledSelect
-              className="flex-1"
-              value={branch.onFailMode ?? "retry"}
-              onChange={(e) =>
-                onChange((b) => ({
-                  ...b,
-                  onFailMode: e.target.value as "retry" | "skip",
-                }))
-              }
-            >
-              <option value="retry">Retry until solved</option>
-              <option value="skip">Skip — proceed without reward</option>
-            </StyledSelect>
-          </label>
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-ink-soft">Type:</span>
+              <StyledSelect
+                className="flex-1"
+                value={challenge.category}
+                onChange={(e) =>
+                  onChange((b) =>
+                    b.challenge?.enabled
+                      ? {
+                          ...b,
+                          challenge: {
+                            ...b.challenge,
+                            category: e.target.value as
+                              | "auto"
+                              | ChallengeCategory,
+                          },
+                        }
+                      : b,
+                  )
+                }
+              >
+                {CHALLENGE_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </StyledSelect>
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-ink-soft">Problems:</span>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={challenge.count ?? 1}
+                onChange={(e) =>
+                  onChange((b) =>
+                    b.challenge?.enabled
+                      ? {
+                          ...b,
+                          challenge: {
+                            ...b.challenge,
+                            count: Math.max(
+                              1,
+                              Math.min(10, Math.floor(Number(e.target.value) || 1)),
+                            ),
+                          },
+                        }
+                      : b,
+                  )
+                }
+                className={`${inputCls} max-w-[5rem] tabular-nums`}
+              />
+              <span className="text-[10px] text-ink-soft/60">
+                solve in a row to pass
+              </span>
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-ink-soft">On fail:</span>
+              <StyledSelect
+                className="flex-1"
+                value={branch.onFailMode ?? "retry"}
+                onChange={(e) =>
+                  onChange((b) => ({
+                    ...b,
+                    onFailMode: e.target.value as "retry" | "skip",
+                  }))
+                }
+              >
+                <option value="retry">Retry until solved</option>
+                <option value="skip">Skip — proceed without reward</option>
+              </StyledSelect>
+            </label>
           </div>
         </div>
       )}
@@ -2253,22 +2504,19 @@ function BranchPuzzleCard({
 function RewardEditor({
   label,
   items,
-  medals,
   reward,
   onChange,
 }: {
   label: string;
   items: ItemDefT[];
-  medals: MedalT[];
-  reward?: { items?: string[]; medalId?: string };
-  onChange: (reward: { items?: string[]; medalId?: string } | undefined) => void;
+  reward?: { items?: string[] };
+  onChange: (reward: { items?: string[] } | undefined) => void;
 }) {
   const itemSet = new Set(reward?.items ?? []);
-  function commit(next: { items?: string[]; medalId?: string }) {
-    const cleaned: { items?: string[]; medalId?: string } = {};
-    if (next.items && next.items.length > 0) cleaned.items = next.items;
-    if (next.medalId) cleaned.medalId = next.medalId;
-    onChange(Object.keys(cleaned).length > 0 ? cleaned : undefined);
+  function commit(next: { items?: string[] }) {
+    onChange(
+      next.items && next.items.length > 0 ? { items: next.items } : undefined,
+    );
   }
   return (
     <div>
@@ -2291,10 +2539,7 @@ function RewardEditor({
                     const set = new Set(reward?.items ?? []);
                     if (set.has(it.id)) set.delete(it.id);
                     else set.add(it.id);
-                    commit({
-                      items: set.size > 0 ? [...set] : undefined,
-                      medalId: reward?.medalId,
-                    });
+                    commit({ items: set.size > 0 ? [...set] : undefined });
                   }}
                   className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
                     on
@@ -2303,35 +2548,6 @@ function RewardEditor({
                   }`}
                 >
                   {it.icon ?? "🎁"} {it.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div>
-          <p className="mb-1 text-[10px] font-semibold uppercase text-ink-soft/70">
-            Medal
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {medals.map((m) => {
-              const on = reward?.medalId === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    commit({
-                      items: reward?.items,
-                      medalId: on ? undefined : m.id,
-                    });
-                  }}
-                  className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
-                    on
-                      ? "bg-accent-deep text-paper"
-                      : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
-                  }`}
-                >
-                  {m.icon} {m.name}
                 </button>
               );
             })}
@@ -2429,6 +2645,123 @@ function newAsk(askable: { id: string }[]): SceneAskT {
  * and ask chips together). The "+ Add ask" button lives in the branch
  * header next to "+ Add branch"; this only renders the existing rows.
  */
+/**
+ * A single ask, collapsed by default (like an EncounterCard). The header shows
+ * the answerer portrait + label; the pencil expands the editor (label input,
+ * answerer picker, char count).
+ */
+function AskRow({
+  ask,
+  storyId,
+  askable,
+  onUpdate,
+  onRemove,
+}: {
+  ask: SceneAskT;
+  storyId: string;
+  askable: CharactersFile["characters"];
+  onUpdate: (mut: (a: SceneAskT) => SceneAskT) => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const answerer = askable.find((c) => c.id === ask.characterId);
+  return (
+    <div className="rounded-card bg-paper-deep/30">
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          {answerer && (
+            <AssetThumb
+              base={`/stories/${storyId}/dialogue/${answerer.id}`}
+              alt={answerer.name}
+              className="h-5 w-5 shrink-0"
+              shape="circle"
+              fit="cover"
+              ringWidth={0}
+            />
+          )}
+          <span className="truncate text-xs font-semibold text-ink">
+            {ask.label || "(untitled ask)"}
+          </span>
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? "Hide details" : "Edit ask"}
+            aria-label={expanded ? "Hide details" : "Edit ask"}
+            className="flex h-5 w-5 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+          >
+            <PencilSimple size={10} weight="bold" />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Remove ask"
+            aria-label="Remove ask"
+            className="flex h-5 w-5 items-center justify-center rounded-pill bg-ruby/15 text-ruby hover:bg-ruby/25"
+          >
+            <TrashSimple size={10} weight="bold" />
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="flex flex-col gap-1 border-t border-ink-soft/10 p-2">
+          <input
+            value={ask.label}
+            onChange={(e) => onUpdate((a) => ({ ...a, label: e.target.value }))}
+            placeholder="e.g. What is a cyclone?"
+            className={inputClsSm}
+          />
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-ink-soft/60">
+              Answered by
+            </span>
+            {/* Single-select portrait chips — mirrors the Interactive
+                Character picker, but exactly one answerer at a time. */}
+            <div className="flex flex-wrap gap-1">
+              {askable.map((c) => {
+                const on = ask.characterId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() =>
+                      onUpdate((a) => ({
+                        ...a,
+                        characterId: c.id as SceneAskT["characterId"],
+                      }))
+                    }
+                    className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
+                      on
+                        ? "bg-accent-deep text-paper"
+                        : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                    }`}
+                  >
+                    <AssetThumb
+                      base={`/stories/${storyId}/dialogue/${c.id}`}
+                      alt={c.name}
+                      className="h-5 w-5"
+                      shape="circle"
+                      fit="cover"
+                      ringWidth={0}
+                    />
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <CharCount value={ask.label} limit={120} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SceneAsksEditor({
   storyId,
   characters,
@@ -2446,82 +2779,22 @@ function SceneAsksEditor({
   function setAsks(next: SceneAskT[]) {
     onChange((s) => ({ ...s, asks: next.length > 0 ? next : undefined }));
   }
-  function update(i: number, mut: (a: SceneAskT) => SceneAskT) {
-    setAsks(asks.map((a, j) => (j === i ? mut(a) : a)));
-  }
 
   if (asks.length === 0) return null;
 
   return (
-    <Field label="Asks">
-      <div className="flex flex-col gap-2">
-        {asks.map((ask, i) => (
-          <div
-            key={ask.id}
-            className="flex flex-col gap-1 rounded-card bg-paper-deep/30 p-2"
-          >
-            <div className="flex items-center gap-1.5">
-              <input
-                value={ask.label}
-                onChange={(e) =>
-                  update(i, (a) => ({ ...a, label: e.target.value }))
-                }
-                placeholder="e.g. What is a cyclone?"
-                className={inputClsSm}
-              />
-              <button
-                type="button"
-                onClick={() => setAsks(asks.filter((_, j) => j !== i))}
-                aria-label="Remove ask"
-                className="shrink-0 rounded-pill bg-ruby/15 px-2 py-1 text-xs text-ruby hover:bg-ruby/25"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wide text-ink-soft/60">
-                Answered by
-              </span>
-              {/* Single-select portrait chips — mirrors the Interactive
-                  Character picker, but exactly one answerer at a time. */}
-              <div className="flex flex-wrap gap-1">
-                {askable.map((c) => {
-                  const on = ask.characterId === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() =>
-                        update(i, (a) => ({
-                          ...a,
-                          characterId: c.id as SceneAskT["characterId"],
-                        }))
-                      }
-                      className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
-                        on
-                          ? "bg-accent-deep text-paper"
-                          : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
-                      }`}
-                    >
-                      <AssetThumb
-                        base={`/stories/${storyId}/dialogue/${c.id}`}
-                        alt={c.name}
-                        className="h-5 w-5"
-                        shape="circle"
-                        fit="cover"
-                        ringWidth={0}
-                      />
-                      {c.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <CharCount value={ask.label} limit={120} />
-          </div>
-        ))}
-      </div>
-    </Field>
+    <div className="flex flex-col gap-2">
+      {asks.map((ask, i) => (
+        <AskRow
+          key={ask.id}
+          ask={ask}
+          storyId={storyId}
+          askable={askable}
+          onUpdate={(mut) => setAsks(asks.map((a, j) => (j === i ? mut(a) : a)))}
+          onRemove={() => setAsks(asks.filter((_, j) => j !== i))}
+        />
+      ))}
+    </div>
   );
 }
 

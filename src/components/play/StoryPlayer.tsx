@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,10 +21,12 @@ import type {
 import type { BattleState } from "@/lib/battle-engine";
 import {
   DEFAULT_MAX_HP,
+  isTerminalScene,
   newPlayState,
   takeBranch,
 } from "@/lib/story-engine";
-import { PatternPuzzle } from "../encounter/PatternPuzzle";
+import { checkMedals } from "@/lib/medals-engine";
+import { EducationalChallenge } from "../challenge/EducationalChallenge";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
 import {
@@ -50,7 +52,9 @@ import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow"
 import { canTalkTo, trimDialogueHistory } from "@/lib/dialogue-personas";
 import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
-import { itemIcon, prettyItem } from "@/data/items";
+import { prettyItem } from "@/data/items";
+import { isBranchVisible } from "@/lib/branch-conditions";
+import { ageFromRange, generateChallenge } from "@/lib/education";
 import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
@@ -134,7 +138,6 @@ export function StoryPlayer({
   const [pendingSceneReward, setPendingSceneReward] = useState<{
     sceneId: string;
     items: string[];
-    medalId?: string;
   } | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -165,15 +168,23 @@ export function StoryPlayer({
     }));
   }
 
-  const pendingPuzzle = useMemo(() => {
+  const pendingChallenge = useMemo(() => {
     const i = state.interaction;
-    if (!i || i.kind !== "puzzle") return null;
+    if (!i || i.kind !== "challenge") return null;
     const branch = story.scenes[i.sourceSceneId]?.branches.find(
       (b) => b.id === i.branchId,
     );
-    if (!branch?.puzzle) return null;
-    return { branch, puzzle: branch.puzzle, attemptKey: i.attemptKey };
-  }, [state.interaction, story.scenes]);
+    if (!branch?.challenge?.enabled) return null;
+    // A fresh problem per attempt AND per solved-step (the memo re-runs when
+    // `interaction` changes — attemptKey on retry, solved on advance). Difficulty
+    // = story age tier. `count` is how many must be solved to pass the gate.
+    const challenge = generateChallenge({
+      age: ageFromRange(story.ageRange),
+      category: branch.challenge.category,
+    });
+    const total = Math.max(1, branch.challenge.count ?? 1);
+    return { branch, challenge, attemptKey: i.attemptKey, solved: i.solved, total };
+  }, [state.interaction, story.scenes, story.ageRange]);
 
   const pendingOutcome = useMemo(() => {
     const i = state.interaction;
@@ -182,17 +193,12 @@ export function StoryPlayer({
       (b) => b.id === i.branchId,
     );
     if (!branch?.outcome) return null;
-    const medal = i.medalId
-      ? medals.medals.find((m) => m.id === i.medalId) ?? null
-      : null;
     return {
       branch,
       sourceSceneId: i.sourceSceneId,
       text: branch.outcome,
-      items: i.items,
-      medal,
     };
-  }, [state.interaction, story.scenes, medals.medals]);
+  }, [state.interaction, story.scenes]);
 
   const pendingEncounter: EncounterDef | null = useMemo(() => {
     const i = state.interaction;
@@ -200,6 +206,17 @@ export function StoryPlayer({
     const headId = i.queue[0];
     return headId ? getEncounter(headId) : null;
   }, [state.interaction]);
+
+  // Length of the remaining encounter queue. A `count: N` encounter expands to
+  // N identical ids, so the id alone can't distinguish occurrence 1 from 2.
+  // The queue strictly shrinks per battle (applyEncounterResult slices it), so
+  // this length gives each occurrence a distinct identity for remount keys +
+  // effect deps — without it, consecutive same-id battles reuse the frozen
+  // EncounterFlow/BattleScreen instance (battle 2 shows battle 1's victory).
+  const encounterQueueLen =
+    state.interaction?.kind === "encounter"
+      ? state.interaction.queue.length
+      : 0;
 
   // Deterministic "adventures so far" line for ambient dialogue awareness.
   // No LLM — derived from already-tracked structured state.
@@ -299,18 +316,8 @@ export function StoryPlayer({
         dialogueCount: prev.dialogueCount + 1,
         updatedAt: new Date().toISOString(),
       };
-      // Check dialogue-count medals.
-      const earned: Medal[] = [];
-      const already = new Set(nextState.earnedMedals);
-      for (const m of medals.medals) {
-        if (already.has(m.id)) continue;
-        if (
-          m.trigger.type === "dialogue_count" &&
-          nextState.dialogueCount >= m.trigger.min
-        ) {
-          earned.push(m);
-        }
-      }
+      // Dialogues counter changed → award any metric medals now reached.
+      const earned = checkMedals(medals, nextState);
       if (earned.length > 0) {
         setMedalQueue((q) => [...q, ...earned]);
         getAudio().playSfx(SFX.MEDAL);
@@ -370,12 +377,39 @@ export function StoryPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, hydrated]);
 
-  // Drive BGM by current scene. Auto-crossfades between scenes.
-  // Stop BGM only when StoryPlayer itself unmounts (story exit).
+  // Drive BGM by the scene the player has actually SETTLED on, not by
+  // `state.currentSceneId`. The latter advances to the destination at
+  // branch-commit time, but during an outcome bridge or a battle the player
+  // hasn't arrived yet — the outgoing scene's art / the battle bg is on screen.
+  // Holding BGM until `interaction` clears makes the track change on ARRIVAL at
+  // the next scene (A → B), not a beat early on the branch (A → branch(B) → B).
+  // Auto-crossfades; stopped only when StoryPlayer unmounts (story exit).
+  const audibleSceneIdRef = useRef(state.currentSceneId);
+  // A branch's `bgmOverride` plays for the duration of its transition — from
+  // the click until the next scene starts. Set in commitBranch, consumed on
+  // arrival (when the overlay clears). Null = no override → normal scene BGM.
+  const transitionBgmRef = useRef<string | null>(null);
+  // Track only the interaction KIND, not the whole object — a battle snapshot
+  // mutates state.interaction every turn but must not re-evaluate BGM.
+  const interactionKind = state.interaction?.kind;
   useEffect(() => {
-    const scene = story.scenes[state.currentSceneId];
+    if (!interactionKind) {
+      // Arrived — the branch transition is over: drop any override and adopt
+      // the destination scene (puzzle keeps currentSceneId at the source
+      // anyway; outcome/encounter advance it early, which is why we wait).
+      transitionBgmRef.current = null;
+      audibleSceneIdRef.current = state.currentSceneId;
+    }
+    // While a transition is in flight, a branch override (if any) takes over;
+    // otherwise BGM follows the scene the player has settled on.
+    const override = interactionKind ? transitionBgmRef.current : null;
+    if (override) {
+      getAudio().playBgm(override, story.id);
+      return;
+    }
+    const scene = story.scenes[audibleSceneIdRef.current];
     if (scene) getAudio().playBgm(scene.bgm, story.id);
-  }, [story, state.currentSceneId]);
+  }, [story, state.currentSceneId, interactionKind]);
 
   useEffect(() => {
     return () => {
@@ -402,15 +436,16 @@ export function StoryPlayer({
   );
 
   function handleChoose(branch: Branch) {
-    // Branch puzzle gates the reward. Stage it on `interaction` — engine
-    // state stays on the source scene until the puzzle resolves, so a
-    // refresh re-mounts the same puzzle.
-    if (branch.puzzle) {
+    // An educational-challenge gate blocks the reward. Stage it on
+    // `interaction` — engine state stays on the source scene until the
+    // challenge resolves, so a refresh re-mounts the same gate.
+    if (branch.challenge?.enabled) {
       setInteraction({
-        kind: "puzzle",
+        kind: "challenge",
         sourceSceneId: state.currentSceneId,
         branchId: branch.id,
         attemptKey: 0,
+        solved: 0,
       });
       return;
     }
@@ -426,6 +461,13 @@ export function StoryPlayer({
    *  inline. Tap anywhere fires `continueFromOutcome()` and the scene
    *  transition proceeds. */
   function commitBranch(branch: Branch, opts: { skipReward: boolean }) {
+    // Drop any pending ask so it can't ride an encounter/outcome bridge and
+    // auto-open the previous scene's character over the destination scene.
+    setAskRequest(null);
+    // Arm this branch's BGM override for the transition window (outcome
+    // bridge / battle). Null when unset → the transition keeps the outgoing
+    // scene's BGM. The BGM effect clears it on arrival at the next scene.
+    transitionBgmRef.current = branch.bgmOverride ?? null;
     const audio = getAudio();
     audio.playSfx(SFX.PAGE_TURN);
     if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
@@ -433,21 +475,17 @@ export function StoryPlayer({
     const prevSceneId = state.currentSceneId;
 
     const result = takeBranch(state, branch, story, medals, opts);
-    // Trigger-based medals (checkNewMedals) announce immediately. The entered
-    // scene's `reward` (items + reward.medalId) is instead DEFERRED — it shows
-    // as toasts only once the player lands on the destination scene (see the
+    // Metric medals earned by this transition (choices/friends counters)
+    // announce immediately. The entered scene's reward ITEMS are deferred —
+    // shown as a toast once the player lands on the destination scene (see the
     // scene-reward arrival effect), never on the bridge page.
     if (result.earnedMedals.length > 0) {
       setMedalQueue((q) => [...q, ...result.earnedMedals]);
       audio.playSfx(SFX.MEDAL);
     }
     const sr = result.sceneReward;
-    if (sr && ((sr.items?.length ?? 0) > 0 || sr.medalId)) {
-      setPendingSceneReward({
-        sceneId: branch.next,
-        items: sr.items ?? [],
-        medalId: sr.medalId,
-      });
+    if (sr && (sr.items?.length ?? 0) > 0) {
+      setPendingSceneReward({ sceneId: branch.next, items: sr.items ?? [] });
     }
 
     // Outcome path: pause on the outgoing scene art with the branch outcome
@@ -460,8 +498,6 @@ export function StoryPlayer({
           kind: "outcome",
           sourceSceneId: prevSceneId,
           branchId: branch.id,
-          items: [],
-          medalId: undefined,
         },
         updatedAt: new Date().toISOString(),
       });
@@ -482,6 +518,9 @@ export function StoryPlayer({
 
   function continueFromOutcome() {
     if (!pendingOutcome) return;
+    // Same guard as commitBranch — the outcome bridge unmounts/remounts the
+    // dialogue layer, so a leaked ask would re-open on the destination scene.
+    setAskRequest(null);
     const { sourceSceneId, branch } = pendingOutcome;
     // Build the encounter pool for the branch we just traversed and let
     // the regular flow consume it before the destination scene narrates.
@@ -493,18 +532,35 @@ export function StoryPlayer({
     );
   }
 
-  function handlePuzzleResolved(correct: boolean) {
-    if (!pendingPuzzle) return;
-    const { branch } = pendingPuzzle;
+  function handleChallengeResolved(correct: boolean) {
+    if (!pendingChallenge) return;
+    const { branch, solved, total } = pendingChallenge;
     if (correct) {
-      setInteraction(undefined);
-      commitBranch(branch, { skipReward: false });
+      // Advance through the gate's `count` problems; commit only after the last.
+      if (solved + 1 >= total) {
+        setInteraction(undefined);
+        commitBranch(branch, { skipReward: false });
+        return;
+      }
+      setState((s) =>
+        s.interaction?.kind === "challenge"
+          ? {
+              ...s,
+              interaction: {
+                ...s.interaction,
+                solved: s.interaction.solved + 1,
+                attemptKey: 0,
+              },
+              updatedAt: new Date().toISOString(),
+            }
+          : s,
+      );
       return;
     }
-    // Fail handling depends on branch.onFailMode.
+    // Fail handling depends on branch.onFailMode (per problem).
     if (branch.onFailMode === "retry") {
       setState((s) =>
-        s.interaction?.kind === "puzzle"
+        s.interaction?.kind === "challenge"
           ? {
               ...s,
               interaction: {
@@ -517,7 +573,7 @@ export function StoryPlayer({
       );
       return;
     }
-    // "skip" (or unset → skip default): proceed without reward.
+    // "skip" (or unset → skip default): skip the whole gate, no reward.
     setInteraction(undefined);
     commitBranch(branch, { skipReward: true });
   }
@@ -560,9 +616,6 @@ export function StoryPlayer({
       const inventory = res.itemsGained.length
         ? [...afterConsumed, ...res.itemsGained]
         : afterConsumed;
-      const earnedMedals = res.medalId
-        ? Array.from(new Set([...prev.earnedMedals, res.medalId]))
-        : prev.earnedMedals;
       const companionMoods = { ...(prev.companionMoods ?? {}) };
       if (res.moodBoost) {
         for (const mb of res.moodBoost) {
@@ -597,22 +650,28 @@ export function StoryPlayer({
             : undefined;
       }
 
-      return {
+      const base: PlayState = {
         ...prev,
         completedEncounters: completed,
         inventory,
-        earnedMedals,
         companionMoods,
         partyHp,
         fallenAttackers,
         interaction: nextInteraction,
         updatedAt: new Date().toISOString(),
       };
+      // Battles-cleared counter changed → award any metric medals now reached.
+      const earned = checkMedals(medals, base);
+      if (earned.length > 0) {
+        setMedalQueue((q) => [...q, ...earned]);
+        getAudio().playSfx(SFX.MEDAL);
+        return {
+          ...base,
+          earnedMedals: [...base.earnedMedals, ...earned.map((m) => m.id)],
+        };
+      }
+      return base;
     });
-
-    // The medal is shown on the battle victory panel itself (TerminalPanel),
-    // not as a post-Continue toast — so we only fold it into earnedMedals
-    // above and don't re-announce it here.
   }
 
   function handleReset() {
@@ -639,18 +698,25 @@ export function StoryPlayer({
       outcome: "victory",
       partyHp: state.partyHp ?? { hero: DEFAULT_MAX_HP.hero },
       fallenAttackers: [],
-      itemsGained: [],
+      // Demo skip grants the encounter-level drops (monster drops are skipped
+      // along with the battle).
+      itemsGained: pendingEncounter.rewards.items ?? [],
       itemsConsumed: [],
-      medalId: pendingEncounter.rewards.medalId,
       moodBoost: pendingEncounter.rewards.moodBoost,
     });
     // Only react to skipBattles toggling or a new pendingEncounter
     // appearing — we don't want every state.partyHp tick to retrigger.
+    // `encounterQueueLen` distinguishes occurrences of a same-id `count: N`
+    // chain so the auto-resolve re-fires for each queued battle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skipBattles, pendingEncounter?.id]);
+  }, [skipBattles, pendingEncounter?.id, encounterQueueLen]);
 
   const speaker = characterMap[currentScene.speaker];
-  const isEnding = !!currentScene.ending;
+  // Ending = manually marked (currentScene.ending) AND terminal (no branch
+  // leads onward). The terminal gate means a scene that later gains a branch
+  // stops being an ending automatically.
+  const isEnding =
+    !!currentScene.ending && isTerminalScene(currentScene, story.scenes);
 
   // Warm the TTS cache while the player listens to the current scene.
   // For every branch on the current scene, fire-and-forget prefetches for
@@ -696,26 +762,18 @@ export function StoryPlayer({
   // scene up by id from interaction (works even on refresh-resume).
   const showingOutcome = !!pendingOutcome;
 
-  // Scene reward arrival — fire the medal + item toasts only once the player
-  // has actually LANDED on the rewarded scene (outcome bridge dismissed, no
+  // Scene reward arrival — show the item toast only once the player has
+  // actually LANDED on the rewarded scene (outcome bridge dismissed, no
   // encounter overlay). Clearing `pendingSceneReward` stops it re-firing.
+  // (Medals are earned from metrics, not scene rewards.)
   useEffect(() => {
     const r = pendingSceneReward;
     if (!r || r.sceneId !== state.currentSceneId) return;
     if (showingOutcome || pendingEncounter) return;
-    // Announce the reward once on arrival; `setPendingSceneReward(null)` below
-    // clears the trigger so these can't cascade.
-    if (r.medalId) {
-      const m = medals.medals.find((x) => x.id === r.medalId);
-      if (m) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot reward announce
-        setMedalQueue((q) => [...q, m]);
-        getAudio().playSfx(SFX.MEDAL);
-      }
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; cleared below
     if (r.items.length > 0) setItemToast(r.items);
     setPendingSceneReward(null);
-  }, [pendingSceneReward, state.currentSceneId, showingOutcome, pendingEncounter, medals]);
+  }, [pendingSceneReward, state.currentSceneId, showingOutcome, pendingEncounter]);
 
   const outcomePrevScene = pendingOutcome
     ? story.scenes[pendingOutcome.sourceSceneId]
@@ -875,27 +933,11 @@ export function StoryPlayer({
             "tap anywhere to continue" hint. */}
         {(() => {
           if (showingOutcome && pendingOutcome) {
+            // Outcome bridge shows only the outgoing-scene pause + outcome text.
+            // Rewards surface as toasts on the destination scene; metric medals
+            // toast separately.
             return (
               <div className="flex flex-col items-center gap-3">
-                {(pendingOutcome.items.length > 0 || pendingOutcome.medal) && (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {pendingOutcome.medal && (
-                      <span className="inline-flex items-center gap-1.5 rounded-pill bg-amber-300/40 px-3 py-1.5 text-sm font-semibold text-amber-900 ring-1 ring-amber-700/30 shadow-soft">
-                        <span aria-hidden>{pendingOutcome.medal.icon}</span>
-                        <span>{pendingOutcome.medal.name}</span>
-                      </span>
-                    )}
-                    {pendingOutcome.items.map((id, i) => (
-                      <span
-                        key={`${id}-${i}`}
-                        className="inline-flex items-center gap-1.5 rounded-pill bg-paper/90 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/15 shadow-soft"
-                      >
-                        <span aria-hidden>{itemIcon(id)}</span>
-                        <span>{prettyItem(id)}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
                 <span
                   className="text-sm font-semibold uppercase tracking-wide text-paper"
                   style={{
@@ -912,7 +954,7 @@ export function StoryPlayer({
           if (isEnding) {
             return (
               <EndingPanel
-                endingLabel={currentScene.ending!.label}
+                endingLabel={currentScene.ending?.label ?? ""}
                 medalCount={state.earnedMedals.length}
                 totalMedals={medals.medals.length}
                 onReset={handleReset}
@@ -920,7 +962,11 @@ export function StoryPlayer({
             );
           }
 
-          const branches = currentScene.branches;
+          // Conditional branches (require an item / companion) only appear once
+          // their gate is met against the current play state.
+          const branches = currentScene.branches.filter((b) =>
+            isBranchVisible(b, state),
+          );
           // Asks render as additional choices in the SAME left-right row as
           // the branches (not a separate stack above) — to the player an
           // "ask" is just another choice. Hidden during an encounter, matching
@@ -1027,6 +1073,10 @@ export function StoryPlayer({
           scene's characters over the outgoing scene's art. */}
       {!pendingEncounter && !showingOutcome && (
         <SceneDialogueLayer
+          // Remount per scene so dialogue session state (active character,
+          // bubble, in-flight fetch) can never bleed into the next scene if a
+          // future branch path forgets to closeSession().
+          key={state.currentSceneId}
           storyId={story.id}
           sceneId={state.currentSceneId}
           sceneSpeaker={currentScene.speaker}
@@ -1049,6 +1099,7 @@ export function StoryPlayer({
           onApplyTurn={handleApplyDialogueTurn}
           onSessionClose={() => handleDialogueClose()}
           onActiveChange={setDialogueActive}
+          onAskConsumed={() => setAskRequest(null)}
         />
       )}
 
@@ -1067,9 +1118,10 @@ export function StoryPlayer({
       <AnimatePresence>
         {pendingEncounter && (
           <EncounterFlow
-            key={pendingEncounter.id}
+            key={`${pendingEncounter.id}#${encounterQueueLen}`}
             encounter={pendingEncounter}
             storyId={story.id}
+            age={ageFromRange(story.ageRange)}
             hero={state.hero}
             companions={state.companions}
             companionMoods={state.companionMoods ?? {}}
@@ -1097,18 +1149,24 @@ export function StoryPlayer({
         )}
       </AnimatePresence>
 
-      {/* Branch puzzle — overlay shown after picking a branch with
-          `puzzle`. `attemptKey` remounts PatternPuzzle for retry. */}
-      {pendingPuzzle && (
+      {/* Branch educational-challenge gate — overlay shown after picking a
+          branch with `challenge`. `attemptKey` remounts (and re-rolls) on retry. */}
+      {pendingChallenge && (
         <div
           className="fixed inset-0 z-[55] bg-ink/85 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
         >
-          <PatternPuzzle
-            key={`${pendingPuzzle.branch.id}-${pendingPuzzle.attemptKey}`}
-            puzzle={pendingPuzzle.puzzle}
-            onSolved={handlePuzzleResolved}
+          <EducationalChallenge
+            key={`${pendingChallenge.branch.id}-${pendingChallenge.solved}-${pendingChallenge.attemptKey}`}
+            mode="gate"
+            challenge={pendingChallenge.challenge}
+            progress={
+              pendingChallenge.total > 1
+                ? { current: pendingChallenge.solved + 1, total: pendingChallenge.total }
+                : undefined
+            }
+            onSolved={(correct) => handleChallengeResolved(correct)}
           />
         </div>
       )}
@@ -1159,7 +1217,9 @@ function EndingPanel({
   return (
     <div className="flex flex-col items-center gap-4 rounded-card-lg bg-paper-deep/60 p-6 text-center ring-1 ring-ink-soft/10 shadow-card">
       <p className="font-handwritten text-3xl text-accent-deep">The End</p>
-      <h2 className="text-2xl font-semibold text-ink">{endingLabel}</h2>
+      {endingLabel && (
+        <h2 className="text-2xl font-semibold text-ink">{endingLabel}</h2>
+      )}
       <p className="text-base text-ink-soft">
         You earned{" "}
         <span className="font-semibold text-accent-deep">

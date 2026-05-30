@@ -24,7 +24,9 @@ export const EncounterIntroSchema = z.object({
 });
 
 export const EncounterRewardsSchema = z.object({
-  medalId: z.string().optional(),
+  /** Encounter-level drop items granted on victory, IN ADDITION to each
+   *  monster's own `drops`. Optional — omit for monster-drops-only. */
+  items: z.array(z.string()).optional(),
   moodBoost: z
     .array(
       z.object({

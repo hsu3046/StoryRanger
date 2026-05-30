@@ -18,7 +18,6 @@ import { formatNarration } from "@/lib/narrative";
 
 import { BattleScreen } from "../battle/BattleScreen";
 import { MONSTERS } from "@/data/monsters";
-import { getMedal } from "@/data/medals";
 
 export interface EncounterResult {
   encounterId: string;
@@ -30,7 +29,6 @@ export interface EncounterResult {
   itemsGained: string[];
   /** Consumables spent during the battle — removed from inventory. */
   itemsConsumed: string[];
-  medalId?: string;
   moodBoost?: { companionId: CompanionId; delta: number }[];
 }
 
@@ -65,6 +63,9 @@ interface Props {
   onComplete: (result: EncounterResult) => void;
   /** Open the parent's Settings modal — surfaced inside battle. */
   onOpenSettings?: () => void;
+  /** Target age (story midpoint) — forwarded to BattleScreen for challenge
+   *  difficulty tiering. */
+  age: number;
 }
 
 type Phase = "alert" | "body";
@@ -97,6 +98,7 @@ export function EncounterFlow({
   onBattleStateChange,
   onComplete,
   onOpenSettings,
+  age,
 }: Props) {
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
@@ -123,6 +125,7 @@ export function EncounterFlow({
     body = (
       <BattleScreen
         storyId={storyId}
+        age={age}
         characterImageBase={(id) => characterImageBase(id, "battle")}
         heroId={heroId}
         characters={characters}
@@ -135,11 +138,7 @@ export function EncounterFlow({
             ? formatNarration(encounter.outro.victory, hero)
             : undefined
         }
-        victoryMedal={
-          encounter.rewards.medalId
-            ? getMedal(encounter.rewards.medalId)
-            : null
-        }
+        victoryItems={encounter.rewards.items ?? []}
         setup={{
           bg: encounter.intro.bg,
           monsterIds: encounter.body.monsterIds,
@@ -155,10 +154,11 @@ export function EncounterFlow({
             outcome: res.outcome,
             partyHp: res.partyHp,
             fallenAttackers: res.fallenAttackers,
-            itemsGained: res.outcome === "victory" ? res.rewards : [],
+            itemsGained:
+              res.outcome === "victory"
+                ? [...res.rewards, ...(encounter.rewards.items ?? [])]
+                : [],
             itemsConsumed: res.itemsConsumed,
-            medalId:
-              res.outcome === "victory" ? encounter.rewards.medalId : undefined,
             moodBoost:
               res.outcome === "victory"
                 ? encounter.rewards.moodBoost

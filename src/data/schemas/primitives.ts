@@ -35,31 +35,22 @@ export const SpriteSizeSchema = z.enum([
   "huge",
 ]);
 
-export const PuzzleKindSchema = z.enum([
-  "add-1d",
-  "sub-1d",
-  "add-2d",
+/** Educational challenge categories (math-first). One generator produces
+ *  problems in these categories, age-tiered. `"auto"` (used in authoring) is
+ *  NOT a category — it means "pick an age-appropriate one at runtime". */
+export const ChallengeCategorySchema = z.enum([
+  "add",
+  "sub",
   "multiply",
-  "pattern",
-  "odd-out",
-  "bigger",
+  "divide",
   "missing",
-]);
-
-/** A monster's puzzle preference: any concrete kind, or `"random"` which
- *  picks a fresh kind on each hero attack. Kept separate from
- *  `PuzzleKindSchema` because the puzzle-routing matrix (attacker → kinds)
- *  must only contain concrete kinds. */
-export const MonsterPuzzleKindSchema = z.enum([
-  "add-1d",
-  "sub-1d",
-  "add-2d",
-  "multiply",
+  "compare",
+  "counting",
   "pattern",
-  "odd-out",
-  "bigger",
-  "missing",
-  "random",
+  "geometry",
+  "fraction",
+  "word",
+  "odd-one-out",
 ]);
 
 export const TtsVoiceSchema = z.enum([

@@ -143,8 +143,8 @@ export function AdminSidebar({ stories }: Props) {
         </p>
         <SidebarLink href="/admin" label="Dashboard" icon={SquaresFour} />
         <SidebarLink
-          href="/admin/puzzles"
-          label="Puzzles & Quizzes"
+          href="/admin/challenges"
+          label="Challenges"
           icon={PuzzlePiece}
         />
         <SidebarLink href="/admin/medals" label="Medals" icon={Medal} />

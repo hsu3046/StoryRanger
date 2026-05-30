@@ -3,7 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 
 import { contentRepo } from "@/lib/content-repo";
-import { MEDALS, listMedals } from "@/data/medals";
+import { MEDALS } from "@/data/medals";
 import { StoryGraphEditor } from "@/app/admin/_components/graph/StoryGraphEditor";
 import type { EncounterDefT, StoryT } from "@/data/schemas";
 
@@ -62,7 +62,6 @@ export default async function GraphPage({
       monsters={repo.listMonsters(storyId)}
       items={repo.listItems(storyId)}
       backgrounds={repo.listBackgrounds(storyId)}
-      medals={listMedals()}
       sceneImages={sceneImages}
       bgmOptions={bgmOptions}
       runtimeStory={loaded.story}

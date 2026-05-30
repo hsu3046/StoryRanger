@@ -18,17 +18,6 @@ import { ItemChipPicker } from "./ItemChipPicker";
 
 const TYPES = ["hostile", "neutral", "friendly"] as const;
 const SIZES = ["tiny", "small", "medium", "large", "huge"] as const;
-const PUZZLES = [
-  "add-1d",
-  "sub-1d",
-  "add-2d",
-  "multiply",
-  "pattern",
-  "odd-out",
-  "bigger",
-  "missing",
-] as const;
-
 interface Props {
   storyId: string;
   storyTitle?: string;
@@ -109,7 +98,6 @@ export function MonstersEditor({
       hits: 2,
       size: "small",
       drops: [],
-      puzzleKind: "random",
     };
     setMonsters((prev) => [...prev, placeholder]);
     setSelectedIdx(monsters.length);
@@ -208,7 +196,6 @@ export function MonstersEditor({
                   <th className="px-3 py-2 w-20">Type</th>
                   <th className="px-3 py-2 w-20">Size</th>
                   <th className="px-3 py-2 w-16">HP</th>
-                  <th className="px-3 py-2 w-24">Puzzle</th>
                   <th className="px-3 py-2 w-20">Airborne</th>
                   <th className="px-3 py-2">Drops</th>
                 </tr>
@@ -253,9 +240,6 @@ export function MonstersEditor({
                     </td>
                     <td className="px-3 py-2 capitalize text-ink-soft">{m.size}</td>
                     <td className="px-3 py-2 tabular-nums">{m.hits}</td>
-                    <td className="px-3 py-2 text-ink-soft">
-                      {m.puzzleKind ?? "random"}
-                    </td>
                     <td className="px-3 py-2 text-ink-soft">
                       {m.airborne ? "🕊️ Yes" : "—"}
                     </td>
@@ -451,24 +435,6 @@ function MonsterForm({
             }
             className={inputCls}
           />
-        </Field>
-        <Field label="Puzzle">
-          <StyledSelect
-            value={monster.puzzleKind ?? "random"}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                puzzleKind: e.target.value as MonsterStatsT["puzzleKind"],
-              }))
-            }
-          >
-            <option value="random">random</option>
-            {PUZZLES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </StyledSelect>
         </Field>
       </div>
       <Field label="Airborne">
