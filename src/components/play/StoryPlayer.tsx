@@ -1395,7 +1395,7 @@ function AskChip({
     <button type="button" onClick={onSelect} className={choiceButtonClass}>
       <span className={iconBase ? "pr-[75px]" : undefined}>{label}</span>
       {iconBase && (
-        <span className="absolute right-2.5 top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+        <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}
