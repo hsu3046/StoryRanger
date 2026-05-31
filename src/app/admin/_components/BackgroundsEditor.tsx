@@ -13,6 +13,7 @@ import { AssetThumb } from "./AssetThumb";
 import { BgmSelectWithPreview } from "./BgmSelectWithPreview";
 import { useConfirm } from "./ConfirmDialog";
 import { uniqueId } from "../_lib/uniqueId";
+import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { Field, StyledSelect, inputCls } from "./form";
 
 const MOODS = ["calm", "tense", "magical", "spooky", "warm"] as const;
@@ -45,6 +46,8 @@ export function BackgroundsEditor({
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // New backgrounds' keys auto-follow their label until saved / hand-edited.
+  const keyLink = useNameLinkedId();
 
   const dirty = useMemo(
     () => JSON.stringify(initial) !== JSON.stringify(backgrounds),
@@ -72,6 +75,8 @@ export function BackgroundsEditor({
       }
       keys.add(b.key);
     }
+    // Committed → freeze all keys (renaming must never rewrite a saved key).
+    keyLink.reset();
     startTransition(async () => {
       const res = await saveBackgroundsAction(storyId, payload);
       if (!res.ok) setError(res.error);
@@ -80,17 +85,19 @@ export function BackgroundsEditor({
   }
 
   function startCreate() {
+    const key = uniqueId(
+      "new-background",
+      backgrounds.map((b) => b.key),
+    );
     const placeholder: BackgroundMetaT = {
-      key: uniqueId(
-        "new-background",
-        backgrounds.map((b) => b.key),
-      ),
+      key,
       label: "New Background",
       bgm: bgmOptions[0] ?? "yellow-road",
       mood: "calm",
     };
     setBackgrounds((prev) => [...prev, placeholder]);
     setSelectedIdx(backgrounds.length);
+    keyLink.register(key);
     setError(null);
   }
 
@@ -101,6 +108,28 @@ export function BackgroundsEditor({
     );
   }
 
+  /** Label edit — retargets the key while it's auto-linked (new drafts). */
+  function changeLabel(value: string) {
+    if (selectedIdx === null) return;
+    const cur = backgrounds[selectedIdx];
+    const others = backgrounds
+      .filter((_, i) => i !== selectedIdx)
+      .map((b) => b.key);
+    const newKey = keyLink.fromName(cur.key, value, others);
+    updateSelected((b) => ({
+      ...b,
+      label: value,
+      ...(newKey ? { key: newKey } : {}),
+    }));
+  }
+
+  /** Manual key edit — takes the key off auto-follow. */
+  function changeKey(value: string) {
+    if (selectedIdx === null) return;
+    keyLink.detach(backgrounds[selectedIdx].key);
+    updateSelected((b) => ({ ...b, key: value }));
+  }
+
   async function deleteSelected() {
     if (selectedIdx === null) return;
     const b = backgrounds[selectedIdx];
@@ -109,6 +138,7 @@ export function BackgroundsEditor({
       message: `Delete background "${b.key}"?\nThis cannot be undone.`,
     });
     if (!ok) return;
+    keyLink.detach(b.key);
     setBackgrounds((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -151,6 +181,7 @@ export function BackgroundsEditor({
               setBackgrounds(initial);
               setSelectedIdx(null);
               setError(null);
+              keyLink.reset();
             }}
             disabled={!dirty || isPending}
             className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep disabled:opacity-50"
@@ -237,6 +268,8 @@ export function BackgroundsEditor({
               bgmOptions={bgmOptions}
               isNew={!initial.some((b) => b.key === selected.key)}
               onChange={updateSelected}
+              onLabelChange={changeLabel}
+              onKeyChange={changeKey}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
             />
@@ -254,6 +287,8 @@ function BackgroundForm({
   bgmOptions,
   isNew,
   onChange,
+  onLabelChange,
+  onKeyChange,
   onDelete,
   onClose,
 }: {
@@ -263,6 +298,10 @@ function BackgroundForm({
   bgmOptions: string[];
   isNew: boolean;
   onChange: (mut: (b: BackgroundMetaT) => BackgroundMetaT) => void;
+  /** Label edit — retargets the key too while it's auto-linked (new drafts). */
+  onLabelChange: (value: string) => void;
+  /** Manual key edit — detaches from auto-follow. */
+  onKeyChange: (value: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -304,7 +343,7 @@ function BackgroundForm({
         <Field label="Key (kebab-case, matches image filename)">
           <input
             value={background.key}
-            onChange={(e) => onChange((b) => ({ ...b, key: e.target.value }))}
+            onChange={(e) => onKeyChange(e.target.value)}
             className={inputCls}
             placeholder="e.g. emerald-gate"
           />
@@ -314,9 +353,7 @@ function BackgroundForm({
       <Field label="Label">
         <input
           value={background.label}
-          onChange={(e) =>
-            onChange((b) => ({ ...b, label: e.target.value }))
-          }
+          onChange={(e) => onLabelChange(e.target.value)}
           className={inputCls}
         />
       </Field>

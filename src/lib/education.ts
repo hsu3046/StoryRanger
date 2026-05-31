@@ -2,12 +2,15 @@
  * Age-driven educational challenge generator — the single source of problems
  * for BOTH the branch-gating challenge and battle challenges.
  *
- * Math-first, fully procedural (offline, free, instant, correct-by-construction).
- * Difficulty is age-tiered and pitched at the Singapore / Korean primary-maths
- * level (a notch above US Common Core): the higher tiers favour THINKING
- * problems (word problems, multiplicative patterns, fractions, percentages,
- * measurement geometry) over big mental arithmetic, so they stay solvable
- * within a battle's short timer via multiple choice. No external API.
+ * Topic coverage follows the Singapore MOE primary mathematics syllabus
+ * (P1–P6 ≈ ages 7–12, plus pre-school 4–6). Each age gets a DISTINCT mix of
+ * level-appropriate topics — trivial types (counting / compare / odd-one-out)
+ * live only at the youngest ages; older ages get fractions, decimals,
+ * percentage, ratio, measurement, average, factors, algebra and speed, not just
+ * bigger numbers. Fully procedural (offline, free, instant, correct-by-
+ * construction); answers stay mental-math + multiple-choice friendly.
+ *
+ * Refs: MOE 2021 Primary Mathematics Syllabus (P1–P6).
  */
 
 import type { z } from "zod";
@@ -15,8 +18,6 @@ import type { ChallengeCategorySchema } from "@/data/schemas/primitives";
 
 export type ChallengeCategory = z.infer<typeof ChallengeCategorySchema>;
 
-/** Visual payload. Counting uses emoji glyphs; geometry uses SVG shapes;
- *  fractions use a divided bar. Rendered by ChallengeVisualView. */
 export type ChallengeVisual =
   | { kind: "glyphs"; glyphs: string[]; layout: "row" | "single" }
   | { kind: "polygon"; sides: number }
@@ -26,65 +27,65 @@ export type ChallengeVisual =
 
 export interface Challenge {
   category: ChallengeCategory;
-  /** Display prompt, e.g. "34 + 25 = ?" or "How many sides?" */
   prompt: string;
-  /** 3–4 answer strings (numbers, fractions, shape names…). */
   choices: string[];
   correctIndex: number;
   visual?: ChallengeVisual;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Age tiers — Singapore / Korea primary levels (US kindergarten ≈ age 5).
-// Level 1..5 drives the per-generator number ranges.
+// Age → Singapore level → topic mix. P1 starts at age 7, so
+// age N maps to level P(N−6); ages 4–6 are pre-school.
 // ─────────────────────────────────────────────────────────────
 
-export type AgeTier = "tier1" | "tier2" | "tier3" | "tier4" | "tier5";
-
-export function tierForAge(age: number): AgeTier {
-  if (age <= 5) return "tier1";
-  if (age <= 7) return "tier2";
-  if (age <= 9) return "tier3";
-  if (age <= 11) return "tier4";
-  return "tier5";
-}
-
-type Level = 1 | 2 | 3 | 4 | 5;
-
-interface TierConfig {
-  level: Level;
-  /** Categories eligible when the author leaves the category on "auto". */
-  categories: ChallengeCategory[];
-}
-
-const TIERS: Record<AgeTier, TierConfig> = {
-  // 4–5 · Pre-K/K: counting, shape sense, sums within 10.
-  tier1: {
-    level: 1,
-    categories: ["counting", "geometry", "compare", "add", "odd-one-out"],
-  },
-  // 6–7 · Singapore P1 / Korea 1학년: ±within 100, ×(2,5,10), patterns, shapes.
-  tier2: {
-    level: 2,
-    categories: ["add", "sub", "multiply", "missing", "compare", "pattern", "geometry", "word"],
-  },
-  // 8–9 · P2–P3 / 2–3학년: tables & division, ±within 1000, fractions, area.
-  tier3: {
-    level: 3,
-    categories: ["multiply", "divide", "add", "sub", "missing", "pattern", "geometry", "fraction", "word", "odd-one-out"],
-  },
-  // 10–11 · P4–P5 / 4–5학년: 2-digit ×/÷, fraction ops, area/triangle, 2-step.
-  tier4: {
-    level: 4,
-    categories: ["multiply", "divide", "fraction", "pattern", "geometry", "word", "missing", "odd-one-out"],
-  },
-  // 12 · P6 / 6학년: percentages (inside `word`), fraction ops, multi-step
-  // word problems, harder patterns.
-  tier5: {
-    level: 5,
-    categories: ["word", "fraction", "multiply", "divide", "pattern", "geometry"],
-  },
+const AGE_PLAN: Record<number, ChallengeCategory[]> = {
+  // Pre-school (K1): counting, shapes, sums within 10.
+  4: ["counting", "shape", "add", "compare", "odd-one-out"],
+  // Pre-school (K2): + simple patterns.
+  5: ["counting", "shape", "add", "sub", "compare", "pattern"],
+  // P1: ± within 100, intro × & money & time, 2D shapes.
+  6: ["add", "sub", "multiply", "money", "shape", "pattern"],
+  // P1→P2: tables, division, money, time, 1-step word problems.
+  7: ["add", "sub", "multiply", "divide", "money", "time", "geometry", "word"],
+  // P2: ± within 1000, ×÷ tables, unit/like fractions, money, time.
+  8: ["multiply", "divide", "fraction", "money", "time", "add", "sub", "word"],
+  // P3: bigger ×÷, equivalent & like fractions, area/perimeter, time, money.
+  9: ["multiply", "divide", "fraction", "measure", "money", "time", "geometry", "word"],
+  // P4: factors/multiples, fraction of a set, decimals (±), area, 2-step word.
+  10: ["factors", "fraction", "decimal", "multiply", "divide", "measure", "word", "pattern"],
+  // P5: fraction ×÷, decimal ×÷, percentage, ratio, area of triangle, average.
+  11: ["fraction", "decimal", "percentage", "ratio", "measure", "average", "geometry", "word"],
+  // P6: fraction ÷, % increase/decrease, ratio, algebra, speed, average.
+  12: ["percentage", "ratio", "algebra", "speed", "average", "fraction", "measure", "word"],
 };
+
+export type AgeBand = keyof typeof AGE_PLAN;
+
+function planForAge(age: number): { age: number; categories: ChallengeCategory[] } {
+  const a = Math.max(4, Math.min(12, Math.round(age)));
+  return { age: a, categories: AGE_PLAN[a] };
+}
+
+/** The categories actually produced at this age (the "auto" pool). Used by the
+ *  admin preview so it shows only level-appropriate types, not every category. */
+export function categoriesForAge(age: number): ChallengeCategory[] {
+  return planForAge(age).categories;
+}
+
+export function ageBandLabel(age: number): string {
+  const a = Math.max(4, Math.min(12, Math.round(age)));
+  if (a <= 5) return `Age ${a} · pre-school · counting & shapes`;
+  const labels: Record<number, string> = {
+    6: "Age 6 · P1 · ± within 100, intro ×, money",
+    7: "Age 7 · P1 · tables, ÷, money, time, word",
+    8: "Age 8 · P2 · ×÷ tables, fractions, money/time",
+    9: "Age 9 · P3 · bigger ×÷, fractions, area",
+    10: "Age 10 · P4 · factors, decimals, fraction-of-set",
+    11: "Age 11 · P5 · fraction/decimal ×÷, %, ratio, average",
+    12: "Age 12 · P6 · %, ratio, algebra, speed",
+  };
+  return labels[a] ?? `Age ${a}`;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Public API
@@ -94,38 +95,36 @@ export function generateChallenge(opts: {
   age: number;
   category?: ChallengeCategory | "auto";
 }): Challenge {
-  const cfg = TIERS[tierForAge(opts.age)];
-  const level = cfg.level;
+  const { age, categories } = planForAge(opts.age);
   const category =
     !opts.category || opts.category === "auto"
-      ? pick(cfg.categories) ?? "add"
+      ? pick(categories) ?? "add"
       : opts.category;
 
   switch (category) {
-    case "add":
-      return makeAdd(level);
-    case "sub":
-      return makeSub(level);
-    case "multiply":
-      return makeMultiply(level);
-    case "divide":
-      return makeDivide(level);
-    case "missing":
-      return makeMissing(level);
-    case "compare":
-      return makeCompare(level);
-    case "counting":
-      return makeCounting(level);
-    case "pattern":
-      return makePattern(level);
-    case "geometry":
-      return makeGeometry(level);
-    case "fraction":
-      return makeFraction(level);
-    case "word":
-      return makeWord(level);
-    case "odd-one-out":
-      return makeOddOneOut(level);
+    case "counting": return makeCounting(age);
+    case "shape": return makeShape();
+    case "compare": return makeCompare(age);
+    case "odd-one-out": return makeOddOneOut(age);
+    case "pattern": return makePattern(age);
+    case "add": return makeAdd(age);
+    case "sub": return makeSub(age);
+    case "multiply": return makeMultiply(age);
+    case "divide": return makeDivide(age);
+    case "missing": return makeMissing(age);
+    case "fraction": return makeFraction(age);
+    case "decimal": return makeDecimal(age);
+    case "percentage": return makePercentage(age);
+    case "ratio": return makeRatio(age);
+    case "money": return makeMoney(age);
+    case "time": return makeTime(age);
+    case "measure": return makeMeasure(age);
+    case "geometry": return makeGeometry(age);
+    case "average": return makeAverage(age);
+    case "factors": return makeFactors(age);
+    case "algebra": return makeAlgebra();
+    case "speed": return makeSpeed();
+    case "word": return makeWord(age);
   }
 }
 
@@ -133,67 +132,82 @@ export function generateChallenge(opts: {
 // Arithmetic
 // ─────────────────────────────────────────────────────────────
 
-/** Sum cap per level (kept mental-math + multiple-choice feasible). */
-const ADD_MAX: Record<Level, number> = { 1: 10, 2: 100, 3: 200, 4: 500, 5: 1000 };
+function addCap(age: number): number {
+  if (age <= 5) return 10;
+  if (age <= 7) return 100;
+  if (age <= 9) return 1000;
+  return 1000;
+}
 
-function makeAdd(level: Level): Challenge {
-  const cap = ADD_MAX[level];
+function makeAdd(age: number): Challenge {
+  const cap = addCap(age);
   const a = randInt(1, Math.max(1, cap - 1));
   const b = randInt(1, Math.max(1, cap - a));
   return numericChallenge("add", `${a} + ${b} = ?`, a + b, spreadFor(a + b));
 }
 
-function makeSub(level: Level): Challenge {
-  const cap = ADD_MAX[level];
+function makeSub(age: number): Challenge {
+  const cap = addCap(age);
   const a = randInt(2, cap);
   const b = randInt(1, a - 1);
   return numericChallenge("sub", `${a} − ${b} = ?`, a - b, spreadFor(a));
 }
 
-/** [multiplicand range, multiplier range] per level. */
-const MUL: Record<Level, [[number, number], [number, number]]> = {
-  1: [[2, 5], [2, 5]],
-  2: [[2, 9], [2, 5]], // intro tables
-  3: [[2, 12], [2, 9]], // full tables
-  4: [[11, 29], [2, 9]], // 2-digit × 1-digit
-  5: [[12, 49], [3, 9]], // bigger 2-digit × 1-digit
-};
-
-function makeMultiply(level: Level): Challenge {
-  const [[aMin, aMax], [bMin, bMax]] = MUL[level];
-  const a = randInt(aMin, aMax);
-  const b = randInt(bMin, bMax);
+function makeMultiply(age: number): Challenge {
+  let a: number, b: number;
+  if (age <= 6) {
+    a = pick([2, 5, 10]) ?? 2;
+    b = randInt(1, 5);
+  } else if (age <= 8) {
+    a = randInt(2, 5);
+    b = randInt(2, 10);
+  } else if (age <= 9) {
+    a = randInt(6, 12);
+    b = randInt(2, 9);
+  } else {
+    a = randInt(11, 29); // 2-digit × 1-digit
+    b = randInt(2, 9);
+  }
   return numericChallenge("multiply", `${a} × ${b} = ?`, a * b, spreadFor(a * b));
 }
 
-function makeDivide(level: Level): Challenge {
-  // Build from a known product so the quotient is always whole.
-  const [, [bMin, bMax]] = MUL[Math.max(3, level) as Level];
-  const divisor = randInt(Math.max(2, bMin), bMax);
-  const quotient = randInt(2, level >= 4 ? 12 : 9);
+function makeDivide(age: number): Challenge {
+  const divisor = randInt(2, age <= 8 ? 5 : 9);
+  const quotient = randInt(2, age >= 10 ? 12 : 9);
   const dividend = divisor * quotient;
   return numericChallenge("divide", `${dividend} ÷ ${divisor} = ?`, quotient, spreadFor(quotient));
 }
 
-function makeMissing(level: Level): Challenge {
-  const cap = ADD_MAX[level];
+function makeMissing(age: number): Challenge {
+  const cap = addCap(age);
   const total = randInt(3, cap);
   const known = randInt(1, total - 1);
   return numericChallenge("missing", `${known} + ? = ${total}`, total - known, spreadFor(total));
 }
 
-const COMPARE_MAX: Record<Level, number> = { 1: 20, 2: 100, 3: 1000, 4: 10000, 5: 100000 };
+// ─────────────────────────────────────────────────────────────
+// Early number sense (young ages only)
+// ─────────────────────────────────────────────────────────────
 
-function makeCompare(level: Level): Challenge {
-  const cap = COMPARE_MAX[level];
+const COUNT_EMOJI = ["🍎", "🐤", "⭐", "🌸", "🍓", "🐢", "🎈", "🐞"];
+
+function makeCounting(age: number): Challenge {
+  const n = randInt(1, age <= 4 ? 10 : 20);
+  const glyph = pick(COUNT_EMOJI) ?? "⭐";
+  const base = numericChallenge("counting", "How many?", n, 2);
+  return { ...base, visual: { kind: "glyphs", glyphs: Array(n).fill(glyph), layout: "row" } };
+}
+
+function makeCompare(age: number): Challenge {
+  const cap = age <= 5 ? 20 : 100;
   const a = randInt(1, cap);
   let b = a;
   for (let t = 0; b === a && t < 200; t++) b = randInt(1, cap);
   const bigger = Math.max(a, b);
   const distractors: number[] = [];
   for (let t = 0; distractors.length < 2 && t < 200; t++) {
-    const d = randInt(1, cap);
-    if (d !== a && d !== b && !distractors.includes(d)) distractors.push(d);
+    const dd = randInt(1, cap);
+    if (dd !== a && dd !== b && !distractors.includes(dd)) distractors.push(dd);
   }
   const choices = shuffle([a, b, ...distractors]);
   return {
@@ -204,45 +218,8 @@ function makeCompare(level: Level): Challenge {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Patterns — additive at low levels, multiplicative / two-rule higher up.
-// ─────────────────────────────────────────────────────────────
-
-function makePattern(level: Level): Challenge {
-  // Higher tiers mix in multiplicative + accelerating patterns ("thinking").
-  const kinds =
-    level <= 2
-      ? (["add"] as const)
-      : level === 3
-        ? (["add", "mul"] as const)
-        : (["add", "mul", "accel"] as const);
-  const kind = pick(kinds as readonly string[]) ?? "add";
-
-  if (kind === "mul") {
-    const start = randInt(1, 3);
-    const factor = pick([2, 3, 4, 5]) ?? 2;
-    const seq = [start, start * factor, start * factor ** 2, start * factor ** 3];
-    return numericChallenge("pattern", `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`, seq[3], spreadFor(seq[3]));
-  }
-  if (kind === "accel") {
-    // +1, +2, +3, … (triangular-style) — needs spotting the changing step.
-    const start = randInt(1, 5);
-    let step = randInt(1, 3);
-    const seq = [start];
-    for (let i = 0; i < 3; i++) {
-      seq.push(seq[seq.length - 1] + step);
-      step += 1;
-    }
-    return numericChallenge("pattern", `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`, seq[3], 3);
-  }
-  const start = randInt(1, level >= 3 ? 12 : 6);
-  const step = pick(level <= 1 ? [1, 2] : level === 2 ? [2, 5, 10] : [3, 4, 6, 7]) ?? 2;
-  const seq = [start, start + step, start + step * 2, start + step * 3];
-  return numericChallenge("pattern", `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`, seq[3], spreadFor(seq[3]));
-}
-
-function makeOddOneOut(level: Level): Challenge {
-  const cap = Math.max(4, Math.floor(COMPARE_MAX[level] / 2));
+function makeOddOneOut(age: number): Challenge {
+  const cap = age <= 5 ? 10 : 20;
   const odd = randInt(0, cap) * 2 + 1;
   const evens: number[] = [];
   for (let t = 0; evens.length < 3 && t < 200; t++) {
@@ -258,217 +235,403 @@ function makeOddOneOut(level: Level): Challenge {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Counting (visual)
-// ─────────────────────────────────────────────────────────────
-
-const COUNT_EMOJI = ["🍎", "🐤", "⭐", "🌸", "🍓", "🐢", "🎈", "🐞"];
-
-function makeCounting(level: Level): Challenge {
-  const n = randInt(1, level >= 2 ? 20 : 10);
-  const glyph = pick(COUNT_EMOJI) ?? "⭐";
-  const base = numericChallenge("counting", "How many?", n, 2);
-  return { ...base, visual: { kind: "glyphs", glyphs: Array(n).fill(glyph), layout: "row" } };
+function makePattern(age: number): Challenge {
+  const kind = age <= 6 ? "add" : age <= 9 ? pick(["add", "mul"]) : pick(["mul", "accel"]);
+  if (kind === "mul") {
+    const start = randInt(1, 3);
+    const f = pick([2, 3, 4, 5]) ?? 2;
+    const seq = [start, start * f, start * f * f, start * f * f * f];
+    return numericChallenge("pattern", `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`, seq[3], spreadFor(seq[3]));
+  }
+  if (kind === "accel") {
+    const start = randInt(1, 5);
+    let step = randInt(2, 4);
+    const seq = [start];
+    for (let i = 0; i < 3; i++) {
+      seq.push(seq[seq.length - 1] + step);
+      step += 1;
+    }
+    return numericChallenge("pattern", `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`, seq[3], 3);
+  }
+  const start = randInt(1, 9);
+  const step = pick(age <= 5 ? [1, 2] : [2, 3, 5, 10]) ?? 2;
+  const seq = [start, start + step, start + step * 2, start + step * 3];
+  return numericChallenge("pattern", `${seq[0]}, ${seq[1]}, ${seq[2]}, ?`, seq[3], spreadFor(seq[3]));
 }
 
 // ─────────────────────────────────────────────────────────────
-// Geometry — SVG shapes (polygons up to a dodecagon, plus rectangle /
-// triangle measurement). Far richer than emoji shape-naming.
+// Geometry & measurement
 // ─────────────────────────────────────────────────────────────
 
 const POLY_NAMES: Record<number, string> = {
-  3: "triangle",
-  4: "square",
-  5: "pentagon",
-  6: "hexagon",
-  7: "heptagon",
-  8: "octagon",
-  9: "nonagon",
-  10: "decagon",
-  12: "dodecagon",
+  3: "triangle", 4: "square", 5: "pentagon", 6: "hexagon",
+  7: "heptagon", 8: "octagon", 9: "nonagon", 10: "decagon",
 };
 
-function makeGeometry(level: Level): Challenge {
-  const options =
-    level <= 1
-      ? (["sides"] as const)
-      : level === 2
-        ? (["sides", "name"] as const)
-        : level === 3
-          ? (["sides", "name", "area", "perimeter"] as const)
-          : (["sides", "area", "perimeter", "triangle"] as const);
-  const kind = pick(options as readonly string[]) ?? "sides";
+function makeShape(): Challenge {
+  const sides = pick([3, 4, 5, 6]) ?? 4;
+  const target = POLY_NAMES[sides];
+  const names = new Set<string>([target]);
+  const pool = Object.values(POLY_NAMES);
+  for (let t = 0; names.size < 4 && t < 200; t++) names.add(pick(pool)!);
+  const choices = shuffle([...names]);
+  return {
+    category: "shape",
+    prompt: "What shape is this?",
+    choices,
+    correctIndex: choices.indexOf(target),
+    visual: { kind: "polygon", sides },
+  };
+}
 
-  if (kind === "area") {
-    const w = randInt(2, level >= 4 ? 20 : 10);
-    const h = randInt(2, level >= 4 ? 12 : 8);
-    return {
-      ...numericChallenge("geometry", `Area of this rectangle? (${w} × ${h})`, w * h, spreadFor(w * h)),
-      visual: { kind: "rect", w, h, showDims: true },
-    };
+function makeGeometry(age: number): Challenge {
+  // P5+: angles on a straight line / at a point.
+  if (age >= 11 && pick([true, false])) {
+    const onLine = pick([true, false]);
+    const whole = onLine ? 180 : 360;
+    const known = randInt(2, (whole - 20) / 10) * 10;
+    return numericChallenge(
+      "geometry",
+      onLine
+        ? `Angles on a straight line: ${known}° + ? = 180°`
+        : `Angles at a point: ${known}° + ? = 360°`,
+      whole - known,
+      10,
+    );
   }
-  if (kind === "perimeter") {
-    const w = randInt(2, level >= 4 ? 20 : 10);
-    const h = randInt(2, level >= 4 ? 12 : 8);
-    return {
-      ...numericChallenge("geometry", "Perimeter of this rectangle?", 2 * (w + h), spreadFor(2 * (w + h))),
-      visual: { kind: "rect", w, h, showDims: true },
-    };
-  }
-  if (kind === "triangle") {
-    let base = randInt(2, 12);
-    const height = randInt(2, 10);
-    // Keep base × height even so the half-area is a whole number.
-    if ((base * height) % 2 !== 0) base += 1;
-    const area = (base * height) / 2;
-    return {
-      ...numericChallenge("geometry", "Area of this triangle? (½ × base × height)", area, spreadFor(area)),
-      visual: { kind: "triangle", base, height },
-    };
-  }
-  // sides / name → regular polygon
-  const sideChoices =
-    level <= 1 ? [3, 4] : level === 2 ? [3, 4, 5, 6] : level === 3 ? [3, 4, 5, 6, 7, 8] : [5, 6, 7, 8, 9, 10, 12];
-  const sides = pick(sideChoices) ?? 4;
-
-  if (kind === "name") {
-    const target = POLY_NAMES[sides] ?? "shape";
-    const pool = Object.values(POLY_NAMES);
-    const names = new Set<string>([target]);
-    for (let t = 0; names.size < 4 && t < 200; t++) names.add(pick(pool)!);
-    const choices = shuffle([...names]);
-    return {
-      category: "geometry",
-      prompt: "What is this shape called?",
-      choices,
-      correctIndex: choices.indexOf(target),
-      visual: { kind: "polygon", sides },
-    };
-  }
+  const sides = pick(age <= 7 ? [3, 4, 5] : [3, 4, 5, 6, 7, 8]) ?? 4;
   return {
     ...numericChallenge("geometry", "How many sides?", sides, 2),
     visual: { kind: "polygon", sides },
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Fractions
-// ─────────────────────────────────────────────────────────────
-
-function makeFraction(level: Level): Challenge {
-  if (level <= 3) {
-    // Mix: "what fraction is shaded?" (visual) and compare unit fractions.
-    if (pick([true, false])) {
-      const den = pick([2, 3, 4, 5, 6]) ?? 4;
-      const shaded = randInt(1, den - 1);
-      const correct = `${shaded}/${den}`;
-      const wrong = new Set<string>([correct]);
-      for (let t = 0; wrong.size < 4 && t < 200; t++) {
-        const d2 = pick([2, 3, 4, 5, 6]) ?? 4;
-        const n2 = randInt(1, d2 - 1);
-        wrong.add(`${n2}/${d2}`);
-      }
-      const choices = shuffle([...wrong]);
-      return {
-        category: "fraction",
-        prompt: "What fraction is shaded?",
-        choices,
-        correctIndex: choices.indexOf(correct),
-        visual: { kind: "bar", den, shaded },
-      };
-    }
-    // Compare two unit fractions (smaller denominator = bigger fraction).
-    const dens = shuffle([2, 3, 4, 5, 6, 8]).slice(0, 3);
-    const bigger = `1/${Math.min(...dens)}`;
-    const choices = shuffle(dens.map((d) => `1/${d}`));
+function makeMeasure(age: number): Challenge {
+  const choice = age >= 11 ? pick(["area", "perim", "triangle", "volume"]) : pick(["area", "perim"]);
+  if (choice === "triangle") {
+    let base = randInt(2, 12);
+    const height = randInt(2, 10);
+    if ((base * height) % 2 !== 0) base += 1;
     return {
-      category: "fraction",
-      prompt: "Which fraction is the biggest?",
-      choices,
-      correctIndex: choices.indexOf(bigger),
+      ...numericChallenge(
+        "measure",
+        "Area of this triangle? (½ × base × height)",
+        (base * height) / 2,
+        spreadFor((base * height) / 2),
+      ),
+      visual: { kind: "triangle", base, height },
     };
   }
-  // Level 4–5: add fractions with the same denominator.
-  const den = pick([4, 5, 6, 8, 10]) ?? 5;
-  const a = randInt(1, den - 2);
-  const b = randInt(1, den - a - 1);
-  const correct = `${a + b}/${den}`;
-  const wrong = new Set<string>([correct]);
-  for (let t = 0; wrong.size < 4 && t < 200; t++) {
-    const n2 = randInt(1, den);
-    wrong.add(`${n2}/${den}`);
+  if (choice === "volume") {
+    const l = randInt(2, 6), w = randInt(2, 5), h = randInt(2, 5);
+    return numericChallenge("measure", `Volume of a box ${l} × ${w} × ${h}? (length × width × height)`, l * w * h, spreadFor(l * w * h));
   }
-  const choices = shuffle([...wrong]);
+  const w = randInt(2, age >= 10 ? 20 : 10);
+  const h = randInt(2, age >= 10 ? 12 : 8);
+  if (choice === "perim") {
+    return {
+      ...numericChallenge("measure", "Perimeter of this rectangle?", 2 * (w + h), spreadFor(2 * (w + h))),
+      visual: { kind: "rect", w, h, showDims: true },
+    };
+  }
   return {
-    category: "fraction",
-    prompt: `${a}/${den} + ${b}/${den} = ?`,
-    choices,
-    correctIndex: choices.indexOf(correct),
+    ...numericChallenge("measure", `Area of this rectangle? (${w} × ${h})`, w * h, spreadFor(w * h)),
+    visual: { kind: "rect", w, h, showDims: true },
   };
 }
 
 // ─────────────────────────────────────────────────────────────
-// Word problems + percentages — the "thinking" layer for older kids.
+// Fractions (sub-type scales with age)
+// ─────────────────────────────────────────────────────────────
+
+function makeFraction(age: number): Challenge {
+  if (age <= 8) {
+    // P2: "what fraction is shaded?" + compare unit fractions.
+    if (pick([true, false])) {
+      const den = pick([2, 3, 4, 5, 6]) ?? 4;
+      const shaded = randInt(1, den - 1);
+      const correct = `${shaded}/${den}`;
+      const opts = new Set<string>([correct]);
+      for (let t = 0; opts.size < 4 && t < 200; t++) {
+        const d2 = pick([2, 3, 4, 5, 6]) ?? 4;
+        opts.add(`${randInt(1, d2 - 1)}/${d2}`);
+      }
+      const choices = shuffle([...opts]);
+      return { category: "fraction", prompt: "What fraction is shaded?", choices, correctIndex: choices.indexOf(correct), visual: { kind: "bar", den, shaded } };
+    }
+    const dens = shuffle([2, 3, 4, 5, 6, 8]).slice(0, 3);
+    const bigger = `1/${Math.min(...dens)}`;
+    const choices = shuffle(dens.map((d) => `1/${d}`));
+    return { category: "fraction", prompt: "Which fraction is the biggest?", choices, correctIndex: choices.indexOf(bigger) };
+  }
+  if (age === 9) {
+    // P3: equivalent fractions + add/sub like fractions.
+    if (pick([true, false])) {
+      const den = pick([2, 3, 4, 5]) ?? 2;
+      const num = randInt(1, den - 1);
+      const f = pick([2, 3]) ?? 2;
+      const correct = `${num * f}/${den * f}`;
+      const opts = new Set<string>([correct]);
+      for (let t = 0; opts.size < 4 && t < 200; t++) opts.add(`${randInt(1, den * f)}/${den * f}`);
+      const choices = shuffle([...opts]);
+      return { category: "fraction", prompt: `${num}/${den} = ?/${den * f}`, choices, correctIndex: choices.indexOf(correct) };
+    }
+    const den = pick([4, 5, 6, 8]) ?? 5;
+    const a = randInt(1, den - 2), b = randInt(1, den - a - 1);
+    return fractionAnswer("fraction", `${a}/${den} + ${b}/${den} = ?`, a + b, den);
+  }
+  if (age === 10) {
+    // P4: fraction of a set (whole-number answer) + add/sub like.
+    if (pick([true, false])) {
+      const den = pick([2, 3, 4, 5]) ?? 4;
+      const whole = den * randInt(2, 6);
+      const num = randInt(1, den - 1);
+      const ans = (whole / den) * num;
+      return numericChallenge("fraction", `${num}/${den} of ${whole} = ?`, ans, spreadFor(ans));
+    }
+    const den = pick([5, 6, 8, 10]) ?? 6;
+    const a = randInt(1, den - 2), b = randInt(1, den - a - 1);
+    return fractionAnswer("fraction", `${a}/${den} + ${b}/${den} = ?`, a + b, den);
+  }
+  // P5/P6: fraction × whole, and ÷.
+  if (pick([true, false])) {
+    const den = pick([2, 3, 4, 5]) ?? 3;
+    const whole = den * randInt(2, 6);
+    const num = age >= 12 ? 1 : randInt(1, den - 1);
+    const ans = (whole / den) * num;
+    return numericChallenge("fraction", `${num}/${den} × ${whole} = ?`, ans, spreadFor(ans));
+  }
+  // ÷ whole by a unit fraction → whole × den (P6).
+  const den = pick([2, 3, 4]) ?? 2;
+  const whole = randInt(2, 6);
+  return numericChallenge("fraction", `${whole} ÷ 1/${den} = ?`, whole * den, spreadFor(whole * den));
+}
+
+/** Build choices for a fraction answer `n/den` (+ fraction distractors). */
+function fractionAnswer(category: ChallengeCategory, prompt: string, num: number, den: number): Challenge {
+  const correct = `${num}/${den}`;
+  const opts = new Set<string>([correct]);
+  for (let t = 0; opts.size < 4 && t < 200; t++) {
+    const n2 = clamp(num + pick([-2, -1, 1, 2])!, 1, den);
+    opts.add(`${n2}/${den}`);
+  }
+  const choices = shuffle([...opts]);
+  return { category, prompt, choices, correctIndex: choices.indexOf(correct) };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Decimals, percentage, ratio, money, time, average, factors, algebra, speed
+// ─────────────────────────────────────────────────────────────
+
+function makeDecimal(age: number): Challenge {
+  if (age <= 10) {
+    // P4: add/subtract one-decimal numbers.
+    const a = randInt(2, 40) / 10;
+    const b = randInt(1, 30) / 10;
+    if (pick([true, false]) && a > b) return decimalAnswer(`${fmt1(a)} − ${fmt1(b)} = ?`, a - b);
+    return decimalAnswer(`${fmt1(a)} + ${fmt1(b)} = ?`, a + b);
+  }
+  // P5: multiply/divide a decimal by a whole number.
+  const d = randInt(2, 25) / 10;
+  const n = randInt(2, 5);
+  if (pick([true, false])) return decimalAnswer(`${fmt1(d)} × ${n} = ?`, d * n);
+  const prod = (randInt(2, 12) * n) / 10; // ensure clean ÷
+  return decimalAnswer(`${fmt1(prod)} ÷ ${n} = ?`, prod / n);
+}
+
+function decimalAnswer(prompt: string, answer: number): Challenge {
+  const a = Math.round(answer * 10) / 10;
+  const opts = new Set<string>([fmt1(a)]);
+  for (let t = 0; opts.size < 4 && t < 200; t++) {
+    const cand = Math.round((a + pick([-1, 1, 2, -2, 5, -5])! / 10) * 10) / 10;
+    if (cand >= 0) opts.add(fmt1(cand));
+  }
+  const choices = shuffle([...opts]);
+  return { category: "decimal", prompt, choices, correctIndex: choices.indexOf(fmt1(a)) };
+}
+
+function makePercentage(age: number): Challenge {
+  const base = pick([20, 40, 50, 60, 80, 100, 200]) ?? 40;
+  const pct = pick([10, 20, 25, 50, 75]) ?? 50;
+  if (age >= 12 && pick([true, false])) {
+    const inc = pick([true, false]);
+    const delta = (base * pct) / 100;
+    const ans = inc ? base + delta : base - delta;
+    return numericChallenge("percentage", `${base} ${inc ? "increased" : "decreased"} by ${pct}% = ?`, ans, spreadFor(ans));
+  }
+  return numericChallenge("percentage", `${pct}% of ${base} = ?`, (base * pct) / 100, spreadFor((base * pct) / 100));
+}
+
+function makeRatio(age: number): Challenge {
+  if (pick([true, false])) {
+    // Simplify a:b.
+    const g = randInt(2, 6);
+    const x = randInt(1, 5);
+    let y = randInt(1, 5);
+    if (x === y) y = y === 5 ? y - 1 : y + 1;
+    const correct = `${x}:${y}`;
+    const opts = new Set<string>([correct]);
+    for (let t = 0; opts.size < 4 && t < 200; t++) opts.add(`${randInt(1, 6)}:${randInt(1, 6)}`);
+    const choices = shuffle([...opts]);
+    return { category: "ratio", prompt: `Simplify the ratio ${x * g} : ${y * g}`, choices, correctIndex: choices.indexOf(correct) };
+  }
+  // Find the missing term: a:b, first = a×k → second = b×k.
+  const a = randInt(1, 4), b = randInt(1, 5), k = randInt(2, 5);
+  void age;
+  return numericChallenge("ratio", `The ratio is ${a} : ${b}. If the first is ${a * k}, the second is ?`, b * k, spreadFor(b * k));
+}
+
+function makeMoney(age: number): Challenge {
+  const mode = pick(age <= 7 ? ["add", "sub"] : ["add", "sub", "mul"]);
+  if (mode === "mul") {
+    const unit = randInt(2, 9) * 5; // cents, multiple of 5
+    const qty = randInt(2, 6);
+    return moneyAnswer(`${qty} items at ${money(unit)} each = ?`, unit * qty);
+  }
+  const a = randInt(20, 900); // cents
+  const b = randInt(10, mode === "sub" ? a - 5 : 600);
+  return mode === "sub"
+    ? moneyAnswer(`${money(a)} − ${money(b)} = ?`, a - b)
+    : moneyAnswer(`${money(a)} + ${money(b)} = ?`, a + b);
+}
+
+function moneyAnswer(prompt: string, cents: number): Challenge {
+  const opts = new Set<string>([money(cents)]);
+  for (let t = 0; opts.size < 4 && t < 200; t++) {
+    const cand = cents + pick([-50, -20, -10, 10, 20, 50])!;
+    if (cand > 0) opts.add(money(cand));
+  }
+  const choices = shuffle([...opts]);
+  return { category: "money", prompt, choices, correctIndex: choices.indexOf(money(cents)) };
+}
+
+function makeTime(age: number): Challenge {
+  const mode = pick(age <= 7 ? ["convert", "duration"] : ["convert", "duration", "later"]);
+  if (mode === "convert") {
+    const h = randInt(1, 4);
+    return numericChallenge("time", `${h} ${h === 1 ? "hour" : "hours"} = ? minutes`, h * 60, 15);
+  }
+  if (mode === "later") {
+    const startH = randInt(1, 9);
+    const add = pick([30, 45, 60, 90]) ?? 60;
+    const total = startH * 60 + add;
+    const ans = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+    const opts = new Set<string>([ans]);
+    for (let t = 0; opts.size < 4 && t < 200; t++) {
+      const m = startH * 60 + add + pick([-60, -15, 15, 60])!;
+      if (m > 0) opts.add(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`);
+    }
+    const choices = shuffle([...opts]);
+    return { category: "time", prompt: `It is ${startH}:00. What time is it ${add} minutes later?`, choices, correctIndex: choices.indexOf(ans) };
+  }
+  const startM = randInt(0, 30);
+  const dur = pick([15, 20, 25, 35, 40]) ?? 20;
+  return numericChallenge("time", `From 3:${String(startM).padStart(2, "0")} to 3:${String(startM + dur).padStart(2, "0")} is ? minutes`, dur, 5);
+}
+
+function makeAverage(age: number): Challenge {
+  void age;
+  const n = pick([2, 3, 4]) ?? 3;
+  const avg = randInt(3, 12);
+  // Build n numbers averaging `avg` (keep small + whole).
+  const nums: number[] = [];
+  let sum = avg * n;
+  for (let i = 0; i < n - 1; i++) {
+    const v = clamp(randInt(1, 2 * avg - 1), 1, sum - (n - 1 - i));
+    nums.push(v);
+    sum -= v;
+  }
+  nums.push(sum);
+  return numericChallenge("average", `Average of ${shuffle(nums).join(", ")} = ?`, avg, spreadFor(avg));
+}
+
+function makeFactors(age: number): Challenge {
+  void age;
+  if (pick([true, false])) {
+    // "Which is a factor of N?"
+    const n = pick([12, 16, 18, 20, 24, 30, 36]) ?? 24;
+    const factors = factorsOf(n).filter((f) => f > 1 && f < n);
+    const correct = pick(factors) ?? 2;
+    const opts = new Set<number>([correct]);
+    for (let t = 0; opts.size < 4 && t < 300; t++) {
+      const cand = randInt(2, n - 1);
+      if (n % cand !== 0) opts.add(cand);
+    }
+    const choices = shuffle([...opts]);
+    return { category: "factors", prompt: `Which is a factor of ${n}?`, choices: choices.map(String), correctIndex: choices.indexOf(correct) };
+  }
+  // "Next multiple of m after k"
+  const m = randInt(3, 9);
+  const k = randInt(m + 1, m * 6);
+  const ans = (Math.floor(k / m) + 1) * m;
+  return numericChallenge("factors", `What is the next multiple of ${m} after ${k}?`, ans, m);
+}
+
+function makeAlgebra(): Challenge {
+  if (pick([true, false])) {
+    const x = randInt(2, 12);
+    const b = randInt(1, 20);
+    return numericChallenge("algebra", `If x + ${b} = ${x + b}, then x = ?`, x, spreadFor(x + b));
+  }
+  const y = randInt(2, 9);
+  const k = randInt(2, 9);
+  return numericChallenge("algebra", `If y = ${y}, what is ${k}y ?`, k * y, spreadFor(k * y));
+}
+
+function makeSpeed(): Challenge {
+  const speed = pick([20, 30, 40, 50, 60]) ?? 40;
+  const time = randInt(2, 4);
+  if (pick([true, false])) {
+    // distance from speed × time
+    return numericChallenge("speed", `A car travels ${speed} km/h for ${time} h. Distance = ?`, speed * time, spreadFor(speed * time));
+  }
+  // speed from distance ÷ time
+  const dist = speed * time;
+  return numericChallenge("speed", `A car travels ${dist} km in ${time} h. Speed = ? km/h`, speed, spreadFor(speed));
+}
+
+// ─────────────────────────────────────────────────────────────
+// Word / heuristic problems (1–3 step, scaled)
 // ─────────────────────────────────────────────────────────────
 
 const NAMES = ["Mia", "Leo", "Ava", "Noah", "Emma", "Kai", "Zoe", "Sam"];
 const ITEMS = ["apples", "stickers", "marbles", "coins", "cookies", "shells", "stars", "crayons"];
 
-function makeWord(level: Level): Challenge {
+function makeWord(age: number): Challenge {
   const name = pick(NAMES) ?? "Mia";
   const name2 = pick(NAMES.filter((n) => n !== name)) ?? "Leo";
   const item = pick(ITEMS) ?? "apples";
-
-  // Level 5 sometimes asks a percentage problem (still a word/thinking task).
-  if (level >= 5 && pick([true, false])) {
-    const base = pick([20, 40, 50, 60, 80, 100]) ?? 40;
-    const pct = pick([10, 25, 50]) ?? 50;
-    const ans = (base * pct) / 100;
-    return numericChallenge("word", `What is ${pct}% of ${base}?`, ans, spreadFor(ans));
-  }
-
-  const steps = level <= 2 ? 1 : level <= 4 ? 2 : pick([2, 3]) ?? 2;
-  const small = level <= 2 ? 20 : level <= 3 ? 50 : 99;
+  const steps = age <= 7 ? 1 : age <= 10 ? 2 : pick([2, 3]) ?? 2;
+  const small = age <= 7 ? 20 : age <= 9 ? 50 : 99;
 
   if (steps === 1) {
     if (pick([true, false])) {
-      const a = randInt(2, small);
-      const b = randInt(1, small);
+      const a = randInt(2, small), b = randInt(1, small);
       return numericChallenge("word", `${name} has ${a} ${item}. ${name2} gives ${b} more. How many now?`, a + b, spreadFor(a + b));
     }
-    const a = randInt(3, small);
-    const b = randInt(1, a - 1);
+    const a = randInt(3, small), b = randInt(1, a - 1);
     return numericChallenge("word", `${name} had ${a} ${item} and gave away ${b}. How many are left?`, a - b, spreadFor(a));
   }
-
   if (steps === 2) {
-    // multiply then add/subtract (groups + change)
-    const groups = randInt(2, level >= 4 ? 9 : 5);
-    const per = randInt(2, level >= 4 ? 9 : 5);
+    const groups = randInt(2, age >= 10 ? 9 : 5);
+    const per = randInt(2, age >= 10 ? 9 : 5);
     const change = randInt(1, Math.max(2, groups * per - 1));
     if (pick([true, false])) {
-      const ans = groups * per + change;
-      return numericChallenge("word", `${name} has ${groups} boxes of ${per} ${item}, then finds ${change} more. How many ${item} in total?`, ans, spreadFor(ans));
+      return numericChallenge("word", `${name} has ${groups} boxes of ${per} ${item}, then finds ${change} more. How many in total?`, groups * per + change, spreadFor(groups * per + change));
     }
-    const ans = groups * per - change;
-    return numericChallenge("word", `${groups} bags hold ${per} ${item} each. ${change} are lost. How many ${item} are left?`, ans, spreadFor(ans));
+    return numericChallenge("word", `${groups} bags hold ${per} ${item} each. ${change} are lost. How many are left?`, groups * per - change, spreadFor(groups * per));
   }
-
-  // 3-step: groups × per, shared between friends after losing some
-  const groups = randInt(2, 6);
-  const per = randInt(2, 6);
+  // 3-step: groups × per shared among friends
+  const groups = randInt(2, 6), per = randInt(2, 6);
   const total = groups * per;
   const friends = pick([2, 3, 4].filter((f) => total % f === 0)) ?? 2;
-  const ans = total / friends;
-  return numericChallenge("word", `${groups} baskets hold ${per} ${item} each. They are shared equally among ${friends} friends. How many does each friend get?`, ans, spreadFor(ans));
+  return numericChallenge("word", `${groups} baskets hold ${per} ${item} each, shared equally among ${friends} friends. Each gets ?`, total / friends, spreadFor(total / friends));
 }
 
 // ─────────────────────────────────────────────────────────────
-// Utilities (bounded — never throw / hang)
+// Utilities
 // ─────────────────────────────────────────────────────────────
 
-/** Distractor spread scales with the answer's magnitude so big answers don't
- *  get giveaway ±1 options only. */
 function spreadFor(answer: number): number {
   if (answer <= 10) return 3;
   if (answer <= 30) return 5;
@@ -476,27 +639,35 @@ function spreadFor(answer: number): number {
   return Math.max(12, Math.round(answer * 0.15));
 }
 
-function numericChallenge(
-  category: ChallengeCategory,
-  prompt: string,
-  answer: number,
-  spread: number,
-): Challenge {
+function numericChallenge(category: ChallengeCategory, prompt: string, answer: number, spread: number): Challenge {
   const distractors = new Set<number>();
   const offsets = [-spread, -2, -1, 1, 2, spread, Math.round(spread / 2), -Math.round(spread / 2)];
   for (let t = 0; distractors.size < 3 && t < 400; t++) {
-    const d = answer + (pick(offsets) ?? 1);
-    if (d !== answer && d >= 0) distractors.add(d);
+    const dd = answer + (pick(offsets) ?? 1);
+    if (dd !== answer && dd >= 0) distractors.add(dd);
   }
   const choices = shuffle([answer, ...distractors]).map(String);
   return { category, prompt, choices, correctIndex: choices.indexOf(String(answer)) };
 }
 
+function money(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+function fmt1(n: number): string {
+  return n.toFixed(1);
+}
+function factorsOf(n: number): number[] {
+  const out: number[] = [];
+  for (let i = 1; i <= n; i++) if (n % i === 0) out.push(i);
+  return out;
+}
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
 function randInt(min: number, max: number): number {
   if (max < min) max = min;
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -505,7 +676,6 @@ function shuffle<T>(arr: T[]): T[] {
   }
   return a;
 }
-
 function pick<T>(arr: readonly T[]): T | undefined {
   if (arr.length === 0) return undefined;
   return arr[Math.floor(Math.random() * arr.length)];
@@ -515,12 +685,3 @@ function pick<T>(arr: readonly T[]): T | undefined {
 export function ageFromRange(range: readonly [number, number]): number {
   return Math.round((range[0] + range[1]) / 2);
 }
-
-/** Human label per tier (for admin preview). */
-export const TIER_LABELS: Record<AgeTier, string> = {
-  tier1: "Tier 1 · ages 4–5 · counting & shapes",
-  tier2: "Tier 2 · ages 6–7 · ± within 100, ×, patterns",
-  tier3: "Tier 3 · ages 8–9 · tables, ÷, fractions, area",
-  tier4: "Tier 4 · ages 10–11 · 2-digit ×÷, fraction ops, geometry",
-  tier5: "Tier 5 · age 12 · %, fractions, multi-step thinking",
-};

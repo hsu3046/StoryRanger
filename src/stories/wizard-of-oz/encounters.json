@@ -5,12 +5,10 @@
       "title": "Cornfield Bandits",
       "trigger": {
         "sceneId": "s04_road",
-        "branchId": "go_cornfield",
-        "count": 2
+        "branchId": "go_cornfield"
       },
       "intro": {
-        "bg": "cornfield-tall",
-        "narration": "Two scruffy goblins leap out from between the cornstalks brandishing crooked sticks."
+        "bg": "cornfield-tall"
       },
       "body": {
         "kind": "battle",
@@ -30,16 +28,15 @@
       "title": "Awakened Orchard",
       "trigger": {
         "sceneId": "s04_road",
-        "branchId": "go_orchard",
-        "count": 2
+        "branchId": "go_orchard"
       },
       "intro": {
-        "bg": "orchard-twilight",
-        "narration": "An old apple tree creaks, twists — and pulls its roots free of the earth. Its branches swing toward you like long arms."
+        "bg": "orchard-twilight"
       },
       "body": {
         "kind": "battle",
         "monsterIds": [
+          "fighting-tree",
           "fighting-tree"
         ]
       },
@@ -57,8 +54,7 @@
         "branchId": "oil_tinman"
       },
       "intro": {
-        "bg": "forest-clearing",
-        "narration": "Snarls echo from the trees. A pack of grey wolves slips out, fanning around you."
+        "bg": "abandoned-cottage"
       },
       "body": {
         "kind": "battle",
@@ -69,81 +65,13 @@
         ]
       },
       "rewards": {
-        "medalId": "wolf-slayer"
+        "items": [
+          "oil"
+        ]
       },
       "outro": {
         "victory": "The pack scatters. The Tin Man dabs a tear from his cheek — proud and a little shaken.",
         "defeat": "You stagger back. The wolves seem satisfied and slip away."
-      }
-    },
-    {
-      "id": "cave-spiders",
-      "title": "Crystal Spiders",
-      "trigger": {
-        "sceneId": "s08_party",
-        "branchId": "_to_dark_forest"
-      },
-      "intro": {
-        "bg": "cave-interior",
-        "narration": "You slip into a glowing crystal cave to shortcut the forest. Two dark spiders descend from above on silver threads."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "cave-spider",
-          "cave-spider"
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "The spiders retreat. The crystal walls hum — and a strand of silk catches on your sleeve.",
-        "defeat": "You stumble back out into the forest, brushing webs from your hair."
-      }
-    },
-    {
-      "id": "swamp-beast__follow_fireflies",
-      "title": "Bog Creature",
-      "trigger": {
-        "sceneId": "s09a_firefly_trial",
-        "branchId": "follow_fireflies"
-      },
-      "intro": {
-        "bg": "swamp-misty",
-        "narration": "Halfway across the shallows, a mossy bog creature surges up from the water. Its huge sad eyes lock onto yours."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "swamp-beast"
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "The creature sighs and sinks back into the water, leaving an iridescent pearl behind.",
-        "defeat": "It nudges you ashore and disappears beneath the lily pads."
-      }
-    },
-    {
-      "id": "swamp-beast__push_brambles",
-      "title": "Bog Creature",
-      "trigger": {
-        "sceneId": "s09a_firefly_trial",
-        "branchId": "push_brambles"
-      },
-      "intro": {
-        "bg": "swamp-misty",
-        "narration": "Halfway across the shallows, a mossy bog creature surges up from the water. Its huge sad eyes lock onto yours."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "swamp-beast"
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "The creature sighs and sinks back into the water, leaving an iridescent pearl behind.",
-        "defeat": "It nudges you ashore and disappears beneath the lily pads."
       }
     },
     {
@@ -154,8 +82,7 @@
         "branchId": "_to_gates"
       },
       "intro": {
-        "bg": "munchkin-back-alley",
-        "narration": "Around the corner, a stocky stone Hammerhead plants himself in your path. 'No passage,' he grunts."
+        "bg": "munchkin-back-alley"
       },
       "body": {
         "kind": "battle",
@@ -177,8 +104,7 @@
         "branchId": "go_to_throne"
       },
       "intro": {
-        "bg": "abandoned-cottage",
-        "narration": "A single winged monkey peers down from a rafter, mischievous eyes glinting."
+        "bg": "abandoned-cottage"
       },
       "body": {
         "kind": "battle",
@@ -193,52 +119,6 @@
       }
     },
     {
-      "id": "crow-flock-ambush__accept_quest",
-      "title": "Murder of Crows",
-      "trigger": {
-        "sceneId": "s14_throne",
-        "branchId": "accept_quest"
-      },
-      "intro": {
-        "bg": "mountain-pass",
-        "narration": "A whole flock of black wings rises from the slate hills — wheeling, diving toward you."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "crow-flock"
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "You wave your arms and shout. The flock breaks and scatters into the grey sky.",
-        "defeat": "They drive you to the ground until you cover your head; then they leave."
-      }
-    },
-    {
-      "id": "crow-flock-ambush__argue_quest",
-      "title": "Murder of Crows",
-      "trigger": {
-        "sceneId": "s14_throne",
-        "branchId": "argue_quest"
-      },
-      "intro": {
-        "bg": "mountain-pass",
-        "narration": "A whole flock of black wings rises from the slate hills — wheeling, diving toward you."
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "crow-flock"
-        ]
-      },
-      "rewards": {},
-      "outro": {
-        "victory": "You wave your arms and shout. The flock breaks and scatters into the grey sky.",
-        "defeat": "They drive you to the ground until you cover your head; then they leave."
-      }
-    },
-    {
       "id": "bat-swarm",
       "title": "Bat Ambush",
       "trigger": {
@@ -246,8 +126,7 @@
         "branchId": "_to_witch"
       },
       "intro": {
-        "bg": "witch-castle-corridor",
-        "narration": "A swarm of bats explodes from the rafters in a rush of leathery wings."
+        "bg": "witch-castle-corridor"
       },
       "body": {
         "kind": "battle",
@@ -269,8 +148,7 @@
         "branchId": "_to_witch"
       },
       "intro": {
-        "bg": "witch-castle-corridor",
-        "narration": "The Wicked Witch towers before you, green fingers crackling with spite. There is no door back — only this fight."
+        "bg": "witch-castle-corridor"
       },
       "body": {
         "kind": "battle",
@@ -279,7 +157,6 @@
         ]
       },
       "rewards": {
-        "medalId": "witchs_bane",
         "moodBoost": [
           {
             "companionId": "lion",
@@ -298,9 +175,7 @@
       "outro": {
         "victory": "The Witch's cackle turns to a shriek. She melts in a rush of black cloth and steam — and her broom clatters to your feet.",
         "defeat": "She catches you in a green flash. The world spins — and Glinda's blessing pulls you back to the corridor for another try."
-      },
-      "nextSceneOnVictory": "s17_witch_melts",
-      "nextSceneOnDefeat": "s16_witch_castle"
+      }
     },
     {
       "id": "kalidah-rogue__throw_water",
@@ -310,8 +185,7 @@
         "branchId": "throw_water"
       },
       "intro": {
-        "bg": "forest-deep",
-        "narration": "On the way back, a single Kalidah — bear-bodied, tiger-faced — pads onto the path. Its huge amber eyes lock onto yours."
+        "bg": "forest-deep"
       },
       "body": {
         "kind": "battle",
@@ -319,9 +193,7 @@
           "kalidah"
         ]
       },
-      "rewards": {
-        "medalId": "kalidah-tamer"
-      },
+      "rewards": {},
       "outro": {
         "victory": "The Kalidah snorts, drops a single curved claw on the path, and disappears into the trees.",
         "defeat": "It cuffs you off the path and lopes away."
@@ -335,8 +207,7 @@
         "branchId": "stand_with_friends"
       },
       "intro": {
-        "bg": "forest-deep",
-        "narration": "On the way back, a single Kalidah — bear-bodied, tiger-faced — pads onto the path. Its huge amber eyes lock onto yours."
+        "bg": "forest-deep"
       },
       "body": {
         "kind": "battle",
@@ -344,9 +215,7 @@
           "kalidah"
         ]
       },
-      "rewards": {
-        "medalId": "kalidah-tamer"
-      },
+      "rewards": {},
       "outro": {
         "victory": "The Kalidah snorts, drops a single curved claw on the path, and disappears into the trees.",
         "defeat": "It cuffs you off the path and lopes away."
@@ -361,8 +230,7 @@
         "count": 1
       },
       "intro": {
-        "bg": "prairie-storm",
-        "narration": "The crows suddenly rushed at you."
+        "bg": "prairie-storm"
       },
       "body": {
         "kind": "battle",
@@ -373,6 +241,200 @@
       "rewards": {},
       "outro": {
         "victory": "You barely chased the crows away."
+      }
+    },
+    {
+      "id": "s06_after_tinman_2__branch_ofjda-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s06_after_tinman_2",
+        "branchId": "branch_ofjda",
+        "count": 1
+      },
+      "intro": {
+        "bg": "orchard-twilight"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "fighting-tree",
+          "fighting-tree"
+        ]
+      },
+      "rewards": {
+        "items": [
+          "oil"
+        ]
+      },
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s05_orchard_2__branch_yaubu-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s05_orchard_2",
+        "branchId": "branch_yaubu",
+        "count": 1
+      },
+      "intro": {
+        "bg": "forest-deep"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "wolf",
+          "wolf",
+          "wolf"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s05_scarecrow_2__branch_qk1d8-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s05_scarecrow_2",
+        "branchId": "branch_qk1d8",
+        "count": 1
+      },
+      "intro": {
+        "bg": "forest-deep"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "wolf",
+          "wolf",
+          "wolf"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s05_scarecrow__branch_m12es-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s05_scarecrow",
+        "branchId": "branch_m12es",
+        "count": 1
+      },
+      "intro": {
+        "bg": "cornfield-tall"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "crow-flock",
+          "crow-flock",
+          "crow-flock"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s06_after_tinman__branch_ehnfb-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s06_after_tinman",
+        "branchId": "branch_ehnfb",
+        "count": 1
+      },
+      "intro": {
+        "bg": "cornfield-tall"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "crow-flock",
+          "crow-flock",
+          "crow-flock",
+          "crow-scout"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s09a_firefly_trial__branch_snljc-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s09a_firefly_trial",
+        "branchId": "branch_snljc",
+        "count": 1
+      },
+      "intro": {
+        "bg": "forest-clearing"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "wisp",
+          "wisp",
+          "wisp"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s08_party__branch_vlupn-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s08_party",
+        "branchId": "branch_vlupn",
+        "count": 1
+      },
+      "intro": {
+        "bg": "road-yellow-noon"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "goblin-scout",
+          "goblin-scout",
+          "goblin-scout"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
+      }
+    },
+    {
+      "id": "s09a_firefly_trial__branch_ryj36-battle",
+      "title": "New Battle",
+      "trigger": {
+        "sceneId": "s09a_firefly_trial",
+        "branchId": "branch_ryj36",
+        "count": 1
+      },
+      "intro": {
+        "bg": "forest-clearing"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "kalidah"
+        ]
+      },
+      "rewards": {},
+      "outro": {
+        "victory": ""
       }
     }
   ]

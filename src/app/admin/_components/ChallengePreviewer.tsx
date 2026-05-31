@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Shuffle } from "@phosphor-icons/react";
 
 import {
   generateChallenge,
-  tierForAge,
-  TIER_LABELS,
+  ageBandLabel,
+  categoriesForAge,
   type Challenge,
   type ChallengeCategory,
 } from "@/lib/education";
@@ -15,20 +16,35 @@ import { ChallengeVisualView } from "@/components/challenge/ChallengeVisualView"
 /** Categories shown as columns. "auto" mirrors what the runtime picks for the
  *  age tier; the explicit ones force that category (numbers clamped to tier). */
 const CATEGORIES: { value: "auto" | ChallengeCategory; label: string }[] = [
-  { value: "auto", label: "Auto (age-appropriate)" },
+  { value: "auto", label: "Auto (mixed)" },
+  { value: "counting", label: "Counting" },
+  { value: "shape", label: "Shapes" },
+  { value: "compare", label: "Compare" },
+  { value: "odd-one-out", label: "Odd one out" },
+  { value: "pattern", label: "Number pattern" },
   { value: "add", label: "Addition" },
   { value: "sub", label: "Subtraction" },
   { value: "multiply", label: "Multiplication" },
   { value: "divide", label: "Division" },
   { value: "missing", label: "Missing number" },
-  { value: "compare", label: "Compare" },
-  { value: "counting", label: "Counting" },
-  { value: "pattern", label: "Number pattern" },
-  { value: "geometry", label: "Shapes / geometry" },
   { value: "fraction", label: "Fractions" },
+  { value: "decimal", label: "Decimals" },
+  { value: "percentage", label: "Percentage" },
+  { value: "ratio", label: "Ratio" },
+  { value: "money", label: "Money" },
+  { value: "time", label: "Time" },
+  { value: "measure", label: "Area / perimeter / volume" },
+  { value: "geometry", label: "Geometry / angles" },
+  { value: "average", label: "Average" },
+  { value: "factors", label: "Factors & multiples" },
+  { value: "algebra", label: "Algebra" },
+  { value: "speed", label: "Speed" },
   { value: "word", label: "Word / thinking" },
-  { value: "odd-one-out", label: "Odd one out" },
 ];
+
+const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
+  CATEGORIES.map((c) => [c.value, c.label]),
+);
 
 const AGES = [4, 5, 6, 7, 8, 9, 10, 11, 12];
 const SAMPLES_PER_CATEGORY = 6;
@@ -37,28 +53,43 @@ export function ChallengePreviewer() {
   const [age, setAge] = useState(8);
   // Bumping the seed re-rolls every sample (generateChallenge is random).
   const [seed, setSeed] = useState(0);
-  const [previewCategory, setPreviewCategory] = useState<
-    "auto" | ChallengeCategory
-  >("auto");
   const [preview, setPreview] = useState<Challenge | null>(null);
-  const [previewResult, setPreviewResult] = useState<boolean | null>(null);
+  // Monotonic id so each new preview problem remounts the component even if the
+  // random prompt happens to repeat (e.g. counting's "How many?").
+  const [previewNonce, setPreviewNonce] = useState(0);
+  // Samples use Math.random, so generating during SSR/first render would
+  // mismatch on hydration. Defer to after mount — server + first client render
+  // both show nothing, then we fill in.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only gate for random content (avoids hydration mismatch)
+    setMounted(true);
+  }, []);
 
-  const tier = tierForAge(age);
+  // Only the categories this age actually produces (the auto pool) + an "auto"
+  // mix card — so the sheet never shows level-inappropriate types (e.g. no
+  // counting/shapes at age 12).
+  const ageCategories = useMemo<("auto" | ChallengeCategory)[]>(
+    () => ["auto", ...categoriesForAge(age)],
+    [age],
+  );
 
-  // Generate a fresh sample sheet whenever age or seed changes.
+  // Generate a fresh sample sheet whenever age or seed changes (post-mount).
   const sheet = useMemo(() => {
+    if (!mounted) return [];
     void seed; // dep only — forces regeneration on "Regenerate"
-    return CATEGORIES.map((cat) => ({
-      cat,
+    return ageCategories.map((value) => ({
+      value,
+      label: CATEGORY_LABEL[value] ?? value,
       samples: Array.from({ length: SAMPLES_PER_CATEGORY }, () =>
-        generateChallenge({ age, category: cat.value }),
+        generateChallenge({ age, category: value }),
       ),
     }));
-  }, [age, seed]);
+  }, [mounted, age, seed, ageCategories]);
 
   function openPreview() {
-    setPreviewResult(null);
-    setPreview(generateChallenge({ age, category: previewCategory }));
+    setPreviewNonce((n) => n + 1);
+    setPreview(generateChallenge({ age, category: "auto" }));
   }
 
   return (
@@ -68,9 +99,6 @@ export function ChallengePreviewer() {
           <p className="font-handwritten text-base text-accent-deep">
             Challenges
           </p>
-          <span className="rounded-pill bg-paper-deep/40 px-2 py-0.5 text-xs text-ink-soft">
-            preview only · generated live
-          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -78,14 +106,15 @@ export function ChallengePreviewer() {
             onClick={openPreview}
             className="rounded-pill bg-accent-deep px-3 py-1 text-sm font-medium text-paper hover:opacity-90"
           >
-            ▶ In-game preview
+            ▶ Preview
           </button>
           <button
             type="button"
             onClick={() => setSeed((s) => s + 1)}
-            className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep"
+            className="flex items-center gap-1.5 rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep"
           >
-            ↻ Regenerate
+            <Shuffle size={15} weight="bold" />
+            Regenerate
           </button>
         </div>
       </header>
@@ -113,46 +142,19 @@ export function ChallengePreviewer() {
             ))}
           </div>
           <span className="rounded-pill bg-emerald/15 px-2.5 py-1 text-xs font-semibold text-emerald">
-            {TIER_LABELS[tier]}
+            {ageBandLabel(age)}
           </span>
-          <label className="ml-auto flex items-center gap-2 text-xs text-ink-soft">
-            Preview category:
-            <select
-              value={previewCategory}
-              onChange={(e) =>
-                setPreviewCategory(e.target.value as "auto" | ChallengeCategory)
-              }
-              className="rounded-pill border border-ink-soft/20 bg-paper px-2 py-1 text-sm text-ink"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
-
-        <p className="mb-3 text-xs text-ink-soft/70">
-          Difficulty is driven by the story&apos;s age range (midpoint).
-          &ldquo;Auto&rdquo; shows what the game actually picks for this age; the
-          named categories force that type (numbers still clamped to the tier).
-          Correct answers are{" "}
-          <span className="font-semibold text-emerald">highlighted</span>.
-        </p>
 
         {/* Sample sheet — one card per category. */}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {sheet.map(({ cat, samples }) => (
+          {sheet.map(({ value, label, samples }) => (
             <div
-              key={cat.value}
+              key={value}
               className="rounded-card-lg bg-paper ring-1 ring-ink-soft/10"
             >
-              <div className="flex items-center justify-between border-b border-ink-soft/10 px-3 py-2">
-                <p className="text-sm font-semibold text-ink">{cat.label}</p>
-                <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 text-[10px] text-ink-soft/70">
-                  {cat.value}
-                </code>
+              <div className="border-b border-ink-soft/10 px-3 py-2">
+                <p className="text-sm font-semibold text-ink">{label}</p>
               </div>
               <ul className="flex flex-col divide-y divide-ink-soft/5">
                 {samples.map((c, i) => (
@@ -164,43 +166,40 @@ export function ChallengePreviewer() {
         </div>
       </div>
 
-      {/* In-game preview overlay — the real component the player sees. */}
+      {/* In-game preview overlay — the real component the player sees, with a
+          "Next Challenge" button stacked directly beneath it (tight gap). */}
       {preview && (
-        <div className="fixed inset-0 z-[80] bg-ink/85 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 overflow-y-auto bg-ink/85 px-4 py-8 backdrop-blur-sm">
+          {/* Close control — "Close ✕". */}
           <button
             type="button"
             onClick={() => setPreview(null)}
-            className="absolute right-4 top-4 z-[90] rounded-pill bg-paper/90 px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper"
+            aria-label="Close preview"
+            className="absolute right-4 top-4 z-[90] flex items-center gap-2 rounded-pill bg-paper/90 px-3 py-1.5 text-sm font-medium text-ink shadow-soft hover:bg-paper"
             style={{ paddingTop: "max(0.375rem, env(safe-area-inset-top))" }}
           >
-            ✕ Close
+            Close <span className="text-base leading-none">✕</span>
           </button>
-          <div className="absolute left-1/2 top-4 z-[90] flex -translate-x-1/2 items-center gap-2">
-            <button
-              type="button"
-              onClick={openPreview}
-              className="rounded-pill bg-accent-deep px-3 py-1.5 text-sm font-medium text-paper hover:opacity-90"
-            >
-              ↻ New problem
-            </button>
-            {previewResult !== null && (
-              <span
-                className={`rounded-pill px-3 py-1.5 text-sm font-semibold ${
-                  previewResult
-                    ? "bg-emerald/20 text-emerald"
-                    : "bg-ruby/15 text-ruby"
-                }`}
-              >
-                {previewResult ? "✓ Correct" : "✗ Wrong"}
-              </span>
-            )}
-          </div>
           <EducationalChallenge
-            key={`${age}-${previewCategory}-${preview.prompt}`}
+            key={`preview-${previewNonce}`}
             mode="gate"
+            placement="inline"
             challenge={preview}
-            onSolved={(correct) => setPreviewResult(correct)}
+            onSolved={(correct) => {
+              // Correct → auto-advance to the next random problem (keep going
+              // until Close). Wrong → leave the in-card "Not quite" feedback up.
+              if (correct) openPreview();
+            }}
           />
+          {/* Next Challenge — sits right under the card (flex gap), larger. */}
+          <button
+            type="button"
+            onClick={openPreview}
+            className="flex shrink-0 items-center gap-2 rounded-pill bg-accent-deep px-6 py-3 text-base font-semibold text-paper shadow-card hover:opacity-90 active:scale-95"
+          >
+            <Shuffle size={18} weight="bold" />
+            Next Challenge
+          </button>
         </div>
       )}
     </div>

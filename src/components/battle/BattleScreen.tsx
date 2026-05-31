@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
+import { Backpack, GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
 
 import {
   attackerName,
@@ -20,6 +20,7 @@ import {
   type SetupArgs,
 } from "@/lib/battle-engine";
 import { getAudio, SFX } from "@/lib/audio-engine";
+import { encounterOutroLine } from "@/lib/encounter-lines";
 import { MONSTERS } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
@@ -70,9 +71,6 @@ interface Props {
   /** Player inventory (item ids, may repeat). Drives the in-battle item
    *  row; consumed items are removed from PlayState when the battle ends. */
   inventory?: string[];
-  /** Authored victory line (encounter.outro.victory, already templated).
-   *  Shown on the victory panel; falls back to a default when empty. */
-  victoryNarration?: string;
   /** Encounter-level drop items (in addition to monster drops) — folded into
    *  the victory panel's loot. */
   victoryItems?: string[];
@@ -98,7 +96,6 @@ export function BattleScreen({
   onComplete,
   onOpenSettings,
   inventory = [],
-  victoryNarration,
   victoryItems,
   age,
 }: Props) {
@@ -455,20 +452,32 @@ export function BattleScreen({
         className="absolute inset-x-0 top-0 z-50 flex items-start justify-between gap-3 px-4 sm:px-6"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <PartyHpRow
-          party={["hero", ...state.companions]}
-          active={state.activeAttacker}
-          characterImageBase={characterImageBase}
-          heroId={heroId}
-          canSwap={state.phase === "hero-choose"}
-          canAct={(a) => canAttackerAct(a, state)}
-          partyLives={state.partyLives}
-          partyMaxLives={state.partyMaxLives}
-          fallenAttackers={state.fallenAttackers}
-          onSwitch={(to) =>
-            setState((s) => chooseHeroAction(s, { kind: "switch", to }))
-          }
-        />
+        {/* Left column: party HP icons + a bag below them (use items). */}
+        <div className="flex flex-col items-start gap-2">
+          <PartyHpRow
+            party={["hero", ...state.companions]}
+            active={state.activeAttacker}
+            characterImageBase={characterImageBase}
+            heroId={heroId}
+            canSwap={state.phase === "hero-choose"}
+            canAct={(a) => canAttackerAct(a, state)}
+            partyLives={state.partyLives}
+            partyMaxLives={state.partyMaxLives}
+            fallenAttackers={state.fallenAttackers}
+            onSwitch={(to) =>
+              setState((s) => chooseHeroAction(s, { kind: "switch", to }))
+            }
+          />
+          <BattleBag
+            inventory={inventory}
+            state={state}
+            onUse={(itemId) =>
+              setState((s) =>
+                chooseHeroAction(s, { kind: "useItem", itemId }),
+              )
+            }
+          />
+        </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-start justify-end gap-2">
           {state.monsters.map((m, i) => (
             <HitsBar
@@ -509,21 +518,10 @@ export function BattleScreen({
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {state.phase === "hero-choose" && (
-          <>
-            <ItemRow
-              inventory={inventory}
-              state={state}
-              onUse={(itemId) =>
-                setState((s) =>
-                  chooseHeroAction(s, { kind: "useItem", itemId }),
-                )
-              }
-            />
-            <ActionRow
-              monsters={aliveMonsters}
-              onAction={(a) => setState((s) => chooseHeroAction(s, a))}
-            />
-          </>
+          <ActionRow
+            monsters={aliveMonsters}
+            onAction={(a) => setState((s) => chooseHeroAction(s, a))}
+          />
         )}
 
         {isTerminal && showTerminal && (
@@ -535,7 +533,6 @@ export function BattleScreen({
                   ? "defeat"
                   : "escaped"
             }
-            victoryNarration={victoryNarration}
             victoryItems={victoryItems}
             rewards={state.rewards}
             onContinue={() =>
@@ -768,7 +765,13 @@ function ActionRow({
  * (`canUseItem`) decide enablement — no per-effect UI branches, so future
  * battle items appear here automatically.
  */
-function ItemRow({
+/**
+ * In-battle bag — a Backpack icon (under the party HP, top-left) that opens a
+ * small panel listing the player's items. Non-event items (`itemUsableIn`
+ * "battle" → heal, etc.) are usable when it's the hero's turn and the effect
+ * applies (`canUseItem`); event/story items are shown greyed for reference.
+ */
+function BattleBag({
   inventory,
   state,
   onUse,
@@ -777,41 +780,93 @@ function ItemRow({
   state: BattleState;
   onUse: (itemId: string) => void;
 }) {
-  // Available count = how many of each id remain after this battle's spends.
+  const [open, setOpen] = useState(false);
+
+  // Available count per id = inventory minus what's already been spent.
   const counts = new Map<string, number>();
   for (const id of inventory) counts.set(id, (counts.get(id) ?? 0) + 1);
   for (const id of state.itemsConsumed) {
     counts.set(id, (counts.get(id) ?? 0) - 1);
   }
-  const usable = [...counts.keys()]
+  const entries = [...counts.keys()]
     .map((id) => ({ id, item: getItem(id), avail: counts.get(id) ?? 0 }))
-    .filter((e) => e.avail > 0 && e.item && itemUsableIn(e.item, "battle"));
-
-  if (usable.length === 0) return null;
+    .filter((e) => e.avail > 0 && !!e.item);
+  const total = entries.reduce((n, e) => n + e.avail, 0);
+  const heroTurn = state.phase === "hero-choose";
 
   return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {usable.map(({ id, item, avail }) => {
-        if (!item) return null;
-        const enabled = canUseItem(state, item);
-        return (
-          <button
-            key={id}
-            type="button"
-            disabled={!enabled}
-            onClick={() => onUse(id)}
-            title={enabled ? item.description : "Can't use right now"}
-            className="inline-flex min-h-11 items-center gap-2 rounded-pill bg-paper/60 px-4 text-sm font-medium text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-paper/60"
-          >
-            <span aria-hidden>{item.icon ?? "🎁"}</span>
-            <span>{item.name}</span>
-            <span className="text-xs text-ink-soft">
-              {effectLabel(item.effect)}
-              {avail > 1 ? ` ×${avail}` : ""}
-            </span>
-          </button>
-        );
-      })}
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Open bag"
+        aria-expanded={open}
+        className="flex h-11 items-center gap-1.5 rounded-pill bg-paper/85 px-3 text-base text-ink ring-1 ring-ink-soft/10 shadow-button backdrop-blur transition-all hover:bg-paper active:scale-95"
+      >
+        <Backpack size={20} weight="duotone" className="text-accent" />
+        <span className="font-semibold tabular-nums">{total}</span>
+      </button>
+
+      {open && (
+        <>
+          {/* iOS-safe outside-tap close — a transparent backdrop catches the
+              tap (pointerdown listeners don't bubble from non-interactive
+              elements on iOS). */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-card-lg bg-paper/95 p-2 shadow-overlay ring-1 ring-ink-soft/15 backdrop-blur">
+            {entries.length === 0 ? (
+              <p className="px-2 py-3 text-center text-sm text-ink-soft/70">
+                Your bag is empty.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {entries.map(({ id, item, avail }) => {
+                  if (!item) return null;
+                  const usable = itemUsableIn(item, "battle");
+                  const enabled = usable && heroTurn && canUseItem(state, item);
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        disabled={!enabled}
+                        onClick={() => {
+                          onUse(id);
+                          setOpen(false);
+                        }}
+                        title={
+                          !usable
+                            ? "Story item — used when the moment comes"
+                            : !heroTurn
+                              ? "Wait for your turn"
+                              : enabled
+                                ? item.description
+                                : "Can't use right now"
+                        }
+                        className="flex w-full items-center gap-2 rounded-card px-2 py-1.5 text-left text-sm text-ink transition-colors enabled:hover:bg-paper-deep/60 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <span className="text-lg" aria-hidden>
+                          {item.icon ?? "🎁"}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {item.name}
+                          {avail > 1 ? ` ×${avail}` : ""}
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-soft">
+                          {usable ? effectLabel(item.effect) : "Story"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -839,13 +894,11 @@ function BattleActionButton({
 
 function TerminalPanel({
   outcome,
-  victoryNarration,
   victoryItems,
   rewards,
   onContinue,
 }: {
   outcome: "victory" | "defeat" | "escaped";
-  victoryNarration?: string;
   victoryItems?: string[];
   rewards: string[];
   onContinue: () => void;
@@ -853,6 +906,11 @@ function TerminalPanel({
   // Loot = monster drops (`rewards`) + encounter-level drops on victory.
   const loot =
     outcome === "victory" ? [...rewards, ...(victoryItems ?? [])] : rewards;
+  // A random "the way is clear" outro line for the victory subtitle, stable
+  // for this panel's lifetime. eslint-disable-next-line react-hooks/purity --
+  // one-shot seed for a freshly mounted terminal panel.
+  // eslint-disable-next-line react-hooks/purity
+  const outroSeed = useMemo(() => Math.floor(Math.random() * 1000), []);
   const title =
     outcome === "victory"
       ? "Victory!"
@@ -861,9 +919,7 @@ function TerminalPanel({
         : "You fell…";
   const subtitle =
     outcome === "victory"
-      ? // Authored victory line (encounter.outro.victory); the hardcoded
-        // string is the default shown when the author left it blank.
-        (victoryNarration?.trim() || "Well done! The adventure continues!")
+      ? encounterOutroLine(outroSeed)
       : outcome === "escaped"
         ? "Your friends help you find your breath."
         : "Glinda's blessing carries you to safety.";

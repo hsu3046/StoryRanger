@@ -69,11 +69,11 @@ export function MedalShelfModal({
               <section className="flex flex-col gap-2">
                 <h3 className="flex items-center gap-2 font-handwritten text-base text-accent-deep">
                   <Backpack size={18} weight="duotone" />
-                  Supplies
+                  Items
                 </h3>
                 {itemCounts.length === 0 ? (
                   <p className="rounded-card bg-paper-deep/40 px-4 py-5 text-center text-sm text-ink-soft/70">
-                    No supplies yet — win battles to find healing treats. Use
+                    No items yet — win battles to find healing treats. Use
                     them in battle!
                   </p>
                 ) : (

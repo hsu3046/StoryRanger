@@ -37,6 +37,12 @@ interface Props {
   /** Asset path. Can include or omit extension — extension fallback chain
    *  tries .webp / .png / .jpeg / .jpg (and uppercase variants) in order. */
   base: string;
+  /** Secondary base tried (with its own extension chain) only after every
+   *  `base` candidate 404s. Used for dialogue portraits: prefer the dedicated
+   *  `/dialogue/<id>` head-shot, else fall back to the in-scene sprite
+   *  (`image` override / `characters/<id>`) so a single uploaded image still
+   *  shows everywhere. Ignored when `resolvedSrc` is supplied. */
+  fallbackBase?: string;
   alt: string;
   /** Tailwind size classes — defaults to a 48×48 square. */
   className?: string;
@@ -73,6 +79,7 @@ interface Props {
  */
 export function AssetThumb({
   base,
+  fallbackBase,
   alt,
   className = "h-12 w-12",
   shape = "square",
@@ -88,16 +95,20 @@ export function AssetThumb({
   const [idx, setIdx] = useState(0);
   const [failed, setFailed] = useState(false);
   const usePrecomputed = resolvedSrc !== undefined;
-  const list = useMemo(
-    () => (usePrecomputed ? (resolvedSrc ? [resolvedSrc] : []) : candidates(base)),
-    [usePrecomputed, resolvedSrc, base],
-  );
+  const list = useMemo(() => {
+    if (usePrecomputed) return resolvedSrc ? [resolvedSrc] : [];
+    // Primary base's extension chain, then the fallback base's — deduped so a
+    // shared file isn't requested twice.
+    const all = [...candidates(base), ...(fallbackBase ? candidates(fallbackBase) : [])];
+    const seen = new Set<string>();
+    return all.filter((v) => (seen.has(v) ? false : (seen.add(v), true)));
+  }, [usePrecomputed, resolvedSrc, base, fallbackBase]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
     setIdx(0);
     setFailed(usePrecomputed && resolvedSrc === null);
-  }, [base, usePrecomputed, resolvedSrc]);
+  }, [base, fallbackBase, usePrecomputed, resolvedSrc]);
 
   const rounded =
     shape === "circle"

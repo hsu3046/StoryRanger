@@ -30,6 +30,10 @@ interface Props {
   /** Resolve a portrait base path (no extension) for the rail thumbnails.
    *  Convention: `/stories/<storyId>/dialogue/<characterId>` (1024×1024). */
   portraitBase: (id: SpeakerId) => string;
+  /** Fallback base when no dedicated dialogue head-shot exists — the in-scene
+   *  sprite (honors the `image` override). Keeps freshly added characters from
+   *  rendering as a blank color disc. */
+  portraitFallbackBase?: (id: SpeakerId) => string;
   /** Current mood per character (from PlayState.companionMoods or 5). */
   mood: (id: SpeakerId) => number;
   /** Whether this character has already gifted the hero (gate input). */
@@ -85,6 +89,7 @@ export function SceneDialogueLayer({
   extraDialogueCharacters,
   characters,
   portraitBase,
+  portraitFallbackBase,
   mood,
   hasGifted,
   heroMemory,
@@ -404,6 +409,7 @@ export function SceneDialogueLayer({
               >
                 <PortraitImg
                   base={portraitBase(id)}
+                  fallbackBase={portraitFallbackBase?.(id)}
                   alt={characterName(id)}
                   color={characterColor(id)}
                 />
@@ -460,22 +466,32 @@ export function SceneDialogueLayer({
  */
 function PortraitImg({
   base,
+  fallbackBase,
   alt,
   color,
 }: {
   base: string;
+  /** Tried (own extension chain) after `base` 404s — the in-scene sprite, so
+   *  characters without a dedicated dialogue head-shot still show. */
+  fallbackBase?: string;
   alt: string;
   color: string;
 }) {
   const [idx, setIdx] = useState(0);
   const [failed, setFailed] = useState(false);
-  const list = useMemo(() => IMAGE_EXTS.map((e) => base + e), [base]);
+  const list = useMemo(
+    () => [
+      ...IMAGE_EXTS.map((e) => base + e),
+      ...(fallbackBase ? IMAGE_EXTS.map((e) => fallbackBase + e) : []),
+    ],
+    [base, fallbackBase],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
     setIdx(0);
     setFailed(false);
-  }, [base]);
+  }, [base, fallbackBase]);
 
   if (failed) {
     return (

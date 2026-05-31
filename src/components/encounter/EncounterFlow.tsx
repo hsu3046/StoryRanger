@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 import type {
@@ -8,15 +8,15 @@ import type {
   Character,
   CompanionId,
   CompanionMoods,
-  Hero,
   PartyHp,
   SpeakerId,
 } from "@/types/story";
 import type { EncounterDef } from "@/types/encounter";
 import type { BattleState } from "@/lib/battle-engine";
-import { formatNarration } from "@/lib/narrative";
+import { encounterIntroLine } from "@/lib/encounter-lines";
 
 import { BattleScreen } from "../battle/BattleScreen";
+import { EncounterCaption } from "./EncounterCaption";
 import { MONSTERS } from "@/data/monsters";
 
 export interface EncounterResult {
@@ -35,7 +35,6 @@ export interface EncounterResult {
 interface Props {
   encounter: EncounterDef;
   storyId: string;
-  hero: Hero;
   companions: CompanionId[];
   companionMoods: CompanionMoods;
   /** Persistent HP carried in from PlayState. */
@@ -68,10 +67,12 @@ interface Props {
   age: number;
 }
 
-type Phase = "alert" | "body";
+type Phase = "intro" | "alert" | "body";
 
+/** How long the intro narration line lingers before the alert splash. */
+const INTRO_DURATION_MS = 1500;
 /** How long the alert splash plays before the battle starts. */
-const ALERT_DURATION_MS = 2400;
+const ALERT_DURATION_MS = 2200;
 
 /**
  * Battle encounter overlay. Dramatic alert splash (monsters + headline) →
@@ -84,7 +85,6 @@ const ALERT_DURATION_MS = 2400;
 export function EncounterFlow({
   encounter,
   storyId,
-  hero,
   companions,
   companionMoods,
   partyHp,
@@ -102,24 +102,46 @@ export function EncounterFlow({
 }: Props) {
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
-  // alert splash is purely intro flair, not worth replaying on refresh.
+  // intro line + alert splash are purely intro flair, not worth replaying on
+  // refresh.
   const [phase, setPhase] = useState<Phase>(
-    initialBattleState ? "body" : "alert",
+    initialBattleState ? "body" : "intro",
   );
-
-  // Auto-advance alert → body after the splash plays.
-  useEffect(() => {
-    if (phase !== "alert") return;
-    const t = setTimeout(() => setPhase("body"), ALERT_DURATION_MS);
-    return () => clearTimeout(t);
-  }, [phase]);
 
   const monsterIds =
     encounter.displayMonsters ?? encounter.body.monsterIds;
+  // Stable per-encounter seed so the intro line doesn't re-roll each render
+  // (and consecutive encounters read different lines).
+  const introLine = useMemo(() => {
+    const seed = [...encounter.id].reduce((a, c) => a + c.charCodeAt(0), 0);
+    const lead = monsterIds[0];
+    const name = lead ? (MONSTERS[lead]?.name ?? lead) : undefined;
+    return encounterIntroLine({ kind: "battle", name, seed });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- monsterIds[0] captured via id
+  }, [encounter.id]);
+
+  // Auto-advance intro → alert → body.
+  useEffect(() => {
+    if (phase === "intro") {
+      const t = setTimeout(() => setPhase("alert"), INTRO_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+    if (phase === "alert") {
+      const t = setTimeout(() => setPhase("body"), ALERT_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   let body: React.ReactNode = null;
 
-  if (phase === "alert") {
+  if (phase === "intro") {
+    // Dim + blur the scene behind, with a calm 1-line intro caption.
+    body = (
+      <div className="absolute inset-0 bg-ink/55">
+        <EncounterCaption line={introLine} />
+      </div>
+    );
+  } else if (phase === "alert") {
     body = <EncounterAlertSplash monsterIds={monsterIds} storyId={storyId} />;
   } else {
     body = (
@@ -133,11 +155,6 @@ export function EncounterFlow({
         inventory={inventory}
         initialState={initialBattleState}
         onStateChange={onBattleStateChange}
-        victoryNarration={
-          encounter.outro.victory
-            ? formatNarration(encounter.outro.victory, hero)
-            : undefined
-        }
         victoryItems={encounter.rewards.items ?? []}
         setup={{
           bg: encounter.intro.bg,
@@ -174,8 +191,12 @@ export function EncounterFlow({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.6, ease: "easeInOut" }}
-      className="fixed inset-0 z-50 overflow-hidden bg-ink"
+      transition={{ duration: 0.45, ease: "easeInOut" }}
+      // Intro beat = let the scene show through, dimmed + blurred. Alert/battle
+      // draw their own full backgrounds, so switch to a solid base then.
+      className={`fixed inset-0 z-50 overflow-hidden ${
+        phase === "intro" ? "backdrop-blur-md" : "bg-ink"
+      }`}
     >
       {body}
     </motion.div>

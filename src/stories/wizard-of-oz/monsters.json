@@ -5,8 +5,7 @@
       "name": "Forest Wolf",
       "type": "hostile",
       "hits": 3,
-      "size": "medium",
-      "puzzleKind": "add-1d"
+      "size": "small"
     },
     {
       "id": "wolf-alpha",
@@ -16,24 +15,22 @@
       "drops": [
         "magic-berry"
       ],
-      "size": "large",
-      "puzzleKind": "add-2d"
+      "size": "medium"
     },
     {
       "id": "wolf-pup",
       "name": "Wolf Pup",
       "type": "neutral",
       "hits": 1,
-      "size": "small",
+      "size": "tiny",
       "notes": "Befriendable — gives 'lost-pup-trust' item if hero spares it."
     },
     {
       "id": "crow-scout",
       "name": "Crow Scout",
       "type": "hostile",
-      "hits": 2,
+      "hits": 3,
       "size": "tiny",
-      "puzzleKind": "bigger",
       "airborne": true
     },
     {
@@ -44,20 +41,18 @@
       "drops": [
         "magic-berry"
       ],
-      "size": "tiny",
-      "puzzleKind": "odd-out",
+      "size": "small",
       "airborne": true
     },
     {
       "id": "kalidah",
       "name": "Kalidah",
       "type": "hostile",
-      "hits": 6,
+      "hits": 8,
       "drops": [
         "honey-cake"
       ],
       "size": "large",
-      "puzzleKind": "multiply",
       "notes": "Mini-boss. Encounter only in deep forest."
     },
     {
@@ -65,19 +60,17 @@
       "name": "Fighting Tree",
       "type": "hostile",
       "hits": 5,
-      "size": "large",
-      "puzzleKind": "missing"
+      "size": "large"
     },
     {
       "id": "hammerhead",
       "name": "Hammerhead",
       "type": "hostile",
-      "hits": 5,
+      "hits": 7,
       "drops": [
         "magic-berry"
       ],
-      "size": "huge",
-      "puzzleKind": "sub-1d"
+      "size": "huge"
     },
     {
       "id": "winged-monkey",
@@ -85,7 +78,6 @@
       "type": "hostile",
       "hits": 3,
       "size": "medium",
-      "puzzleKind": "add-1d",
       "airborne": true
     },
     {
@@ -96,8 +88,7 @@
       "drops": [
         "honey-cake"
       ],
-      "size": "large",
-      "puzzleKind": "pattern"
+      "size": "large"
     },
     {
       "id": "cave-spider",
@@ -105,7 +96,6 @@
       "type": "hostile",
       "hits": 3,
       "size": "tiny",
-      "puzzleKind": "sub-1d",
       "airborne": true
     },
     {
@@ -117,7 +107,6 @@
         "magic-berry"
       ],
       "size": "medium",
-      "puzzleKind": "bigger",
       "airborne": true
     },
     {
@@ -125,30 +114,17 @@
       "name": "Goblin Scout",
       "type": "hostile",
       "hits": 2,
-      "size": "small",
-      "puzzleKind": "add-1d"
-    },
-    {
-      "id": "mouse-king",
-      "name": "Field Mouse King",
-      "type": "friendly",
-      "hits": 0,
-      "drops": [
-        "magic-berry"
-      ],
-      "size": "tiny",
-      "notes": "Friendly NPC. Gifts mouse-call (1 free encounter escape)."
+      "size": "small"
     },
     {
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
       "type": "hostile",
-      "hits": 8,
+      "hits": 12,
       "drops": [
         "honey-cake"
       ],
       "size": "large",
-      "puzzleKind": "multiply",
       "notes": "Main-story boss. The hardest puzzle category, longest fight."
     },
     {
@@ -159,6 +135,16 @@
       "size": "tiny",
       "airborne": true,
       "notes": "Reveals hidden paths. Can be befriended via riddle."
+    },
+    {
+      "id": "cat",
+      "name": "Cat",
+      "type": "hostile",
+      "hits": 3,
+      "drops": [
+        "magic-berry"
+      ],
+      "size": "small"
     }
   ]
 }

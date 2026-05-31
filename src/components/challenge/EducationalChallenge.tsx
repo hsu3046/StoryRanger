@@ -24,6 +24,10 @@ interface Props {
   streak?: number;
   /** Multi-problem gate progress (e.g. {current:2,total:3}). */
   progress?: { current: number; total: number };
+  /** "fixed" (default) self-centers as a full-screen overlay card. "inline"
+   *  drops the fixed positioning so a parent can stack the card in normal flow
+   *  (e.g. the admin previewer placing a button right beneath it). */
+  placement?: "fixed" | "inline";
 }
 
 const HARD_TIMEOUT_MS = 10_000;
@@ -40,6 +44,7 @@ export function EducationalChallenge({
   attackerLabel,
   streak = 0,
   progress,
+  placement = "fixed",
 }: Props) {
   const startRef = useRef<number>(0);
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);
@@ -124,7 +129,11 @@ export function EducationalChallenge({
         x: { duration: 0.45 },
         default: { type: "spring", stiffness: 260, damping: 22 },
       }}
-      className={`pointer-events-auto fixed left-1/2 top-1/2 z-[60] flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-2 backdrop-blur transition-colors sm:p-8 ${
+      className={`pointer-events-auto flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-5 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-2 backdrop-blur transition-colors sm:p-8 ${
+        placement === "inline"
+          ? "relative"
+          : "fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2"
+      } ${
         result === true
           ? "ring-emerald/60"
           : result === false

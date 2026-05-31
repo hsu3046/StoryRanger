@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { CompanionId, SpeakerId } from "@/types/story";
 
@@ -191,11 +191,27 @@ function SpriteLayer({
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const candidates = getCandidates(layer.base);
 
+  // Measure as soon as the <img> is attached IF it's already decoded (a cached
+  // image — e.g. a 2nd instance of the same monster — whose `onLoad` never
+  // fires). Without this the ratio stays null, `width:auto` kicks in, and the
+  // browser's aspect-ratio shrink quirk renders that instance at ~40% size —
+  // the "random tiny duplicate monster" bug. Stable identity (useCallback) so
+  // React only invokes it on real mount/unmount.
+  const measureOnAttach = useCallback((img: HTMLImageElement | null) => {
+    if (img && img.complete && img.naturalWidth > 0) {
+      setAspectRatio((prev) => prev ?? img.naturalWidth / img.naturalHeight);
+    }
+  }, []);
+
   useEffect(() => {
+    // Reset the extension-fallback cursor when the image path changes. We do
+    // NOT null `aspectRatio` here — the <img> remounts on its `key` (the
+    // resolved src) and `measureOnAttach` / `onLoad` re-measure the new image.
+    // Nulling it would race with (and clobber) the synchronous cached-image
+    // measurement, dropping the sprite back to the `width:auto` shrink path.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on base change
     setIdx(0);
     setFailed(false);
-    setAspectRatio(null);
   }, [layer.base]);
 
   const scale = layer.scale ?? defaultScale;
@@ -324,6 +340,7 @@ function SpriteLayer({
           measured we swap to the exact width derived from `naturalAspect`. */}
       <motion.img
         key={candidates[idx]}
+        ref={measureOnAttach}
         src={candidates[idx]}
         alt={layer.alt ?? ""}
         draggable={false}

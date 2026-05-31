@@ -13,6 +13,9 @@ interface Props {
   characters: CharactersFile;
   /** Scene id where the preview should start. Null = closed. */
   sceneId: string | null;
+  /** Optional branch id (on `sceneId`) — when set, the preview opens right
+   *  after that branch's choice instead of on the scene itself. */
+  branchId?: string | null;
   onClose: () => void;
 }
 
@@ -27,6 +30,7 @@ export function ScenePreviewModal({
   medals,
   characters,
   sceneId,
+  branchId,
   onClose,
 }: Props) {
   // ESC closes; body scroll locked while open.
@@ -75,11 +79,15 @@ export function ScenePreviewModal({
           </button>
         </div>
         <StoryPlayer
+          // Remount when the start point changes so a fresh preview state is
+          // built (incl. re-running the branch auto-take).
+          key={`${sceneId}:${branchId ?? ""}`}
           story={story}
           medals={medals}
           characters={characters}
           slot="admin-preview"
           initialSceneId={sceneId}
+          initialBranchId={branchId ?? undefined}
         />
       </div>
     </div>,

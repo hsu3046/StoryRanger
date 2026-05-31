@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { saveMedalsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
+import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { Field, StyledSelect, inputCls } from "./form";
 
 type MedalMetric = z.infer<typeof MedalMetricSchema>;
@@ -51,6 +52,9 @@ export function MedalsEditor({ initial }: Props) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // New medals' ids auto-follow their name until saved (no id field shown —
+  // the id is derived purely from the name).
+  const idLink = useNameLinkedId();
 
   const dirty = useMemo(
     () => JSON.stringify(initial) !== JSON.stringify(medals),
@@ -78,6 +82,8 @@ export function MedalsEditor({ initial }: Props) {
       }
       ids.add(m.id);
     }
+    // Committed → freeze all ids (renaming must never rewrite a saved id).
+    idLink.reset();
     startTransition(async () => {
       const res = await saveMedalsAction(payload);
       if (!res.ok) setError(res.error);
@@ -86,8 +92,9 @@ export function MedalsEditor({ initial }: Props) {
   }
 
   function startCreate() {
+    const id = `new-medal-${medals.length + 1}`;
     const placeholder: MedalT = {
-      id: `new-medal-${medals.length + 1}`,
+      id,
       name: "New Medal",
       icon: "🏅",
       description: "",
@@ -96,12 +103,22 @@ export function MedalsEditor({ initial }: Props) {
     };
     setMedals((prev) => [...prev, placeholder]);
     setSelectedIdx(medals.length);
+    idLink.register(id);
     setError(null);
   }
 
   function updateSelected(mut: (m: MedalT) => MedalT) {
     if (selectedIdx === null) return;
     setMedals((prev) => prev.map((m, i) => (i === selectedIdx ? mut(m) : m)));
+  }
+
+  /** Name edit — derives the id from the name while it's auto-linked. */
+  function changeName(value: string) {
+    if (selectedIdx === null) return;
+    const cur = medals[selectedIdx];
+    const others = medals.filter((_, i) => i !== selectedIdx).map((m) => m.id);
+    const newId = idLink.fromName(cur.id, value, others);
+    updateSelected((m) => ({ ...m, name: value, ...(newId ? { id: newId } : {}) }));
   }
 
   async function deleteSelected() {
@@ -112,6 +129,7 @@ export function MedalsEditor({ initial }: Props) {
       message: `Delete medal "${m.name}"?\nThis cannot be undone.`,
     });
     if (!ok) return;
+    idLink.detach(m.id);
     setMedals((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -149,6 +167,7 @@ export function MedalsEditor({ initial }: Props) {
               setMedals(initial);
               setSelectedIdx(null);
               setError(null);
+              idLink.reset();
             }}
             disabled={!dirty || isPending}
             className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep disabled:opacity-50"
@@ -213,6 +232,7 @@ export function MedalsEditor({ initial }: Props) {
             <MedalForm
               medal={selected}
               onChange={updateSelected}
+              onNameChange={changeName}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
             />
@@ -226,11 +246,13 @@ export function MedalsEditor({ initial }: Props) {
 function MedalForm({
   medal,
   onChange,
+  onNameChange,
   onDelete,
   onClose,
 }: {
   medal: MedalT;
   onChange: (mut: (m: MedalT) => MedalT) => void;
+  onNameChange: (value: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -259,7 +281,7 @@ function MedalForm({
       <Field label="Name">
         <input
           value={medal.name}
-          onChange={(e) => onChange((m) => ({ ...m, name: e.target.value }))}
+          onChange={(e) => onNameChange(e.target.value)}
           className={inputCls}
         />
       </Field>

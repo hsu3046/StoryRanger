@@ -18,6 +18,13 @@ export interface SceneNodeData {
   storyId: string;
   /** The story's protagonist id — its dialogue portrait lives at `hero.*`. */
   heroId: SpeakerId;
+  /** Primary dialogue-portrait base per character id (honors `dialogueImage`,
+   *  else `/dialogue/<id>`). */
+  dialogueBaseById: Record<string, string>;
+  /** Fallback portrait base per character id (the in-scene sprite, honoring
+   *  `image`). Used when a character has no dedicated dialogue head-shot yet
+   *  — keeps the chip from showing "?". */
+  spriteBaseById: Record<string, string>;
   selected?: boolean;
   [key: string]: unknown;
 }
@@ -35,7 +42,16 @@ function dialoguePortrait(
 
 export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) {
   const d = data as unknown as SceneNodeData;
-  const { sceneId, scene, isStart, isEnding, storyId, heroId } = d;
+  const {
+    sceneId,
+    scene,
+    isStart,
+    isEnding,
+    storyId,
+    heroId,
+    dialogueBaseById,
+    spriteBaseById,
+  } = d;
   const dialogueChars = scene.dialogueCharacters ?? [];
 
   const accent = isEnding
@@ -143,7 +159,8 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
               {dialogueChars.map((id) => (
                 <AssetThumb
                   key={id}
-                  base={dialoguePortrait(storyId, id, heroId)}
+                  base={dialogueBaseById[id] ?? dialoguePortrait(storyId, id, heroId)}
+                  fallbackBase={spriteBaseById[id]}
                   alt={id}
                   className="h-5 w-5"
                   shape="circle"

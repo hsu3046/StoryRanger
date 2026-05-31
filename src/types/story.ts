@@ -44,10 +44,11 @@ export interface Branch {
   label: string;
   /** Next scene to transition to when picked. */
   next: string;
-  /** Optional companion gained (added to party). */
+  /** Optional companion gained (added to party; no-op if already present). */
   addsCompanion?: CompanionId;
-  /** Optional BGM override for this transition. */
-  bgmOverride?: string;
+  /** Optional companion who leaves the party here (parting moment). Mood + HP
+   *  are kept so a later re-join restores them. */
+  removesCompanion?: CompanionId;
   /** Optional visibility gate. The branch only appears as a choice when the
    *  condition is met. Every present clause must hold (AND); each clause
    *  requires ALL of its ids. Evaluated against PlayState at render time. */
@@ -63,11 +64,10 @@ export interface Branch {
   challenge?: {
     enabled: true;
     category: "auto" | ChallengeCategory;
-    /** Number of problems to solve in sequence (default 1). */
+    /** Number of problems to solve in sequence (default 1). A wrong answer
+     *  always re-rolls a fresh problem — the gate retries until solved. */
     count?: number;
   };
-  /** What to do when the challenge is failed. */
-  onFailMode?: "retry" | "skip";
   /** Narration shown after the branch resolves, before scene transition. */
   outcome?: string;
 }
@@ -178,8 +178,14 @@ export interface Character {
    *  monsters do. */
   size: "tiny" | "small" | "medium" | "large" | "huge";
   /** Optional override of the in-scene sprite path (extensionless base).
-   *  Omit to use the id-based convention. */
+   *  Omit to use the id-based convention (`characters/<id>`). */
   image?: string;
+  /** Optional override of the dialogue head-shot (`/dialogue/<id>`),
+   *  extensionless base. Omit for the id-based convention. */
+  dialogueImage?: string;
+  /** Optional override of the battle-stance art (`/characters/battle/<id>`),
+   *  extensionless base. Omit for the id-based convention. */
+  battleImage?: string;
   /** Optional interactive-dialogue persona (companions + story NPCs).
    *  Omitted for narrator / hero. */
   persona?: CharacterPersona;

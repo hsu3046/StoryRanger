@@ -26,11 +26,12 @@ import {
   takeBranch,
 } from "@/lib/story-engine";
 import { checkMedals } from "@/lib/medals-engine";
-import { EducationalChallenge } from "../challenge/EducationalChallenge";
+import { ChallengeGate } from "../challenge/ChallengeGate";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
 import {
   characterAssetSlug,
+  characterSpriteBase,
   formatNarration,
   resolveHeroId,
 } from "@/lib/narrative";
@@ -59,6 +60,10 @@ import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
 const HERO_MEMORY_CAP = 30;
+
+/** Stable empty default for `bgmKeys` so the BGM effect doesn't re-run every
+ *  render when the prop is omitted (e.g. the admin scene preview). */
+const EMPTY_BGM_KEYS: string[] = [];
 
 /**
  * Resolve a character image base path. The hero (speakerId "dorothy")
@@ -109,6 +114,15 @@ interface Props {
    *  PlayState at this scene. State is NOT persisted in this mode —
    *  intended for the admin per-scene preview modal. */
   initialSceneId?: string;
+  /** Admin branch preview — a branch id on `initialSceneId`. When set, the
+   *  preview auto-takes that branch on mount, so it starts RIGHT AFTER the
+   *  choice (its outcome / encounter / challenge → next scene) instead of on
+   *  the source scene's choice list. */
+  initialBranchId?: string;
+  /** BGM track keys that actually exist for this story (scanned server-side).
+   *  Gates the encounter crossfade — we only switch to `battle` / `puzzle`
+   *  when the file is present, else the scene BGM keeps playing. */
+  bgmKeys?: string[];
 }
 
 export function StoryPlayer({
@@ -120,6 +134,8 @@ export function StoryPlayer({
   onStateChange,
   extraTopBar,
   initialSceneId,
+  initialBranchId,
+  bgmKeys = EMPTY_BGM_KEYS,
 }: Props) {
   const previewMode = !!initialSceneId;
   const [state, setState] = useState<PlayState>(() => {
@@ -385,31 +401,61 @@ export function StoryPlayer({
   // the next scene (A → B), not a beat early on the branch (A → branch(B) → B).
   // Auto-crossfades; stopped only when StoryPlayer unmounts (story exit).
   const audibleSceneIdRef = useRef(state.currentSceneId);
-  // A branch's `bgmOverride` plays for the duration of its transition — from
-  // the click until the next scene starts. Set in commitBranch, consumed on
-  // arrival (when the overlay clears). Null = no override → normal scene BGM.
-  const transitionBgmRef = useRef<string | null>(null);
+  // Battle / puzzle BGM variant pools — every file named `battle`, `battle_1`,
+  // `battle_2`, … (and likewise `puzzle*`) is an interchangeable variant; one
+  // is picked at random each time an encounter / challenge starts.
+  const battleBgmVariants = useMemo(
+    () => bgmKeys.filter((k) => k === "battle" || k.startsWith("battle_")),
+    [bgmKeys],
+  );
+  const puzzleBgmVariants = useMemo(
+    () => bgmKeys.filter((k) => k === "puzzle" || k.startsWith("puzzle_")),
+    [bgmKeys],
+  );
+  // The variant chosen for the CURRENT interaction — kept stable while it lasts
+  // (a re-render mid-battle must not re-roll + restart the track); re-picked
+  // only when a new encounter / challenge begins.
+  const interactionBgmRef = useRef<{ kind: string; track: string } | null>(null);
   // Track only the interaction KIND, not the whole object — a battle snapshot
   // mutates state.interaction every turn but must not re-evaluate BGM.
   const interactionKind = state.interaction?.kind;
   useEffect(() => {
     if (!interactionKind) {
-      // Arrived — the branch transition is over: drop any override and adopt
-      // the destination scene (puzzle keeps currentSceneId at the source
-      // anyway; outcome/encounter advance it early, which is why we wait).
-      transitionBgmRef.current = null;
+      // Arrived — the branch transition is over: adopt the destination scene
+      // (puzzle keeps currentSceneId at the source anyway; outcome/encounter
+      // advance it early, which is why we wait for the overlay to clear).
       audibleSceneIdRef.current = state.currentSceneId;
+      interactionBgmRef.current = null;
     }
-    // While a transition is in flight, a branch override (if any) takes over;
-    // otherwise BGM follows the scene the player has settled on.
-    const override = interactionKind ? transitionBgmRef.current : null;
-    if (override) {
-      getAudio().playBgm(override, story.id);
-      return;
+    const audio = getAudio();
+    // During a battle / challenge, crossfade to a RANDOM matching variant —
+    // but ONLY when at least one such file exists, else keep the scene BGM
+    // rather than cutting to silence.
+    if (interactionKind === "encounter" || interactionKind === "challenge") {
+      const pool =
+        interactionKind === "encounter" ? battleBgmVariants : puzzleBgmVariants;
+      if (pool.length > 0) {
+        let cur = interactionBgmRef.current;
+        if (!cur || cur.kind !== interactionKind) {
+          const track = pool[Math.floor(Math.random() * pool.length)];
+          cur = { kind: interactionKind, track };
+          interactionBgmRef.current = cur;
+        }
+        audio.playBgm(cur.track, story.id);
+        return;
+      }
     }
+    // BGM follows the scene the player has settled on (held through any
+    // in-flight transition overlay).
     const scene = story.scenes[audibleSceneIdRef.current];
-    if (scene) getAudio().playBgm(scene.bgm, story.id);
-  }, [story, state.currentSceneId, interactionKind]);
+    if (scene) audio.playBgm(scene.bgm, story.id);
+  }, [
+    story,
+    state.currentSceneId,
+    interactionKind,
+    battleBgmVariants,
+    puzzleBgmVariants,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -452,6 +498,22 @@ export function StoryPlayer({
     commitBranch(branch, { skipReward: false });
   }
 
+  // Admin branch preview — auto-take the requested branch ONCE on mount so the
+  // preview opens right after the choice (outcome / encounter / challenge →
+  // next scene) rather than on the source scene's choice list.
+  const autoChoseRef = useRef(false);
+  useEffect(() => {
+    if (autoChoseRef.current || !initialBranchId || !initialSceneId) return;
+    const branch = story.scenes[initialSceneId]?.branches.find(
+      (b) => b.id === initialBranchId,
+    );
+    if (!branch) return;
+    autoChoseRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot mount: replay the chosen branch so the preview opens after the choice
+    handleChoose(branch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount auto-take
+  }, []);
+
   /** Apply the branch transition. `skipReward` lets the caller suppress
    *  reward grant (used when a puzzle fails in `skip` mode).
    *
@@ -464,10 +526,6 @@ export function StoryPlayer({
     // Drop any pending ask so it can't ride an encounter/outcome bridge and
     // auto-open the previous scene's character over the destination scene.
     setAskRequest(null);
-    // Arm this branch's BGM override for the transition window (outcome
-    // bridge / battle). Null when unset → the transition keeps the outgoing
-    // scene's BGM. The BGM effect clears it on arrival at the next scene.
-    transitionBgmRef.current = branch.bgmOverride ?? null;
     const audio = getAudio();
     audio.playSfx(SFX.PAGE_TURN);
     if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
@@ -557,25 +615,20 @@ export function StoryPlayer({
       );
       return;
     }
-    // Fail handling depends on branch.onFailMode (per problem).
-    if (branch.onFailMode === "retry") {
-      setState((s) =>
-        s.interaction?.kind === "challenge"
-          ? {
-              ...s,
-              interaction: {
-                ...s.interaction,
-                attemptKey: s.interaction.attemptKey + 1,
-              },
-              updatedAt: new Date().toISOString(),
-            }
-          : s,
-      );
-      return;
-    }
-    // "skip" (or unset → skip default): skip the whole gate, no reward.
-    setInteraction(undefined);
-    commitBranch(branch, { skipReward: true });
+    // Wrong answer → always retry until solved: bump attemptKey to re-roll a
+    // fresh problem (the gate can't be failed out of).
+    setState((s) =>
+      s.interaction?.kind === "challenge"
+        ? {
+            ...s,
+            interaction: {
+              ...s.interaction,
+              attemptKey: s.interaction.attemptKey + 1,
+            },
+            updatedAt: new Date().toISOString(),
+          }
+        : s,
+    );
   }
 
   /** Persist live BattleState changes from the active EncounterFlow into
@@ -1085,9 +1138,23 @@ export function StoryPlayer({
           companions={state.companions}
           extraDialogueCharacters={currentScene.dialogueCharacters ?? []}
           characters={characters}
-          portraitBase={(id) =>
-            dialoguePortraitPath(story.id, id as SpeakerId | CompanionId, heroId)
-          }
+          // Prefer the `dialogueImage` override, else the /dialogue/<id>
+          // convention.
+          portraitBase={(id) => {
+            const ch = characters.characters.find((c) => c.id === id);
+            return (
+              ch?.dialogueImage ??
+              dialoguePortraitPath(story.id, id as SpeakerId | CompanionId, heroId)
+            );
+          }}
+          // No dedicated dialogue head-shot yet (e.g. a newly added character)
+          // → fall back to the in-scene sprite (honors `image`).
+          portraitFallbackBase={(id) => {
+            const ch = characters.characters.find((c) => c.id === id);
+            return ch
+              ? characterSpriteBase(story.id, ch, heroId)
+              : characterImagePath(story.id, id as SpeakerId, heroId);
+          }}
           mood={(id) => state.companionMoods?.[id as CompanionId] ?? 5}
           hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
           heroMemory={state.heroMemory ?? []}
@@ -1122,19 +1189,21 @@ export function StoryPlayer({
             encounter={pendingEncounter}
             storyId={story.id}
             age={ageFromRange(story.ageRange)}
-            hero={state.hero}
             companions={state.companions}
             companionMoods={state.companionMoods ?? {}}
             partyHp={state.partyHp ?? { hero: DEFAULT_MAX_HP.hero }}
             partyMaxHp={state.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }}
             fallenAttackers={state.fallenAttackers ?? []}
             characterImageBase={(id, mode = "default") => {
-              // Honor per-character `image` override when set, but only
-              // for the default in-scene sprite. Battle-stance art keeps
-              // the id-based convention under /characters/battle/.
-              if (mode === "default") {
-                const ch = characters.characters.find((c) => c.id === id);
-                if (ch?.image) return ch.image;
+              // Honor the per-mode override (`image` for the in-scene sprite,
+              // `battleImage` for the combat stance); else fall back to the
+              // id-based convention for that folder.
+              const ch = characters.characters.find((c) => c.id === id);
+              if (mode === "default" && ch) {
+                return characterSpriteBase(story.id, ch, heroId);
+              }
+              if (mode === "battle" && ch?.battleImage) {
+                return ch.battleImage;
               }
               return characterImagePath(story.id, id, heroId, mode);
             }}
@@ -1149,27 +1218,25 @@ export function StoryPlayer({
         )}
       </AnimatePresence>
 
-      {/* Branch educational-challenge gate — overlay shown after picking a
-          branch with `challenge`. `attemptKey` remounts (and re-rolls) on retry. */}
-      {pendingChallenge && (
-        <div
-          className="fixed inset-0 z-[55] bg-ink/85 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <EducationalChallenge
-            key={`${pendingChallenge.branch.id}-${pendingChallenge.solved}-${pendingChallenge.attemptKey}`}
-            mode="gate"
+      {/* Branch educational-challenge gate — narrated bookend (intro line →
+          problem(s) → outro line) over a dim/blur veil. AnimatePresence plays
+          the veil's fade-out when the gate resolves and pendingChallenge clears. */}
+      <AnimatePresence>
+        {pendingChallenge && (
+          <ChallengeGate
+            key={pendingChallenge.branch.id}
             challenge={pendingChallenge.challenge}
-            progress={
-              pendingChallenge.total > 1
-                ? { current: pendingChallenge.solved + 1, total: pendingChallenge.total }
-                : undefined
-            }
-            onSolved={(correct) => handleChallengeResolved(correct)}
+            solvedCount={pendingChallenge.solved}
+            total={pendingChallenge.total}
+            attemptKey={pendingChallenge.attemptKey}
+            seed={[...pendingChallenge.branch.id].reduce(
+              (a, c) => a + c.charCodeAt(0),
+              0,
+            )}
+            onResolved={(correct) => handleChallengeResolved(correct)}
           />
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       <SettingsModal
         open={settingsOpen}

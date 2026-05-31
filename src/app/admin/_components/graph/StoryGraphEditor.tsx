@@ -65,6 +65,80 @@ import {
 import { isTerminalScene } from "@/lib/story-engine";
 import type { ChallengeCategory } from "@/lib/education";
 import { AssetThumb } from "../AssetThumb";
+
+/**
+ * Dialogue-portrait fallback base = the character's in-scene sprite (honors
+ * the `image` override). Used so a character lacking a dedicated
+ * `/dialogue/<id>` head-shot (e.g. just added) still shows its sprite in the
+ * graph chips instead of a "?" placeholder. The hero is never dialogue-able,
+ * so the id slug needs no hero remap here.
+ */
+function dialogueFallbackBase(
+  storyId: string,
+  c: { id: string; image?: string },
+): string {
+  return c.image ?? `/stories/${storyId}/characters/${c.id}`;
+}
+
+/**
+ * Primary dialogue-portrait base for a chip — the `dialogueImage` override if
+ * set, else the `/dialogue/<id>` convention. Pair with `dialogueFallbackBase`
+ * (the in-scene sprite) as the AssetThumb fallback.
+ */
+function dialoguePortraitBase(
+  storyId: string,
+  c: { id: string; dialogueImage?: string },
+): string {
+  return c.dialogueImage ?? `/stories/${storyId}/dialogue/${c.id}`;
+}
+
+/**
+ * Companions in the party when the player ARRIVES at each scene — i.e. who has
+ * joined (minus who has left) on a path from the start scene to that scene.
+ * Computed as a graph fixpoint over branch `addsCompanion` / `removesCompanion`.
+ *
+ * Branching makes membership path-dependent, so this is the UNION across paths
+ * ("possibly in the party here"). The branch editor uses it to show inherited
+ * companions as already "joined" (→ clicking parts them) vs not-yet-joined
+ * (→ clicking adds them). Either way the runtime is safe: re-adding a present
+ * companion or removing an absent one is a no-op.
+ */
+function companionsArrivingByScene(
+  scenes: Record<string, SceneT>,
+  startScene: string,
+): Record<string, Set<CompanionId>> {
+  const arriving: Record<string, Set<CompanionId>> = {};
+  if (scenes[startScene]) arriving[startScene] = new Set();
+  let changed = true;
+  let guard = 0;
+  const maxPasses = Object.keys(scenes).length + 2;
+  while (changed && guard < maxPasses) {
+    changed = false;
+    guard += 1;
+    for (const [sid, scene] of Object.entries(scenes)) {
+      const here = arriving[sid];
+      if (!here) continue; // scene not yet reachable from start
+      for (const b of scene.branches) {
+        if (!scenes[b.next]) continue; // orphan target
+        const leaving = new Set(here);
+        if (b.addsCompanion) leaving.add(b.addsCompanion);
+        if (b.removesCompanion) leaving.delete(b.removesCompanion);
+        if (!arriving[b.next]) {
+          arriving[b.next] = new Set();
+          changed = true; // newly reachable → needs another pass
+        }
+        const target = arriving[b.next];
+        for (const id of leaving) {
+          if (!target.has(id)) {
+            target.add(id);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+  return arriving;
+}
 import { ItemChipPicker } from "../ItemChipPicker";
 import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
 import { useAlert, useConfirm } from "../ConfirmDialog";
@@ -136,6 +210,9 @@ function StoryGraphEditorInner({
   // Per-scene preview modal target. Set by the Demo button in Scene /
   // Branch Inspector. null → modal closed.
   const [previewSceneId, setPreviewSceneId] = useState<string | null>(null);
+  // When previewing a BRANCH (not a whole scene), the preview opens right after
+  // this branch's choice. Null = scene preview / closed.
+  const [previewBranchId, setPreviewBranchId] = useState<string | null>(null);
   // Held in a ref (not state) because we only need it inside event handlers
   // — putting it in state would re-render on init for no rendering reason.
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -230,24 +307,23 @@ function StoryGraphEditorInner({
   // covers the unlikely case of a scene appearing without a recorded
   // position (e.g. external file edit while admin is open).
 
-  // Count of encounters attached per (sceneId, branchId) — drives the ⚔
-  // chip on BranchEdge so authors can see at a glance which branches roll
-  // a battle.
-  // Per-branch list of encounters, each carrying its OWN battle count
-  // (`trigger.count`, default 1 — the admin's "Number of battles") and its
-  // deduped monster icons. NOT merged across encounters: the edge marker shows
-  // each encounter as its own group + its own ×count, so a branch with two
-  // single-battle encounters reads as two enemies (no ×2), while one encounter
-  // with count 2 reads as ×2.
+  // Per-branch list of encounters, each carrying its monster icons WITH a
+  // per-monster count (so a battle with 3× Will-o-Wisp shows ×3) — drives the
+  // battle marker on BranchEdge. Order = first appearance; one battle per
+  // encounter, each rendered as its own enemy group.
   const encounterInfoByBranch = useMemo(() => {
-    const map = new Map<string, { count: number; monsterIds: string[] }[]>();
+    const map = new Map<
+      string,
+      { monsters: { id: string; count: number }[] }[]
+    >();
     for (const e of encounters) {
       const key = `${e.trigger.sceneId}__${e.trigger.branchId}`;
       const arr = map.get(key) ?? [];
       const ids = e.displayMonsters ?? e.body.monsterIds;
+      const counts = new Map<string, number>();
+      for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
       arr.push({
-        count: e.trigger.count ?? 1,
-        monsterIds: [...new Set(ids)],
+        monsters: [...counts].map(([id, count]) => ({ id, count })),
       });
       map.set(key, arr);
     }
@@ -261,6 +337,13 @@ function StoryGraphEditorInner({
     [initialStory, story, initialEncounters, encounters],
   );
 
+  // Who's already in the party arriving at each scene (from prior branches) —
+  // lets the branch editor show inherited companions as "joined".
+  const partyArrivingByScene = useMemo(
+    () => companionsArrivingByScene(story.scenes, story.startScene),
+    [story.scenes, story.startScene],
+  );
+
   // Per-scene `data` objects — memo'd separately from `positions` so
   // dragging (which fires position changes every frame) doesn't churn the
   // SceneNode `data` prop identity. Without this, every drag frame would
@@ -271,13 +354,48 @@ function StoryGraphEditorInner({
       runtimeCharactersFile.characters.find((c) => c.isHero)?.id ?? "dorothy",
     [runtimeCharactersFile],
   );
+  // Dialogue-portrait fallback base per character id (the in-scene sprite,
+  // honoring `image`). Built once and shared by SceneNode / BranchEdge — which
+  // only carry character ids — so a character without a dedicated
+  // `/dialogue/<id>` head-shot still shows its sprite instead of a "?".
+  const spriteBaseById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of runtimeCharactersFile.characters) {
+      map[c.id] = dialogueFallbackBase(storyId, c);
+    }
+    return map;
+  }, [runtimeCharactersFile, storyId]);
+  // Primary dialogue-portrait base per id (honors `dialogueImage`). Paired
+  // with spriteBaseById as the fallback when no head-shot file exists.
+  const dialogueBaseById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of runtimeCharactersFile.characters) {
+      map[c.id] = dialoguePortraitBase(storyId, c);
+    }
+    return map;
+  }, [runtimeCharactersFile, storyId]);
+  // Scenes that are the target of at least one branch — used to gate the Start
+  // flag the same way `isTerminalScene` gates Ending (mirror image: no incoming
+  // ↔ no outgoing).
+  const incomingTargets = useMemo(() => {
+    const set = new Set<string>();
+    for (const sc of Object.values(story.scenes)) {
+      for (const b of sc.branches) {
+        if (story.scenes[b.next]) set.add(b.next);
+      }
+    }
+    return set;
+  }, [story.scenes]);
   const sceneDataById = useMemo(() => {
     const map: Record<string, SceneNodeData> = {};
     for (const [id, scene] of Object.entries(story.scenes)) {
       map[id] = {
         sceneId: id,
         scene,
-        isStart: id === story.startScene,
+        // Start = the designated start scene AND an entry point (nothing leads
+        // into it). The no-incoming gate hides the flag once a branch connects
+        // back to it — mirror of how Ending hides once a branch leads onward.
+        isStart: id === story.startScene && !incomingTargets.has(id),
         // Ending = manually marked AND terminal (no branch leads onward). The
         // terminal gate hides the badge automatically once a branch connects;
         // requiring the manual flag keeps orphan/WIP nodes from all reading as
@@ -285,10 +403,20 @@ function StoryGraphEditorInner({
         isEnding: !!scene.ending && isTerminalScene(scene, story.scenes),
         storyId,
         heroId,
+        spriteBaseById,
+        dialogueBaseById,
       };
     }
     return map;
-  }, [story.scenes, story.startScene, storyId, heroId]);
+  }, [
+    story.scenes,
+    story.startScene,
+    storyId,
+    heroId,
+    incomingTargets,
+    spriteBaseById,
+    dialogueBaseById,
+  ]);
 
   // ─── Source-of-truth: story + positions + selection → Node[] / Edge[] ───
   //
@@ -332,6 +460,18 @@ function StoryGraphEditorInner({
           parallelCount: arr.length,
           encounters: encInfo ?? [],
           storyId,
+          companionDialogueBase: b.addsCompanion
+            ? dialogueBaseById[b.addsCompanion]
+            : undefined,
+          companionSpriteBase: b.addsCompanion
+            ? spriteBaseById[b.addsCompanion]
+            : undefined,
+          leavingCompanionDialogueBase: b.removesCompanion
+            ? dialogueBaseById[b.removesCompanion]
+            : undefined,
+          leavingCompanionSpriteBase: b.removesCompanion
+            ? spriteBaseById[b.removesCompanion]
+            : undefined,
           offset: edgeOffsets[edgeId],
           onOffsetChange: setEdgeOffset,
         };
@@ -366,6 +506,8 @@ function StoryGraphEditorInner({
     encounterInfoByBranch,
     selection,
     storyId,
+    spriteBaseById,
+    dialogueBaseById,
     edgeOffsets,
     setEdgeOffset,
   ]);
@@ -627,16 +769,11 @@ function StoryGraphEditorInner({
     setSelection(null);
   }
 
-  /** Clone the scene under a new id. Everything else (image, bgm, speaker,
-   *  narration, branches, reward, ending, dialogueCharacters) is deep-copied
-   *  verbatim. New id is `{sourceId}_2`, `_3`, ... — first unused suffix.
-   *
-   *  Encounters cascade too: every encounter tied to a branch of the
-   *  source scene is cloned with `trigger.sceneId` rewritten to the new
-   *  scene id (branchId stays — branch ids are scoped to their parent
-   *  scene's `branches` array). New encounter id follows the existing
-   *  `{sceneId}__{branchId}-battle[-N]` pattern so duplicates don't
-   *  collide with the originals. */
+  /** Clone the scene under a new id. The scene's OWN content (image, bgm,
+   *  speaker, narration, reward, ending, dialogueCharacters, asks) is deep-
+   *  copied — but its `branches` are NOT: a duplicate starts disconnected, with
+   *  no outgoing choices (and therefore no branch encounters to cascade). New
+   *  id is `{sourceId}_2`, `_3`, … — first unused suffix. */
   function duplicateScene(sceneId: string) {
     const src = story.scenes[sceneId];
     if (!src) return;
@@ -646,8 +783,11 @@ function StoryGraphEditorInner({
       suffix += 1;
       newId = `${sceneId}_${suffix}`;
     }
-    // Deep clone via JSON to detach all nested refs (branches, reward, etc).
+    // Deep clone via JSON to detach nested refs (reward, ending, asks, …),
+    // then drop the branches — duplicating a scene copies only its own content,
+    // not its outgoing connections (so there are no branch encounters to clone).
     const cloned = JSON.parse(JSON.stringify(src)) as SceneT;
+    cloned.branches = [];
     setStory((prev) => ({
       ...prev,
       scenes: {
@@ -655,32 +795,6 @@ function StoryGraphEditorInner({
         [newId]: cloned,
       },
     }));
-
-    // Cascade encounters tied to branches of the source scene.
-    const sourceEncounters = encounters.filter(
-      (e) => e.trigger.sceneId === sceneId,
-    );
-    if (sourceEncounters.length > 0) {
-      // Build a fresh id-collision check that includes both the existing
-      // catalog AND any duplicates we mint in this same pass.
-      const existingIds = new Set(encounters.map((e) => e.id));
-      const cloned: EncounterDefT[] = [];
-      for (const e of sourceEncounters) {
-        let baseId = `${newId}__${e.trigger.branchId}-battle`;
-        let i = 0;
-        while (existingIds.has(baseId)) {
-          i += 1;
-          baseId = `${newId}__${e.trigger.branchId}-battle-${i}`;
-        }
-        existingIds.add(baseId);
-        cloned.push({
-          ...(JSON.parse(JSON.stringify(e)) as EncounterDefT),
-          id: baseId,
-          trigger: { ...e.trigger, sceneId: newId },
-        });
-      }
-      setEncounters((prev) => [...prev, ...cloned]);
-    }
 
     // Drop the duplicate near the source on the canvas so it doesn't land
     // at the origin and stack on top of other nodes.
@@ -740,15 +854,12 @@ function StoryGraphEditorInner({
     }
     const newEnc: EncounterDefT = {
       id: baseId,
-      title: "New Battle",
-      trigger: { sceneId, branchId, count: 1 },
+      trigger: { sceneId, branchId },
       intro: {
         bg: "forest-clearing",
       },
       body: { kind: "battle", monsterIds: [] },
       rewards: {},
-      // Empty → the battle's victory panel shows a sensible default line.
-      outro: { victory: "" },
     };
     setEncounters((prev) => [...prev, newEnc]);
   }
@@ -1075,6 +1186,7 @@ function StoryGraphEditorInner({
                   sceneId={selectedScene.id}
                   scene={selectedScene.scene}
                   isStart={selectedScene.id === story.startScene}
+                  hasIncoming={incomingTargets.has(selectedScene.id)}
                   items={items}
                   sceneImages={sceneImages}
                   bgmOptions={bgmOptions}
@@ -1092,7 +1204,10 @@ function StoryGraphEditorInner({
                       branchId,
                     })
                   }
-                  onPreview={() => setPreviewSceneId(selectedScene.id)}
+                  onPreview={() => {
+                    setPreviewBranchId(null);
+                    setPreviewSceneId(selectedScene.id);
+                  }}
                   onSetStart={() =>
                     setStory((prev) => ({
                       ...prev,
@@ -1112,6 +1227,9 @@ function StoryGraphEditorInner({
                     storyPremise={story.subtitle ?? ""}
                     storyScenes={story.scenes}
                     sceneId={selectedScene.id}
+                    inheritedCompanions={[
+                      ...(partyArrivingByScene[selectedScene.id] ?? []),
+                    ]}
                     branch={selectedBranch}
                     sourceScene={selectedScene.scene}
                     encounters={encounters.filter(
@@ -1122,7 +1240,6 @@ function StoryGraphEditorInner({
                     monsters={monsters}
                     backgrounds={backgrounds}
                     items={items}
-                    bgmOptions={bgmOptions}
                     characters={runtimeCharactersFile.characters}
                     onChange={(mut) =>
                       updateBranch(
@@ -1144,7 +1261,11 @@ function StoryGraphEditorInner({
                       updateEncounter(encId, mut)
                     }
                     onDeleteEncounter={(encId) => deleteEncounter(encId)}
-                    onPreview={() => setPreviewSceneId(selectedScene.id)}
+                    onPreview={() => {
+                      // Preview from RIGHT AFTER this branch's choice.
+                      setPreviewBranchId(selectedBranch.id);
+                      setPreviewSceneId(selectedScene.id);
+                    }}
                   />
                 )}
             </div>
@@ -1156,7 +1277,11 @@ function StoryGraphEditorInner({
         medals={runtimeMedalsFile}
         characters={runtimeCharactersFile}
         sceneId={previewSceneId}
-        onClose={() => setPreviewSceneId(null)}
+        branchId={previewBranchId}
+        onClose={() => {
+          setPreviewSceneId(null);
+          setPreviewBranchId(null);
+        }}
       />
     </div>
   );
@@ -1181,6 +1306,7 @@ function SceneInspector({
   sceneId,
   scene,
   isStart,
+  hasIncoming,
   items,
   characters,
   sceneImages,
@@ -1205,6 +1331,10 @@ function SceneInspector({
   scene: SceneT;
   /** Whether this scene is the story's start scene — disables Delete. */
   isStart: boolean;
+  /** Whether any branch leads INTO this scene. The "set as start" flag is
+   *  hidden once a scene has an incoming branch (it can't be an entry point) —
+   *  mirror of how the Ending toggle only shows on terminal scenes. */
+  hasIncoming: boolean;
   items: ItemDefT[];
   /** Character catalog — chips display `name` instead of raw `id`; the
    *  Asks editor reads `persona` to limit answerers. */
@@ -1234,24 +1364,29 @@ function SceneInspector({
           <code className="text-sm text-ink">{sceneId}</code>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onSetStart}
-            disabled={isStart}
-            title={
-              isStart
-                ? "This is the story's start scene"
-                : "Mark this as the story's start scene"
-            }
-            aria-label={isStart ? "Start scene" : "Set as start scene"}
-            className={`flex h-6 w-6 items-center justify-center rounded-pill transition-colors ${
-              isStart
-                ? "bg-accent-deep text-paper"
-                : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
-            }`}
-          >
-            <Flag size={12} weight={isStart ? "fill" : "regular"} />
-          </button>
+          {/* Start flag — only on entry-point scenes (no incoming branch), or
+              the current start. Mirror of the Ending toggle, which only shows
+              on terminal scenes. */}
+          {(isStart || !hasIncoming) && (
+            <button
+              type="button"
+              onClick={onSetStart}
+              disabled={isStart}
+              title={
+                isStart
+                  ? "This is the story's start scene"
+                  : "Mark this as the story's start scene"
+              }
+              aria-label={isStart ? "Start scene" : "Set as start scene"}
+              className={`flex h-6 w-6 items-center justify-center rounded-pill transition-colors ${
+                isStart
+                  ? "bg-accent-deep text-paper"
+                  : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+              }`}
+            >
+              <Flag size={12} weight={isStart ? "fill" : "regular"} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onPreview}
@@ -1521,8 +1656,9 @@ function EncounterCard({
   onChange: (mut: (e: EncounterDefT) => EncounterDefT) => void;
   onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const count = encounter.trigger.count ?? 1;
+  // Battles open expanded by default — when a branch has a battle, its editor
+  // shows the setup straight away (collapse manually via the header).
+  const [expanded, setExpanded] = useState(true);
 
   return (
     <li className="rounded-card bg-paper ring-1 ring-ink-soft/10">
@@ -1532,12 +1668,7 @@ function EncounterCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex-1 text-left"
         >
-          <p className="text-xs font-semibold text-ink">
-            {encounter.title}
-            {count > 1 && (
-              <span className="ml-1 font-normal text-ink-soft">× {count}</span>
-            )}
-          </p>
+          <p className="text-xs font-semibold text-ink">Battle</p>
         </button>
         <div className="flex items-center gap-1">
           <button
@@ -1563,34 +1694,6 @@ function EncounterCard({
 
       {expanded && (
         <div className="flex flex-col gap-2 border-t border-ink-soft/10 px-2 py-2">
-          <MiniField label="Title">
-            <input
-              value={encounter.title}
-              onChange={(e) =>
-                onChange((x) => ({ ...x, title: e.target.value }))
-              }
-              className={inputClsSm}
-            />
-          </MiniField>
-          <MiniField label="Number of battles">
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={count}
-              onChange={(e) => {
-                const v = Math.max(1, Math.floor(Number(e.target.value) || 1));
-                onChange((x) => ({
-                  ...x,
-                  trigger: {
-                    ...x.trigger,
-                    count: v === 1 ? undefined : v,
-                  },
-                }));
-              }}
-              className={inputClsSm}
-            />
-          </MiniField>
           <MiniField label="Background">
             <StyledSelect
               compact
@@ -1616,6 +1719,16 @@ function EncounterCard({
                 </option>
               ))}
             </StyledSelect>
+            {/* Preview the picked background — small banner under the select. */}
+            {encounter.intro.bg && (
+              <AssetThumb
+                base={`/stories/${storyId}/backgrounds/${encounter.intro.bg}`}
+                alt={encounter.intro.bg}
+                className="mt-1.5 h-20 w-full"
+                shape="banner"
+                fit="cover"
+              />
+            )}
           </MiniField>
 
           <MiniField label="Monsters">
@@ -1698,21 +1811,6 @@ function EncounterCard({
             />
           </MiniField>
 
-          <MiniField label="Narration on victory">
-            <textarea
-              value={encounter.outro.victory}
-              onChange={(e) =>
-                onChange((x) => ({
-                  ...x,
-                  outro: { ...x.outro, victory: e.target.value },
-                }))
-              }
-              rows={5}
-              placeholder="Well done! The adventure continues!  (default if left blank — shown on the battle's victory screen)"
-              className={inputClsSm}
-            />
-            <CharCount value={encounter.outro.victory} />
-          </MiniField>
         </div>
       )}
     </li>
@@ -1788,6 +1886,7 @@ function BranchInspector({
   storyPremise,
   storyScenes,
   sceneId,
+  inheritedCompanions,
   branch,
   sourceScene,
   encounters,
@@ -1795,7 +1894,6 @@ function BranchInspector({
   backgrounds,
   items,
   characters,
-  bgmOptions,
   onChange,
   onDelete,
   onAddEncounter,
@@ -1811,6 +1909,9 @@ function BranchInspector({
   storyPremise: string;
   storyScenes: Record<string, SceneT>;
   sceneId: string;
+  /** Companions already in the party arriving at this branch's scene (joined on
+   *  a prior branch). Shown as "joined" — clicking them parts them here. */
+  inheritedCompanions: CompanionId[];
   branch: BranchT;
   sourceScene: SceneT;
   encounters: EncounterDefT[];
@@ -1820,9 +1921,9 @@ function BranchInspector({
   items: ItemDefT[];
   /** Character catalog — Add-companion chips show `name` not raw id. */
   characters: { id: string; name: string }[];
-  bgmOptions: string[];
   onChange: (mut: (b: BranchT) => BranchT) => void;
   onDelete: () => void;
+  /** Adds a battle encounter to this branch. */
   onAddEncounter: () => void;
   onUpdateEncounter: (
     encId: string,
@@ -1838,10 +1939,10 @@ function BranchInspector({
 
   return (
     <div className="flex flex-col gap-3">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <div>
           <p className="font-handwritten text-base text-accent-deep">Branch</p>
-          <code className="text-xs text-ink-soft">{branch.id}</code>
+          <code className="text-sm text-ink">{branch.id}</code>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -1905,29 +2006,73 @@ function BranchInspector({
         />
       </Field>
 
-      <Field label="Add companion">
+      <Field label="Companions">
         <div className="flex flex-wrap gap-1">
           {COMPANION_OPTIONS.map((c) => {
-            const on = branch.addsCompanion === c.id;
+            // Is this companion already in the party arriving here (joined on a
+            // prior branch)? That decides whether clicking parts them (leave)
+            // or recruits them (join).
+            const inParty = inheritedCompanions.includes(c.id);
+            const joins = branch.addsCompanion === c.id; // recruited HERE
+            const leaves = branch.removesCompanion === c.id; // parts HERE
+            // Display state (priority): leaves > joined(inherited) > joins.
+            const state: "leaves" | "joined" | "joins" | "none" = leaves
+              ? "leaves"
+              : inParty
+                ? "joined"
+                : joins
+                  ? "joins"
+                  : "none";
             const name = characters.find((ch) => ch.id === c.id)?.name ?? c.id;
             return (
               <button
                 key={c.id}
                 type="button"
+                // In-party companion → toggle Leave. Otherwise → toggle Join.
+                // Clearing the opposite op keeps the data unambiguous.
                 onClick={() =>
-                  onChange((b) => ({
-                    ...b,
-                    addsCompanion: on ? undefined : c.id,
-                  }))
+                  onChange((b) =>
+                    inParty
+                      ? {
+                          ...b,
+                          removesCompanion: leaves ? undefined : c.id,
+                          addsCompanion:
+                            b.addsCompanion === c.id
+                              ? undefined
+                              : b.addsCompanion,
+                        }
+                      : {
+                          ...b,
+                          addsCompanion: joins ? undefined : c.id,
+                          removesCompanion:
+                            b.removesCompanion === c.id
+                              ? undefined
+                              : b.removesCompanion,
+                        },
+                  )
+                }
+                title={
+                  state === "leaves"
+                    ? `${name} leaves the party here`
+                    : state === "joined"
+                      ? `${name} is already in the party — click to make them leave here`
+                      : state === "joins"
+                        ? `${name} joins the party here`
+                        : `${name} — click to make them join here`
                 }
                 className={`flex items-center gap-1 rounded-pill py-0.5 pl-0.5 pr-2 text-[11px] transition-colors ${
-                  on
-                    ? "bg-accent-deep text-paper"
-                    : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                  state === "leaves"
+                    ? "bg-ruby text-paper"
+                    : state === "joined"
+                      ? "bg-emerald/20 text-emerald ring-1 ring-emerald/30"
+                      : state === "joins"
+                        ? "bg-accent-deep text-paper"
+                        : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
                 }`}
               >
                 <AssetThumb
-                  base={`/stories/${storyId}/dialogue/${c.id}`}
+                  base={dialoguePortraitBase(storyId, c)}
+                  fallbackBase={dialogueFallbackBase(storyId, c)}
                   alt={name}
                   className="h-5 w-5"
                   shape="circle"
@@ -1935,18 +2080,35 @@ function BranchInspector({
                   ringWidth={0}
                 />
                 {name}
+                {state !== "none" && (
+                  <span className="text-[9px] font-bold uppercase opacity-90">
+                    {state}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
       </Field>
 
+      <BranchOutcomeEditor
+        storyId={storyId}
+        storyLanguage={storyLanguage}
+        storyTitle={storyTitle}
+        storyPremise={storyPremise}
+        storyScenes={storyScenes}
+        sceneId={sceneId}
+        sourceScene={sourceScene}
+        branch={branch}
+        targetScene={targetScene}
+        onChange={onChange}
+      />
+
+      <hr className="my-1 border-t border-ink-soft/15" />
+
       {/* Condition — branch only appears as a choice when the player meets
           every clause (AND). Empty clauses = always shown. */}
-      <Field
-        label="Condition (show only if…)"
-        hint="Branch stays hidden until the player meets every clause"
-      >
+      <Field label="Condition">
         <div className="flex flex-col gap-2">
           <div>
             <p className="mb-1 text-[11px] font-medium text-ink-soft/80">
@@ -1999,7 +2161,8 @@ function BranchInspector({
                     }`}
                   >
                     <AssetThumb
-                      base={`/stories/${storyId}/dialogue/${c.id}`}
+                      base={dialoguePortraitBase(storyId, c)}
+                      fallbackBase={dialogueFallbackBase(storyId, c)}
                       alt={name}
                       className="h-5 w-5"
                       shape="circle"
@@ -2015,41 +2178,11 @@ function BranchInspector({
         </div>
       </Field>
 
-      <BranchOutcomeEditor
-        storyId={storyId}
-        storyLanguage={storyLanguage}
-        storyTitle={storyTitle}
-        storyPremise={storyPremise}
-        storyScenes={storyScenes}
-        sceneId={sceneId}
-        sourceScene={sourceScene}
-        branch={branch}
-        targetScene={targetScene}
-        onChange={onChange}
-      />
-
-      <Field
-        label="BGM override (optional)"
-        hint="Plays through this branch's transition (outcome bridge / battle), until the next scene's BGM takes over on arrival"
-      >
-        <BgmSelectWithPreview
-          value={branch.bgmOverride ?? ""}
-          options={bgmOptions}
-          storyId={storyId}
-          allowEmpty="Default (Scene's BGM)"
-          onChange={(v) =>
-            onChange((b) => ({
-              ...b,
-              bgmOverride: v || undefined,
-            }))
-          }
-        />
-      </Field>
-
       {/* Encounters rolled when the player takes THIS branch.
           The gating educational challenge is conceptually one of these — it
           lives in `branch.challenge` (not the encounters JSON) but renders as a
           card here alongside battle encounters. */}
+      <hr className="my-1 border-t border-ink-soft/15" />
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase text-ink-soft">
@@ -2075,7 +2208,6 @@ function BranchInspector({
                     category: "auto",
                     count: 1,
                   },
-                  onFailMode: b.onFailMode ?? "retry",
                 }))
               }
               className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
@@ -2103,7 +2235,6 @@ function BranchInspector({
                   onChange((b) => ({
                     ...b,
                     challenge: undefined,
-                    onFailMode: undefined,
                   }))
                 }
               />
@@ -2221,7 +2352,7 @@ function BranchOutcomeEditor({
             outcome: e.target.value || undefined,
           }))
         }
-        rows={8}
+        rows={4}
         placeholder="e.g. {{name}} nods and steps through. {{They}} feel {{their}} pack settle on {{their}} shoulders. (leave empty for no outcome line)"
         className={inputCls}
       />
@@ -2352,19 +2483,30 @@ function SceneNarrationEditor({
 /** Challenge category options for the branch-gate picker. `auto` lets the
  *  generator pick an age-appropriate category at runtime (the default). */
 const CHALLENGE_CATEGORIES: { value: "auto" | ChallengeCategory; label: string }[] = [
-  { value: "auto", label: "Auto (age-appropriate)" },
+  { value: "auto", label: "Auto (Mixed)" },
+  { value: "counting", label: "Counting" },
+  { value: "shape", label: "Shapes" },
+  { value: "compare", label: "Compare" },
+  { value: "odd-one-out", label: "Odd one out" },
+  { value: "pattern", label: "Number pattern" },
   { value: "add", label: "Addition" },
   { value: "sub", label: "Subtraction" },
   { value: "multiply", label: "Multiplication" },
   { value: "divide", label: "Division" },
   { value: "missing", label: "Missing number" },
-  { value: "compare", label: "Compare (which is bigger)" },
-  { value: "counting", label: "Counting" },
-  { value: "pattern", label: "Number pattern" },
-  { value: "geometry", label: "Shapes / geometry" },
   { value: "fraction", label: "Fractions" },
+  { value: "decimal", label: "Decimals" },
+  { value: "percentage", label: "Percentage" },
+  { value: "ratio", label: "Ratio" },
+  { value: "money", label: "Money" },
+  { value: "time", label: "Time" },
+  { value: "measure", label: "Area / perimeter / volume" },
+  { value: "geometry", label: "Geometry / angles" },
+  { value: "average", label: "Average" },
+  { value: "factors", label: "Factors & multiples" },
+  { value: "algebra", label: "Algebra" },
+  { value: "speed", label: "Speed" },
   { value: "word", label: "Word / thinking" },
-  { value: "odd-one-out", label: "Odd one out" },
 ];
 
 function BranchChallengeCard({
@@ -2379,9 +2521,6 @@ function BranchChallengeCard({
   const [expanded, setExpanded] = useState(true);
   const challenge = branch.challenge;
   if (!challenge?.enabled) return null;
-  const catLabel =
-    CHALLENGE_CATEGORIES.find((c) => c.value === challenge.category)?.label ??
-    "Auto";
   return (
     <li className="rounded-card bg-paper ring-1 ring-ink-soft/10">
       <div className="flex items-center justify-between gap-2 px-2 py-1.5">
@@ -2390,12 +2529,7 @@ function BranchChallengeCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex-1 text-left"
         >
-          <code className="text-xs text-ink">challenge</code>
-          <p className="text-[11px] text-ink-soft">Educational gate</p>
-          <p className="text-[10px] text-ink-soft/70">
-            🧩 {catLabel} · {challenge.count ?? 1} problem
-            {(challenge.count ?? 1) === 1 ? "" : "s"} · difficulty auto from age
-          </p>
+          <p className="text-xs font-semibold text-ink">Challenge</p>
         </button>
         <div className="flex items-center gap-1">
           <button
@@ -2474,25 +2608,6 @@ function BranchChallengeCard({
                 }
                 className={`${inputCls} max-w-[5rem] tabular-nums`}
               />
-              <span className="text-[10px] text-ink-soft/60">
-                solve in a row to pass
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-xs">
-              <span className="text-ink-soft">On fail:</span>
-              <StyledSelect
-                className="flex-1"
-                value={branch.onFailMode ?? "retry"}
-                onChange={(e) =>
-                  onChange((b) => ({
-                    ...b,
-                    onFailMode: e.target.value as "retry" | "skip",
-                  }))
-                }
-              >
-                <option value="retry">Retry until solved</option>
-                <option value="skip">Skip — proceed without reward</option>
-              </StyledSelect>
             </label>
           </div>
         </div>
@@ -2610,7 +2725,8 @@ function DialogueCharactersEditor({
               }`}
             >
               <AssetThumb
-                base={`/stories/${storyId}/dialogue/${id}`}
+                base={dialoguePortraitBase(storyId, c)}
+                fallbackBase={dialogueFallbackBase(storyId, c)}
                 alt={name}
                 className="h-5 w-5"
                 shape="circle"
@@ -2675,7 +2791,8 @@ function AskRow({
         >
           {answerer && (
             <AssetThumb
-              base={`/stories/${storyId}/dialogue/${answerer.id}`}
+              base={dialoguePortraitBase(storyId, answerer)}
+              fallbackBase={dialogueFallbackBase(storyId, answerer)}
               alt={answerer.name}
               className="h-5 w-5 shrink-0"
               shape="circle"
@@ -2742,7 +2859,8 @@ function AskRow({
                     }`}
                   >
                     <AssetThumb
-                      base={`/stories/${storyId}/dialogue/${c.id}`}
+                      base={dialoguePortraitBase(storyId, c)}
+                      fallbackBase={dialogueFallbackBase(storyId, c)}
                       alt={c.name}
                       className="h-5 w-5"
                       shape="circle"

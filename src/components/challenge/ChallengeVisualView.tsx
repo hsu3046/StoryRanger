@@ -65,7 +65,8 @@ export function ChallengeVisualView({
     const y = (px - rh) / 2;
     return (
       <svg width={px} height={px} viewBox={`0 0 ${px} ${px}`} aria-hidden>
-        <rect x={x} y={y} width={rw} height={rh} fill={FILL} stroke={STROKE} strokeWidth={2.5} rx={3} />
+        {/* Sharp right-angle corners — no rx. */}
+        <rect x={x} y={y} width={rw} height={rh} fill={FILL} stroke={STROKE} strokeWidth={2.5} />
         {visual.showDims && (
           <>
             <text x={px / 2} y={y + rh + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
@@ -86,6 +87,10 @@ export function ChallengeVisualView({
     const apexX = px / 2;
     const apexY = pad;
     const halfBase = (px - pad * 2) / 2;
+    const hLabel = String(visual.height);
+    const chipW = hLabel.length * fontSize * 0.72 + 5;
+    const chipH = fontSize + 4;
+    const hy = (apexY + baseY) / 2;
     return (
       <svg width={px} height={px} viewBox={`0 0 ${px} ${px}`} aria-hidden>
         <polygon
@@ -95,36 +100,55 @@ export function ChallengeVisualView({
           strokeWidth={2.5}
           strokeLinejoin="round"
         />
-        {/* height line */}
+        {/* Altitude line (dashed) illustrates "height". */}
         <line x1={apexX} y1={apexY} x2={apexX} y2={baseY} stroke={STROKE} strokeWidth={1} strokeDasharray="3 3" />
-        <text x={apexX} y={baseY + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
+        {/* Base label, below the figure. */}
+        <text x={apexX} y={baseY + fontSize + 3} textAnchor="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
           {visual.base}
         </text>
-        <text x={apexX + 4} y={(apexY + baseY) / 2} dominantBaseline="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
-          {visual.height}
+        {/* Height label centred on the altitude, on a fill chip so it stays
+            legible over the dashed line. */}
+        <rect x={apexX - chipW / 2} y={hy - chipH / 2} width={chipW} height={chipH} fill={FILL} />
+        <text x={apexX} y={hy} textAnchor="middle" dominantBaseline="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
+          {hLabel}
         </text>
       </svg>
     );
   }
 
-  // bar fraction — `den` segments, first `shaded` filled.
+  // bar fraction — `den` segments, first `shaded` filled. Outer border and
+  // internal dividers share one stroke width so they look uniform.
   const barW = size === "lg" ? Math.min(280, 40 * visual.den) : 64;
   const barH = size === "lg" ? 44 : 18;
-  const seg = barW / visual.den;
+  const bw = 2;
+  const seg = (barW - bw) / visual.den;
   return (
     <svg width={barW} height={barH} viewBox={`0 0 ${barW} ${barH}`} aria-hidden>
+      {/* fills only (no per-segment stroke) */}
       {Array.from({ length: visual.den }, (_, i) => (
         <rect
           key={i}
-          x={i * seg}
-          y={0}
+          x={bw / 2 + i * seg}
+          y={bw / 2}
           width={seg}
-          height={barH}
+          height={barH - bw}
           fill={i < visual.shaded ? SHADE : FILL}
-          stroke={STROKE}
-          strokeWidth={2}
         />
       ))}
+      {/* internal dividers */}
+      {Array.from({ length: visual.den - 1 }, (_, i) => (
+        <line
+          key={i}
+          x1={bw / 2 + (i + 1) * seg}
+          y1={bw / 2}
+          x2={bw / 2 + (i + 1) * seg}
+          y2={barH - bw / 2}
+          stroke={STROKE}
+          strokeWidth={bw}
+        />
+      ))}
+      {/* outer border — same width as the dividers */}
+      <rect x={bw / 2} y={bw / 2} width={barW - bw} height={barH - bw} fill="none" stroke={STROKE} strokeWidth={bw} />
     </svg>
   );
 }

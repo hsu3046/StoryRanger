@@ -10,6 +10,7 @@ import {
   type MonstersFileT,
 } from "@/data/schemas";
 import { saveMonstersAction } from "../_actions/saveJson";
+import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { AssetThumb } from "./AssetThumb";
 import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
@@ -48,6 +49,8 @@ export function MonstersEditor({
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // New monsters' ids auto-follow their name until saved / hand-edited.
+  const idLink = useNameLinkedId();
 
   const dirty = useMemo(
     () => JSON.stringify(initial) !== JSON.stringify(monsters),
@@ -83,6 +86,8 @@ export function MonstersEditor({
       }
       ids.add(m.id);
     }
+    // Committed → freeze all ids (renaming must never rewrite a saved id).
+    idLink.reset();
     startTransition(async () => {
       const res = await saveMonstersAction(storyId, payload);
       if (!res.ok) setError(res.error);
@@ -91,8 +96,9 @@ export function MonstersEditor({
   }
 
   function startCreate() {
+    const id = `new-monster-${monsters.length + 1}`;
     const placeholder: MonsterStatsT = {
-      id: `new-monster-${monsters.length + 1}`,
+      id,
       name: "New Monster",
       type: "hostile",
       hits: 2,
@@ -101,6 +107,7 @@ export function MonstersEditor({
     };
     setMonsters((prev) => [...prev, placeholder]);
     setSelectedIdx(monsters.length);
+    idLink.register(id);
     setError(null);
   }
 
@@ -111,6 +118,24 @@ export function MonstersEditor({
     );
   }
 
+  /** Name edit — retargets the id while it's auto-linked (new drafts). */
+  function changeName(value: string) {
+    if (selectedIdx === null) return;
+    const cur = monsters[selectedIdx];
+    const others = monsters
+      .filter((_, i) => i !== selectedIdx)
+      .map((m) => m.id);
+    const newId = idLink.fromName(cur.id, value, others);
+    updateSelected((m) => ({ ...m, name: value, ...(newId ? { id: newId } : {}) }));
+  }
+
+  /** Manual id edit — takes the id off auto-follow. */
+  function changeId(value: string) {
+    if (selectedIdx === null) return;
+    idLink.detach(monsters[selectedIdx].id);
+    updateSelected((m) => ({ ...m, id: value }));
+  }
+
   async function deleteSelected() {
     if (selectedIdx === null) return;
     const m = monsters[selectedIdx];
@@ -119,6 +144,7 @@ export function MonstersEditor({
       message: `Delete monster "${m.name}"?\nThis cannot be undone.`,
     });
     if (!ok) return;
+    idLink.detach(m.id);
     setMonsters((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -162,6 +188,7 @@ export function MonstersEditor({
               setMonsters(initial);
               setSelectedIdx(null);
               setError(null);
+              idLink.reset();
             }}
             disabled={!dirty || isPending}
             className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep disabled:opacity-50"
@@ -275,6 +302,8 @@ export function MonstersEditor({
               itemCatalog={itemCatalog}
               imageOptions={imageOptions}
               onChange={updateSelected}
+              onNameChange={changeName}
+              onIdChange={changeId}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
             />
@@ -292,6 +321,8 @@ function MonsterForm({
   itemCatalog,
   imageOptions,
   onChange,
+  onNameChange,
+  onIdChange,
   onDelete,
   onClose,
 }: {
@@ -301,6 +332,8 @@ function MonsterForm({
   itemCatalog: ItemDefT[];
   imageOptions: { value: string; label: string }[];
   onChange: (mut: (m: MonsterStatsT) => MonsterStatsT) => void;
+  onNameChange: (value: string) => void;
+  onIdChange: (value: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -323,9 +356,7 @@ function MonsterForm({
           {isNew && (
             <input
               value={monster.id}
-              onChange={(e) =>
-                onChange((m) => ({ ...m, id: e.target.value }))
-              }
+              onChange={(e) => onIdChange(e.target.value)}
               placeholder="id"
               className={`${inputCls} max-w-[10rem]`}
             />
@@ -350,7 +381,7 @@ function MonsterForm({
       <Field label="Name">
         <input
           value={monster.name}
-          onChange={(e) => onChange((m) => ({ ...m, name: e.target.value }))}
+          onChange={(e) => onNameChange(e.target.value)}
           className={inputCls}
         />
       </Field>

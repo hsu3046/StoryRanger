@@ -5,14 +5,38 @@
       "name": "Magic Berry",
       "icon": "🫐",
       "description": "A plump, glowing berry that mends small hurts. Restores 1 heart in battle.",
-      "effect": { "kind": "heal", "amount": 1 }
+      "effect": {
+        "kind": "heal",
+        "amount": 1
+      }
     },
     {
       "id": "honey-cake",
       "name": "Honey Cake",
       "icon": "🍯",
       "description": "Aunt Em's honey cake — a big warm bite brings you back. Restores 2 hearts in battle.",
-      "effect": { "kind": "heal", "amount": 2 }
+      "effect": {
+        "kind": "heal",
+        "amount": 2
+      }
+    },
+    {
+      "id": "oil",
+      "name": "Oil",
+      "icon": "🛢️",
+      "description": "It makes rusty metal move smoothly again!",
+      "effect": {
+        "kind": "event"
+      }
+    },
+    {
+      "id": "crown-of-the-mouse-king",
+      "name": "Crown of the Mouse King",
+      "icon": "👑",
+      "description": "Show this to any mouse, and they will help you once — no questions asked.",
+      "effect": {
+        "kind": "event"
+      }
     }
   ]
 }

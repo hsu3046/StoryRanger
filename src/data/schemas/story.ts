@@ -38,8 +38,8 @@ export const BranchChallengeSchema = z.object({
   enabled: z.literal(true),
   category: z.union([z.literal("auto"), ChallengeCategorySchema]).default("auto"),
   /** How many problems the player must solve (in sequence) to pass the gate.
-   *  Default 1. `onFailMode` applies per problem (retry the current one, or
-   *  skip the whole gate). */
+   *  Default 1. A wrong answer always re-rolls a fresh problem — the gate
+   *  retries until solved (there is no skip / fail-out). */
   count: z.number().int().min(1).max(10).default(1),
 });
 
@@ -47,18 +47,22 @@ export const BranchSchema = z.object({
   id: z.string(),
   label: z.string(),
   next: z.string(),
+  /** Companion who JOINS the party when this branch is taken (dedup — a
+   *  no-op if already in the party). */
   addsCompanion: CompanionIdSchema.optional(),
-  bgmOverride: z.string().optional(),
+  /** Companion who LEAVES the party when this branch is taken (parting
+   *  moment). Their mood + HP are kept, so re-joining later restores them. */
+  removesCompanion: CompanionIdSchema.optional(),
   /** Optional visibility gate — the branch only appears as a choice when the
    *  condition is met (e.g. holds an item, has a companion). */
   condition: BranchConditionSchema.optional(),
   /** Optional educational challenge gate. When enabled, an age-appropriate
-   *  math problem must be solved to take the branch. `onFailMode` = retry/skip.
-   *  (The pre-v4 hand-authored `puzzle` field is no longer in the schema; any
-   *  legacy value is dropped by Zod on the next admin save → branch ungated.
-   *  No bundled content uses it.) */
+   *  math problem must be solved to take the branch (a wrong answer always
+   *  retries with a fresh problem — no skip).
+   *  (The pre-v4 hand-authored `puzzle` field + the old `onFailMode` toggle are
+   *  no longer in the schema; any legacy value is dropped by Zod on the next
+   *  admin save. No bundled content depends on them.) */
   challenge: BranchChallengeSchema.optional(),
-  onFailMode: z.enum(["retry", "skip"]).optional(),
   /** Outcome narration shown AFTER the branch is taken and BEFORE
    *  navigating to the next scene. Single tap continues. */
   outcome: z.string().optional(),

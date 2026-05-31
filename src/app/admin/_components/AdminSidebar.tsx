@@ -13,7 +13,7 @@ import {
   Image as ImageIcon,
   Medal,
   Package,
-  PuzzlePiece,
+  Scroll,
   SquaresFour,
   Sword,
   TreeStructure,
@@ -145,7 +145,7 @@ export function AdminSidebar({ stories }: Props) {
         <SidebarLink
           href="/admin/challenges"
           label="Challenges"
-          icon={PuzzlePiece}
+          icon={Scroll}
         />
         <SidebarLink href="/admin/medals" label="Medals" icon={Medal} />
       </div>

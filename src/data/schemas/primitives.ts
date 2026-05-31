@@ -39,18 +39,32 @@ export const SpriteSizeSchema = z.enum([
  *  problems in these categories, age-tiered. `"auto"` (used in authoring) is
  *  NOT a category — it means "pick an age-appropriate one at runtime". */
 export const ChallengeCategorySchema = z.enum([
+  // Early / number sense (younger ages)
+  "counting",
+  "shape",
+  "compare",
+  "odd-one-out",
+  "pattern",
+  // Arithmetic
   "add",
   "sub",
   "multiply",
   "divide",
   "missing",
-  "compare",
-  "counting",
-  "pattern",
-  "geometry",
+  // Singapore-curriculum topics (scale by age tier)
   "fraction",
-  "word",
-  "odd-one-out",
+  "decimal",
+  "percentage",
+  "ratio",
+  "money",
+  "time",
+  "measure", // area / perimeter / volume
+  "geometry", // shape sides / angles
+  "average",
+  "factors", // factors & multiples
+  "algebra",
+  "speed",
+  "word", // word / heuristic problems
 ]);
 
 export const TtsVoiceSchema = z.enum([

@@ -25,8 +25,9 @@ export function buildEncounterQueue(
       if (r.companion && !state.companions.includes(r.companion)) continue;
       if (r.item && !(state.inventory ?? []).includes(r.item)) continue;
     }
-    const count = Math.max(1, e.trigger.count ?? 1);
-    for (let i = 0; i < count; i++) pool.push(e);
+    // One battle per encounter — battles no longer repeat (the old
+    // `trigger.count` multiplier was removed).
+    pool.push(e);
   }
 
   // Fisher-Yates shuffle.

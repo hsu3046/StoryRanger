@@ -121,7 +121,13 @@ export function takeBranch(
     throw new Error(`Scene not found: ${branch.next}`);
   }
 
-  const companions = addCompanion(state.companions, branch.addsCompanion);
+  // A branch may add a companion (join) and/or remove one (parting). Removal
+  // only drops them from the active party — their mood + HP entries are kept so
+  // a later re-join restores the relationship instead of resetting it.
+  const companions = removeCompanion(
+    addCompanion(state.companions, branch.addsCompanion),
+    branch.removesCompanion,
+  );
   const branchHistory = [...state.branchHistory, branch.id];
 
   // v2.0 — initialise mood for newly added companion at 5/10
@@ -189,4 +195,14 @@ function addCompanion(
 ): CompanionId[] {
   if (!add || current.includes(add)) return current;
   return [...current, add];
+}
+
+/** Drop a companion from the active party (no-op if absent). Mood + HP are
+ *  intentionally NOT cleared by the caller, so a later re-join restores them. */
+function removeCompanion(
+  current: CompanionId[],
+  remove?: CompanionId,
+): CompanionId[] {
+  if (!remove || !current.includes(remove)) return current;
+  return current.filter((id) => id !== remove);
 }

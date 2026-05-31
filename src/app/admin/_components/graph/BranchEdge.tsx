@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useRef } from "react";
-import { Lock, PuzzlePiece } from "@phosphor-icons/react";
+import { Lock, Scroll } from "@phosphor-icons/react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -19,13 +19,24 @@ export interface BranchEdgeData {
   parallelIdx?: number;
   /** Total number of parallel edges in that group. */
   parallelCount?: number;
-  /** Encounters triggered on this branch, each with its OWN battle count
-   *  (`trigger.count`, default 1) + deduped monster ids. Rendered one group per
-   *  encounter so the ×N reflects per-encounter battles, not encounter count. */
-  encounters?: { count: number; monsterIds: string[] }[];
+  /** Encounters triggered on this branch — each with its monster icons and a
+   *  per-monster count (×N when a monster repeats). One battle per encounter,
+   *  rendered as its own enemy group. */
+  encounters?: { monsters: { id: string; count: number }[] }[];
   /** Story id — needed to resolve companion portrait paths
    *  (`/stories/<storyId>/dialogue/<companion>.{webp,png,…}`). */
   storyId: string;
+  /** Primary dialogue-portrait base for the joining companion (honors
+   *  `dialogueImage`, else `/dialogue/<id>`). */
+  companionDialogueBase?: string;
+  /** Fallback portrait base for the joining companion (its in-scene sprite,
+   *  honoring `image`) — used when no dedicated dialogue head-shot exists yet
+   *  so the join chip doesn't render a "?". */
+  companionSpriteBase?: string;
+  /** Dialogue-portrait + sprite-fallback bases for the LEAVING companion
+   *  (parting chip), resolved the same way as the joining one. */
+  leavingCompanionDialogueBase?: string;
+  leavingCompanionSpriteBase?: string;
   /** Manual curve control-point offset (from the natural midpoint). When set,
    *  the edge bends through it — dragged via the handle shown when selected. */
   offset?: { x: number; y: number };
@@ -105,10 +116,11 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
     onOffsetChange?.(id, dragOffset(e), true);
   }
 
-  // Companion-join chip: a small pill carrying the companion's portrait
-  // thumbnail + "join" label. Portrait comes from the same dialogue path
-  // the SceneNode uses, kept in sync via AssetThumb's extension fallback.
+  // Companion join/leave chips: a small pill with the companion's portrait +
+  // "join" (accent) or "leave" (ruby) label. Portrait comes from the same
+  // dialogue path the SceneNode uses, kept in sync via the extension fallback.
   const companionId = branch?.addsCompanion ?? null;
+  const leavingCompanionId = branch?.removesCompanion ?? null;
   const storyId = d?.storyId;
   // Battle + puzzle indicators are rendered as bare icons (no background
   // pill) so they read as graphic markers, not labels. Both use the same
@@ -117,6 +129,9 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
   const encounterGroups = d?.encounters ?? [];
   const hasEncounters = encounterGroups.length > 0;
   const hasChallenge = !!branch?.challenge?.enabled;
+  // Number of problems to solve in a row to pass (default 1) — surfaced as a
+  // ×N badge next to the scroll, mirroring the encounter battle count.
+  const challengeCount = branch?.challenge?.count ?? 1;
 
   // Visibility gate marker — only when at least one clause is actually set.
   const condItems = branch?.condition?.hasItems ?? [];
@@ -179,7 +194,11 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
               {branch.label}
             </span>
           )}
-          {(companionId || hasEncounters || hasChallenge || hasCondition) && (
+          {(companionId ||
+            leavingCompanionId ||
+            hasEncounters ||
+            hasChallenge ||
+            hasCondition) && (
             <div className="flex max-w-[260px] flex-wrap items-center justify-center gap-2">
               {hasCondition && (
                 <span
@@ -195,7 +214,11 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                   className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-accent/20 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-accent-deep shadow-soft"
                 >
                   <AssetThumb
-                    base={`/stories/${storyId}/dialogue/${companionId}`}
+                    base={
+                      d?.companionDialogueBase ??
+                      `/stories/${storyId}/dialogue/${companionId}`
+                    }
+                    fallbackBase={d?.companionSpriteBase}
                     alt={companionId}
                     className="h-5 w-5"
                     shape="circle"
@@ -205,57 +228,82 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                   Join
                 </span>
               )}
-              {/* One group per encounter. The ×N is THIS encounter's own
-                  battle count (trigger.count, default 1) — not the number of
-                  encounters — so it only shows when a single encounter repeats. */}
+              {leavingCompanionId && storyId && (
+                <span
+                  title={`${leavingCompanionId} leaves party`}
+                  className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-ruby/15 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-ruby shadow-soft"
+                >
+                  <AssetThumb
+                    base={
+                      d?.leavingCompanionDialogueBase ??
+                      `/stories/${storyId}/dialogue/${leavingCompanionId}`
+                    }
+                    fallbackBase={d?.leavingCompanionSpriteBase}
+                    alt={leavingCompanionId}
+                    className="h-5 w-5"
+                    shape="circle"
+                    fit="cover"
+                    ringWidth={0}
+                  />
+                  Leave
+                </span>
+              )}
+              {/* One group per encounter (one battle each) — its monster icons
+                  stand in for the old ⚔ marker, each with a ×N when the monster
+                  repeats in the battle pool. */}
               {storyId &&
                 encounterGroups.map((enc, gi) => (
                   <span
                     key={gi}
-                    title={
-                      enc.count > 1
-                        ? `Encounter — ${enc.count} battles`
-                        : "Encounter — 1 battle"
-                    }
+                    title="Encounter — 1 battle"
                     className="flex items-center gap-1 whitespace-nowrap text-ruby"
                   >
-                    {/* Monster icons (red border) stand in for the old ⚔
-                        marker. Capped so a big pool doesn't overflow. */}
-                    {enc.monsterIds.slice(0, 4).map((mid) => (
-                      <AssetThumb
-                        key={mid}
-                        base={
-                          MONSTERS[mid]?.image ??
-                          `/stories/${storyId}/monsters/${mid}`
-                        }
-                        alt={mid}
-                        className="h-5 w-5"
-                        shape="circle"
-                        // Full-body monster sprites — `contain` shrinks the
-                        // whole sprite to fit inside the small circle (cover
-                        // cropped/oversized it). Paper fill + a little inner
-                        // padding so the sprite sits on a clean disc and its
-                        // corners aren't clipped by the round mask.
-                        fit="contain"
-                        ringColor="#b03333"
-                        ringWidth={1.0}
-                        bgColor="#fdf6e3"
-                        pad={3}
-                      />
-                    ))}
-                    {enc.count > 1 && (
-                      <span className="text-[10px] font-semibold">
-                        ×{enc.count}
+                    {/* Capped so a big pool doesn't overflow. */}
+                    {enc.monsters.slice(0, 4).map(({ id: mid, count }) => (
+                      <span key={mid} className="flex items-center gap-0.5">
+                        <AssetThumb
+                          base={
+                            MONSTERS[mid]?.image ??
+                            `/stories/${storyId}/monsters/${mid}`
+                          }
+                          alt={mid}
+                          className="h-5 w-5"
+                          shape="circle"
+                          // Full-body monster sprites — `contain` shrinks the
+                          // whole sprite to fit inside the small circle (cover
+                          // cropped/oversized it). Paper fill + a little inner
+                          // padding so the sprite sits on a clean disc and its
+                          // corners aren't clipped by the round mask.
+                          fit="contain"
+                          ringColor="#b03333"
+                          ringWidth={1.0}
+                          bgColor="#fdf6e3"
+                          pad={3}
+                        />
+                        {count > 1 && (
+                          <span className="text-[10px] font-semibold">
+                            ×{count}
+                          </span>
+                        )}
                       </span>
-                    )}
+                    ))}
                   </span>
                 ))}
               {hasChallenge && (
                 <span
-                  title="Educational challenge must be solved to take this branch"
-                  className="flex items-center text-accent-deep"
+                  title={
+                    challengeCount > 1
+                      ? `Educational challenge — ${challengeCount} problems to pass`
+                      : "Educational challenge must be solved to take this branch"
+                  }
+                  className="flex items-center gap-1 text-accent-deep"
                 >
-                  <PuzzlePiece size={20} weight="duotone" />
+                  <Scroll size={20} weight="duotone" />
+                  {challengeCount > 1 && (
+                    <span className="text-[10px] font-semibold">
+                      ×{challengeCount}
+                    </span>
+                  )}
                 </span>
               )}
             </div>
