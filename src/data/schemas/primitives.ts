@@ -67,11 +67,6 @@ export const ChallengeCategorySchema = z.enum([
   "word", // word / heuristic problems
 ]);
 
-export const TtsVoiceSchema = z.enum([
-  "alloy",
-  "echo",
-  "fable",
-  "onyx",
-  "nova",
-  "shimmer",
-]);
+/** ElevenLabs voice id (e.g. "21m00Tcm4TlvDq8ikWAM"). Free-form because the
+ *  Voice Library has thousands; authors pick one per character in the admin. */
+export const TtsVoiceSchema = z.string().min(1);

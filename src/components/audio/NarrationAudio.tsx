@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { buildCacheKey, getCachedAudio, setCachedAudio } from "@/lib/tts-cache";
+import { assetUrl, ASSET_BASE_URL } from "@/lib/asset-paths";
+import { ttsObjectKey } from "@/lib/tts-config";
 import type { Character } from "@/types/story";
 
 interface Props {
@@ -66,24 +67,37 @@ export function NarrationAudio({ text, character, volume, playKey }: Props) {
       }
 
       try {
-        const key = await buildCacheKey(text, character.voice, character.voiceSpeed);
-        let blob = await getCachedAudio(key);
-        console.log("[narration] cache lookup", { hit: !!blob, key: key.slice(0, 12) });
+        const key = await ttsObjectKey(
+          text,
+          character.voice,
+          character.voiceSpeed,
+        );
+        let blob: Blob | null = null;
 
+        // 1) Cache hit — play straight from R2/CDN (egress-free, no server).
+        if (ASSET_BASE_URL) {
+          try {
+            const hit = await fetch(assetUrl(`/${key}`));
+            if (hit.ok) blob = await hit.blob();
+          } catch {
+            /* network hiccup → fall through to generate */
+          }
+        }
+
+        // 2) Miss — generate via ElevenLabs; the server also writes it to R2,
+        // so the next request (any user) is a cache hit.
         if (!blob) {
-          console.log("[narration] fetching /api/tts");
           const res = await fetch("/api/tts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text,
-              voice: character.voice,
+              voiceId: character.voice,
               voiceSpeed: character.voiceSpeed,
             }),
           });
-          console.log("[narration] fetch response", { status: res.status, ok: res.ok });
           if (res.status === 503) {
-            console.warn("[narration] 503 — OPENAI_API_KEY not set on server");
+            console.warn("[narration] 503 — ELEVENLABS_API_KEY not set on server");
             return;
           }
           if (!res.ok) {
@@ -92,14 +106,9 @@ export function NarrationAudio({ text, character, volume, playKey }: Props) {
             return;
           }
           blob = await res.blob();
-          console.log("[narration] blob received", { size: blob.size, type: blob.type });
-          await setCachedAudio(key, blob);
         }
 
-        if (cancelled) {
-          console.log("[narration] cancelled before play");
-          return;
-        }
+        if (cancelled) return;
 
         const url = URL.createObjectURL(blob);
         urlRef.current = url;

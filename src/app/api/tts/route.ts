@@ -1,49 +1,56 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getOpenAI, hasOpenAIKey, TTS_MODEL } from "@/lib/openai-client";
+import { hasElevenLabsKey, synthesizeSpeech } from "@/lib/elevenlabs";
+import { ttsObjectKey } from "@/lib/tts-config";
+import { hasR2, r2Put } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   text: z.string().min(1).max(2000),
-  voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]),
+  voiceId: z.string().min(1),
   voiceSpeed: z.number().min(0.25).max(4.0).default(1.0),
 });
 
+/**
+ * On-demand TTS. The client tries R2 first (cache hit = served straight from
+ * the CDN); only a MISS reaches here. We synthesize via ElevenLabs, persist to
+ * R2 at the deterministic key (so the next request — for ANY user — is a cache
+ * hit), and return the audio so this caller plays immediately.
+ *
+ * The R2 key is derived server-side from the same inputs the client hashes, so
+ * it can't be spoofed into writing arbitrary objects.
+ */
 export async function POST(req: Request) {
-  let body;
+  let body: z.infer<typeof RequestSchema>;
   try {
     body = RequestSchema.parse(await req.json());
   } catch {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  if (!hasOpenAIKey()) {
-    console.warn("[tts] OPENAI_API_KEY not set — returning 503");
+  if (!hasElevenLabsKey()) {
+    console.warn("[tts] ELEVENLABS_API_KEY not set — returning 503");
     return NextResponse.json({ error: "no_api_key" }, { status: 503 });
   }
 
-  console.log("[tts] request", {
-    model: TTS_MODEL,
-    voice: body.voice,
-    speed: body.voiceSpeed,
-    textLen: body.text.length,
-  });
-
   try {
-    const client = getOpenAI();
-    const audio = await client.audio.speech.create({
-      model: TTS_MODEL,
-      voice: body.voice,
-      input: body.text,
-      speed: body.voiceSpeed,
-      response_format: "mp3",
-    });
+    const buffer = await synthesizeSpeech(
+      body.text,
+      body.voiceId,
+      body.voiceSpeed,
+    );
 
-    const buffer = Buffer.from(await audio.arrayBuffer());
-    console.log("[tts] ✓", { bytes: buffer.length });
-    return new NextResponse(buffer, {
+    // Populate the R2 cache (best-effort — never fail the request over it).
+    if (hasR2()) {
+      const key = await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed);
+      r2Put(key, buffer, "audio/mpeg").catch((e) =>
+        console.warn("[tts] R2 cache write failed:", String(e)),
+      );
+    }
+
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
@@ -51,10 +58,12 @@ export async function POST(req: Request) {
       },
     });
   } catch (err) {
-    console.error("[tts] OpenAI error", err);
-    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[tts] ElevenLabs error", err);
     return NextResponse.json(
-      { error: "tts_failed", detail: msg },
+      {
+        error: "tts_failed",
+        detail: err instanceof Error ? err.message : String(err),
+      },
       { status: 502 },
     );
   }

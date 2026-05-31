@@ -168,9 +168,9 @@ export interface Character {
    *  default/fallback), no dialogue persona, sprite at `characters/hero.*`.
    *  At most one per story. */
   isHero?: boolean;
-  /** OpenAI tts-1 voice id. */
-  voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer";
-  /** TTS playback speed (0.25–4.0). Mapped to OpenAI's `speed` param. */
+  /** ElevenLabs voice id (e.g. "21m00Tcm4TlvDq8ikWAM"). */
+  voice: string;
+  /** TTS playback speed (0.25–4.0). Mapped to ElevenLabs voice_settings.speed. */
   voiceSpeed: number;
   /** Hex color for the speech box label. */
   color: string;

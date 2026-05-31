@@ -21,16 +21,9 @@ import { useConfirm } from "./ConfirmDialog";
 import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
 
-const VOICES = [
-  "alloy",
-  "echo",
-  "fable",
-  "onyx",
-  "nova",
-  "shimmer",
-] as const;
-
-type Voice = (typeof VOICES)[number];
+/** Placeholder ElevenLabs voice id for new characters — replace with a real
+ *  one from the Voice Library (https://elevenlabs.io/app/voice-library). */
+const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel (premade)
 
 function characterImageBase(
   storyId: string,
@@ -144,7 +137,7 @@ export function CharactersEditor({
     const placeholder: CharacterT = {
       id,
       name: id.replace(/[-_]/g, " "),
-      voice: "alloy",
+      voice: DEFAULT_VOICE_ID,
       voiceSpeed: 1.0,
       color: "#777777",
       size: "medium",
@@ -548,19 +541,30 @@ function CharacterForm({
         onPick={(v) => onChange((c) => ({ ...c, battleImage: v }))}
       />
 
-      <Field label="Voice">
-        <StyledSelect
+      <Field label="Voice (ElevenLabs voice id)">
+        <input
+          type="text"
           value={character.voice}
+          placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"
+          spellCheck={false}
           onChange={(e) =>
-            onChange((c) => ({ ...c, voice: e.target.value as Voice }))
+            onChange((c) => ({ ...c, voice: e.target.value.trim() }))
           }
-        >
-          {VOICES.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </StyledSelect>
+          className={inputCls}
+        />
+        <p className="mt-1 text-xs text-ink-soft/70">
+          Copy from the{" "}
+          <a
+            href="https://elevenlabs.io/app/voice-library"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-accent"
+          >
+            Voice Library
+          </a>{" "}
+          (add the voice to your workspace, then use its id). Avoid child-like
+          voices for kid characters — they&apos;re disallowed in the library.
+        </p>
       </Field>
 
       <Field label="Voice speed (0.25 – 4.0)">
