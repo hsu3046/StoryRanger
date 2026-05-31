@@ -1,5 +1,6 @@
 "use client";
 
+import { Howl } from "howler";
 import { useEffect, useRef, useState } from "react";
 
 import { assetUrl, ASSET_BASE_URL } from "@/lib/asset-paths";
@@ -15,27 +16,41 @@ interface Props {
   playKey: string;
 }
 
+const clamp = (v: number) => Math.max(0, Math.min(1, v));
+
 /**
- * Loads (cache → fetch → cache) and plays the narration audio.
+ * Resolves a narration line (R2 cache → ElevenLabs) and plays it.
  *
- * - Re-runs whenever text/voice/speed change OR voice is muted/unmuted
- *   (the 0-volume boundary). In-range volume changes are applied live in a
- *   separate effect so dragging the slider never restarts the line.
- * - iOS Safari blocks autoplay before any user gesture; we attempt anyway
- *   and silently swallow the resulting AbortError. After the first tap,
- *   subsequent narrations autoplay normally.
+ * Playback goes through **Howler (Web Audio)**, NOT an HTML5 `<audio>` element:
+ * a plain `<audio>` hijacks the audio session and silences the Web-Audio BGM
+ * (notably on iOS). Routing the voice through the same Howler context lets it
+ * MIX with the music instead of interrupting it. We feed Howler a same-origin
+ * blob URL, so decoding never needs R2 CORS.
+ *
+ * - The load effect re-runs on text/voice/speed change or the mute boundary
+ *   (0 volume). In-range volume changes apply live without reloading the line.
  */
 export function NarrationAudio({ text, character, volume, playKey }: Props) {
   const [error, setError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const soundRef = useRef<Howl | null>(null);
   const urlRef = useRef<string | null>(null);
   const enabled = volume > 0;
 
+  function dispose() {
+    if (soundRef.current) {
+      soundRef.current.stop();
+      soundRef.current.unload();
+      soundRef.current = null;
+    }
+    if (urlRef.current) {
+      URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    }
+  }
+
   // Apply in-range volume changes to the playing line without reloading it.
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = Math.max(0, Math.min(1, volume));
-    }
+    soundRef.current?.volume(clamp(volume));
   }, [volume]);
 
   useEffect(() => {
@@ -43,28 +58,8 @@ export function NarrationAudio({ text, character, volume, playKey }: Props) {
 
     async function load() {
       setError(null);
-      console.log("[narration] mount", {
-        textPreview: text.slice(0, 40),
-        voice: character.voice,
-        voiceSpeed: character.voiceSpeed,
-        enabled,
-        playKey,
-      });
-
-      // Stop & dispose any previous audio.
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      if (urlRef.current) {
-        URL.revokeObjectURL(urlRef.current);
-        urlRef.current = null;
-      }
-
-      if (!enabled) {
-        console.log("[narration] skip — voice muted");
-        return;
-      }
+      dispose();
+      if (!enabled) return;
 
       try {
         const key = await ttsObjectKey(
@@ -74,13 +69,13 @@ export function NarrationAudio({ text, character, volume, playKey }: Props) {
         );
         let blob: Blob | null = null;
 
-        // 1) Cache hit — play straight from R2/CDN (egress-free, no server).
+        // 1) Cache hit — pull the bytes straight from R2/CDN (egress-free).
         if (ASSET_BASE_URL) {
           try {
             const hit = await fetch(assetUrl(`/${key}`));
             if (hit.ok) blob = await hit.blob();
           } catch {
-            /* network hiccup → fall through to generate */
+            /* network/CORS hiccup → fall through to generate */
           }
         }
 
@@ -112,18 +107,18 @@ export function NarrationAudio({ text, character, volume, playKey }: Props) {
 
         const url = URL.createObjectURL(blob);
         urlRef.current = url;
-        const el = new Audio(url);
-        // Voice volume from the Settings slider; BGM is attenuated separately
-        // in audio-engine.ts to keep the voice clearly forward.
-        el.volume = Math.max(0, Math.min(1, volume));
-        audioRef.current = el;
-
-        console.log("[narration] play() attempt");
-        el.play()
-          .then(() => console.log("[narration] play() ✓"))
-          .catch((err) => {
-            console.warn("[narration] play() rejected:", err?.name, err?.message);
-          });
+        const sound = new Howl({
+          src: [url],
+          format: ["mp3"], // blob URL has no extension → tell Howler the codec
+          html5: false, // Web Audio → mixes with the BGM instead of stopping it
+          volume: clamp(volume),
+          onloaderror: (_id, e) =>
+            console.warn("[narration] load error", String(e)),
+          onplayerror: (_id, e) =>
+            console.warn("[narration] play error", String(e)),
+        });
+        soundRef.current = sound;
+        sound.play();
       } catch (err) {
         if (!cancelled) {
           console.warn("[narration] threw:", err);
@@ -136,21 +131,12 @@ export function NarrationAudio({ text, character, volume, playKey }: Props) {
 
     return () => {
       cancelled = true;
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      if (urlRef.current) {
-        URL.revokeObjectURL(urlRef.current);
-        urlRef.current = null;
-      }
+      dispose();
     };
     // `volume` intentionally excluded — only the 0-boundary (`enabled`) gates
     // load/play; in-range changes are handled by the live-volume effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, character.voice, character.voiceSpeed, enabled, playKey]);
 
-  // Render nothing — audio plays via Web Audio element only.
-  // (We could surface an error indicator if needed, but it's noise for kids.)
   return error ? null : null;
 }
