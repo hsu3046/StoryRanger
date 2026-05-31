@@ -60,6 +60,9 @@ interface Props {
   /** Fires on every BattleState change so the parent can persist it. */
   onBattleStateChange?: (state: BattleState) => void;
   onComplete: (result: EncounterResult) => void;
+  /** "Try again" after a defeat — restart this battle fresh (parent restores
+   *  the party + re-mounts via a key bump). */
+  onRetry?: () => void;
   /** Open the parent's Settings modal — surfaced inside battle. */
   onOpenSettings?: () => void;
   /** Target age (story midpoint) — forwarded to BattleScreen for challenge
@@ -97,6 +100,7 @@ export function EncounterFlow({
   initialBattleState,
   onBattleStateChange,
   onComplete,
+  onRetry,
   onOpenSettings,
   age,
 }: Props) {
@@ -165,6 +169,7 @@ export function EncounterFlow({
           companions,
           companionMoods,
         }}
+        onRetry={onRetry}
         onComplete={(res) => {
           onComplete({
             encounterId: encounter.id,
@@ -190,7 +195,14 @@ export function EncounterFlow({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      // Leaving the encounter: the battle blooms outward + fades, letting the
+      // story scene (which zoom-reveals underneath) take over — a softer,
+      // more deliberate hand-off than a plain cut.
+      exit={{
+        opacity: 0,
+        scale: 1.06,
+        transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+      }}
       transition={{ duration: 0.45, ease: "easeInOut" }}
       // Intro beat = let the scene show through, dimmed + blurred. Alert/battle
       // draw their own full backgrounds, so switch to a solid base then.

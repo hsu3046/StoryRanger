@@ -254,6 +254,23 @@ export function StoryPlayer({
       ? state.interaction.queue.length
       : 0;
 
+  // Bumped when an encounter ends, so the scene background re-mounts and
+  // zoom-reveals — the world "returns" after a battle rather than just popping
+  // back. Normal scene-to-scene changes leave this untouched (they keep the
+  // painterly cross-fade instead).
+  const [sceneRevealKey, setSceneRevealKey] = useState(0);
+  // Bumped by "Try again" after a defeat — part of the EncounterFlow key so the
+  // battle re-mounts fresh.
+  const [encounterRetryNonce, setEncounterRetryNonce] = useState(0);
+  const prevEncounterActiveRef = useRef(false);
+  useEffect(() => {
+    const active = !!pendingEncounter;
+    if (prevEncounterActiveRef.current && !active) {
+      setSceneRevealKey((k) => k + 1);
+    }
+    prevEncounterActiveRef.current = active;
+  }, [pendingEncounter]);
+
   // Deterministic "adventures so far" line for ambient dialogue awareness.
   // No LLM — derived from already-tracked structured state.
   const journeyNote = useMemo(() => {
@@ -724,14 +741,37 @@ export function StoryPlayer({
     });
   }
 
+  /** "Try again" after a defeat — restart the lost battle from the top with the
+   *  party fully restored, keeping the player at the same point in the story.
+   *  Bumping the nonce re-mounts EncounterFlow; clearing `battle` re-inits it. */
+  function retryEncounter() {
+    setState((prev) => {
+      if (prev.interaction?.kind !== "encounter") return prev;
+      return {
+        ...prev,
+        partyHp: { ...(prev.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }) },
+        fallenAttackers: [],
+        interaction: { ...prev.interaction, battle: undefined },
+      };
+    });
+    setEncounterRetryNonce((n) => n + 1);
+  }
+
   function applyEncounterResult(res: EncounterResult) {
-    // Whole-party defeat → game over. The BattleScreen's TerminalPanel
-    // already showed the defeat message; on Continue we wipe the save
-    // for this slot and send the player back to the title screen so
-    // they can start over. Demo mode follows the same flow (the demo
-    // bar's Reset already gives a "Start over" path).
+    // Whole-party defeat → the player picked "Leave the story" on the defeat
+    // panel ("Try again" is handled by retryEncounter, never reaching here).
+    // Keep their progress: drop the lost battle overlay, restore the party so
+    // a later Continue resumes cleanly, save, and return to the title screen.
     if (res.outcome === "defeat") {
-      clearState(story.id, slot);
+      const next: PlayState = {
+        ...state,
+        interaction: undefined,
+        partyHp: { ...(state.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }) },
+        fallenAttackers: [],
+        updatedAt: new Date().toISOString(),
+      };
+      setState(next);
+      if (!previewMode) saveState(next, slot);
       router.push("/");
       return;
     }
@@ -956,11 +996,14 @@ export function StoryPlayer({
           the same time so the swap is a true cross-fade. Long duration for
           a slow, painterly transition between storybook pages. */}
       <motion.div
+        // Re-mounts (zoom-reveal) on the home "dive" AND whenever a battle
+        // ends (`sceneRevealKey` bump) — the world settles back in. Normal
+        // scene swaps don't change the key, so they keep the painterly
+        // cross-fade from the inner AnimatePresence instead.
+        key={`reveal-${sceneRevealKey}`}
         className="absolute inset-0"
-        // On entry from the home "dive", the world emerges: the scene starts
-        // slightly zoomed-in and settles back. One-shot on mount; skipped in
-        // admin preview. Subsequent scene swaps still cross-fade (inner
-        // AnimatePresence) without re-zooming.
+        // The scene starts slightly zoomed-in and settles back. Skipped in
+        // admin preview.
         initial={previewMode ? false : { scale: 1.12 }}
         animate={{ scale: 1 }}
         transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
@@ -1046,10 +1089,14 @@ export function StoryPlayer({
             {!pendingEncounter && !dialogueActive && (
               <motion.div
                 key={`narr-${narrationKey}`}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.3 }}
+                // Fast exit so the OLD narration clears almost instantly on a
+                // choice tap (mode="wait" otherwise holds it for the full
+                // duration, reading as "the previous text lingers then
+                // vanishes"). The new scene's text then types in cleanly.
+                exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                transition={{ duration: 0.25 }}
                 // No fixed height cap — the narration block grows up
                 // from the bottom (parent is `absolute bottom-0 flex
                 // flex-col`), so longer text simply raises its top Y while
@@ -1285,7 +1332,7 @@ export function StoryPlayer({
       <AnimatePresence>
         {pendingEncounter && (
           <EncounterFlow
-            key={`${pendingEncounter.id}#${encounterQueueLen}`}
+            key={`${pendingEncounter.id}#${encounterQueueLen}#${encounterRetryNonce}`}
             encounter={pendingEncounter}
             storyId={story.id}
             age={ageFromRange(story.ageRange)}
@@ -1313,6 +1360,7 @@ export function StoryPlayer({
             initialBattleState={persistedBattleState}
             onBattleStateChange={handleBattleStateChange}
             onComplete={applyEncounterResult}
+            onRetry={retryEncounter}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
@@ -1393,7 +1441,7 @@ function AskChip({
 }) {
   return (
     <button type="button" onClick={onSelect} className={choiceButtonClass}>
-      <span className={iconBase ? "pr-[75px]" : undefined}>{label}</span>
+      <span>{label}</span>
       {iconBase && (
         <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />

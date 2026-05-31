@@ -50,7 +50,7 @@ export function MedalShelfModal({
             transition={{ type: "spring", stiffness: 240, damping: 22 }}
             className="pointer-events-auto fixed left-1/2 top-1/2 z-[100] flex max-h-[88dvh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-card-lg bg-paper/95 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur"
           >
-            <header className="flex items-center justify-between gap-3">
+            <header className="relative flex items-center justify-center">
               <p className="font-handwritten text-xl text-accent-deep">
                 Your Collections
               </p>
@@ -58,7 +58,7 @@ export function MedalShelfModal({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex h-9 w-9 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft ring-1 ring-ink-soft/10 transition-colors hover:bg-paper-deep hover:text-ink active:scale-90"
+                className="absolute right-0 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-pill bg-paper-deep/60 text-ink-soft ring-1 ring-ink-soft/10 transition-colors hover:bg-paper-deep hover:text-ink active:scale-90"
               >
                 <X size={16} weight="bold" />
               </button>
@@ -73,8 +73,7 @@ export function MedalShelfModal({
                 </h3>
                 {itemCounts.length === 0 ? (
                   <p className="rounded-card bg-paper-deep/40 px-4 py-5 text-center text-sm text-ink-soft/70">
-                    No items yet — win battles to find healing treats. Use
-                    them in battle!
+                    No items yet
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">

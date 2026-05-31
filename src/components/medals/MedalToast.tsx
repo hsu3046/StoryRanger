@@ -9,7 +9,7 @@ interface Props {
   onDismiss: () => void;
 }
 
-const AUTO_DISMISS_MS = 3800;
+const AUTO_DISMISS_MS = 2000;
 
 export function MedalToast({ medal, onDismiss }: Props) {
   // Auto-dismiss so the toast never blocks the next encounter

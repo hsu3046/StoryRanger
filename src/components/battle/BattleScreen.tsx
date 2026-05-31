@@ -66,6 +66,9 @@ interface Props {
     /** Items spent during the battle — removed from PlayState.inventory. */
     itemsConsumed: string[];
   }) => void;
+  /** "Try again" on the defeat panel — restart this battle fresh. When absent,
+   *  the defeat panel falls back to a single "Leave the story" button. */
+  onRetry?: () => void;
   /** Open the global Settings modal from inside the battle. */
   onOpenSettings?: () => void;
   /** Player inventory (item ids, may repeat). Drives the in-battle item
@@ -94,6 +97,7 @@ export function BattleScreen({
   initialState,
   onStateChange,
   onComplete,
+  onRetry,
   onOpenSettings,
   inventory = [],
   victoryItems,
@@ -308,22 +312,40 @@ export function BattleScreen({
   ]);
 
   // Per-attack SFX: an attack landing (hit/crit) vs. missing (target dodges).
-  const lastLog = state.log[state.log.length - 1];
+  // Scan the log lines ADDED this update from the end (not just the very last
+  // entry): the killing blow appends a "victory" line in the same turn, so the
+  // hit/crit that ended the battle is no longer the final entry — without this
+  // the final attack would be silent and only the victory stinger would play.
+  const prevLogLen = useRef<number | null>(null);
   useEffect(() => {
-    if (!lastLog) return;
-    if (lastLog.tone === "hit" || lastLog.tone === "crit") {
-      getAudio().playSfx(SFX.ATTACK);
-    } else if (lastLog.tone === "miss") {
-      getAudio().playSfx(SFX.DODGE);
+    if (prevLogLen.current === null) {
+      prevLogLen.current = state.log.length; // don't replay pre-existing log
+      return;
     }
-  }, [lastLog?.text, lastLog?.tone, lastLog]);
+    const fresh = state.log.slice(prevLogLen.current);
+    prevLogLen.current = state.log.length;
+    for (let i = fresh.length - 1; i >= 0; i--) {
+      const t = fresh[i].tone;
+      if (t === "hit" || t === "crit") {
+        getAudio().playSfx(SFX.ATTACK);
+        break;
+      }
+      if (t === "miss") {
+        getAudio().playSfx(SFX.DODGE);
+        break;
+      }
+    }
+  }, [state.log]);
 
   // Battle-end stinger — fire once when the battle reaches a terminal phase.
   // Driven by `phase` (not the log tone): the "defeat" tone also marks a single
-  // party member falling, whereas phase only flips to "defeat" on a full wipe.
+  // party member falling, whereas phase only flips on a full win/wipe. Delayed
+  // so the killing-blow attack cue (above) is heard first, then the stinger.
   useEffect(() => {
-    if (state.phase === "victory") getAudio().playSfx(SFX.VICTORY);
-    else if (state.phase === "defeat") getAudio().playSfx(SFX.DEFEAT);
+    if (state.phase !== "victory" && state.phase !== "defeat") return;
+    const key = state.phase === "victory" ? SFX.VICTORY : SFX.DEFEAT;
+    const t = setTimeout(() => getAudio().playSfx(key), 450);
+    return () => clearTimeout(t);
   }, [state.phase]);
 
   const heroPartyIds: (SpeakerId | CompanionId)[] = useMemo(
@@ -544,6 +566,7 @@ export function BattleScreen({
             }
             victoryItems={victoryItems}
             rewards={state.rewards}
+            onRetry={onRetry}
             onContinue={() =>
               onComplete({
                 outcome:
@@ -905,11 +928,15 @@ function TerminalPanel({
   victoryItems,
   rewards,
   onContinue,
+  onRetry,
 }: {
   outcome: "victory" | "defeat" | "escaped";
   victoryItems?: string[];
   rewards: string[];
   onContinue: () => void;
+  /** Defeat only — "Try again" restarts the battle. When absent, only the
+   *  single "Leave the story" path is offered. */
+  onRetry?: () => void;
 }) {
   // Loot = monster drops (`rewards`) + encounter-level drops on victory.
   const loot =
@@ -953,13 +980,33 @@ function TerminalPanel({
           ))}
         </div>
       )}
-      <button
-        type="button"
-        onClick={onContinue}
-        className="mt-1 inline-flex min-h-14 min-w-56 items-center justify-center rounded-pill bg-accent-deep px-10 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-64"
-      >
-        Continue
-      </button>
+      {outcome === "defeat" && onRetry ? (
+        // Defeat → let the player retry the battle or step out (progress kept).
+        <div className="mt-1 flex w-full flex-col items-stretch gap-2.5 sm:flex-row sm:justify-center">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex min-h-14 items-center justify-center rounded-pill bg-accent-deep px-8 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-48"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="inline-flex min-h-14 items-center justify-center rounded-pill bg-paper-deep/70 px-8 text-base font-medium text-ink ring-1 ring-ink-soft/15 transition-all hover:bg-paper-deep active:scale-[0.98] sm:min-w-48"
+          >
+            Leave the story
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="mt-1 inline-flex min-h-14 min-w-56 items-center justify-center rounded-pill bg-accent-deep px-10 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-64"
+        >
+          Continue
+        </button>
+      )}
     </div>
   );
 }
