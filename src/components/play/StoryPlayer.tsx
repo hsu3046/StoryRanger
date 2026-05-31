@@ -165,12 +165,6 @@ export function StoryPlayer({
   // Items received on the most recent scene entry — shown as a toast (below
   // the medal toast) once the destination scene is reached.
   const [itemToast, setItemToast] = useState<string[] | null>(null);
-  // Scene reward staged at branch-pick, displayed only on arrival at the
-  // destination scene (after any outcome page / encounters).
-  const [pendingSceneReward, setPendingSceneReward] = useState<{
-    sceneId: string;
-    items: string[];
-  } | null>(null);
   const [hydrated, setHydrated] = useState(false);
   // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
   // narration TTS, music is BGM, effects are SFX. Seeded from the historic mix
@@ -639,10 +633,14 @@ export function StoryPlayer({
       setMedalQueue((q) => [...q, ...result.earnedMedals]);
       audio.playSfx(SFX.MEDAL);
     }
+    // Stage the scene reward's arrival toast IN PlayState (persisted) so a
+    // refresh mid-overlay still surfaces it on arrival. The items are already
+    // applied to `inventory` by takeBranch; this is only the pending toast.
     const sr = result.sceneReward;
-    if (sr && (sr.items?.length ?? 0) > 0) {
-      setPendingSceneReward({ sceneId: branch.next, items: sr.items ?? [] });
-    }
+    const pendingRewardToast =
+      sr && (sr.items?.length ?? 0) > 0
+        ? { sceneId: branch.next, items: sr.items ?? [] }
+        : undefined;
 
     // Outcome path: pause on the outgoing scene art with the branch outcome
     // text only. Rewards are NOT shown here — they surface as toasts on the
@@ -655,6 +653,7 @@ export function StoryPlayer({
           sourceSceneId: prevSceneId,
           branchId: branch.id,
         },
+        pendingRewardToast,
         updatedAt: new Date().toISOString(),
       });
       return;
@@ -668,6 +667,7 @@ export function StoryPlayer({
         queue.length > 0
           ? { kind: "encounter", queue: queue.map((e) => e.id) }
           : undefined,
+      pendingRewardToast,
       updatedAt: new Date().toISOString(),
     });
   }
@@ -853,7 +853,6 @@ export function StoryPlayer({
     setState(newPlayState(story));
     setMedalQueue([]);
     setItemToast(null);
-    setPendingSceneReward(null);
   }
 
   // Demo "skip battles" auto-resolve. When a battle would mount and
@@ -938,16 +937,22 @@ export function StoryPlayer({
 
   // Scene reward arrival — show the item toast only once the player has
   // actually LANDED on the rewarded scene (outcome bridge dismissed, no
-  // encounter overlay). Clearing `pendingSceneReward` stops it re-firing.
-  // (Medals are earned from metrics, not scene rewards.)
+  // encounter overlay). Reads from the PERSISTED `pendingRewardToast`, so a
+  // refresh mid-overlay still surfaces it here; clearing it (in state) stops it
+  // re-firing. (Medals are earned from metrics, not scene rewards.)
   useEffect(() => {
-    const r = pendingSceneReward;
+    const r = state.pendingRewardToast;
     if (!r || r.sceneId !== state.currentSceneId) return;
     if (showingOutcome || pendingEncounter) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; cleared below
     if (r.items.length > 0) setItemToast(r.items);
-    setPendingSceneReward(null);
-  }, [pendingSceneReward, state.currentSceneId, showingOutcome, pendingEncounter]);
+    setState((s) => ({ ...s, pendingRewardToast: undefined }));
+  }, [
+    state.pendingRewardToast,
+    state.currentSceneId,
+    showingOutcome,
+    pendingEncounter,
+  ]);
 
   const outcomePrevScene = pendingOutcome
     ? story.scenes[pendingOutcome.sourceSceneId]
