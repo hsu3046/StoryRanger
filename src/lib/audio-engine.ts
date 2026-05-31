@@ -68,6 +68,11 @@ class AudioEngine {
   private currentBgm: Howl | null = null;
   private currentBgmKey: string | null = null;
   private muted = false;
+  /** Per-channel volumes (0–1), seeded from the historic mix defaults. The
+   *  Settings sliders adjust these live (narration/voice is a separate <audio>
+   *  element handled in NarrationAudio, not routed through Howler). */
+  private bgmVolume = BGM_VOLUME;
+  private sfxVolume = SFX_VOLUME;
   /** Howl → scheduled stop() timeout. Cleared on cancel. */
   private pendingStops = new Map<Howl, ReturnType<typeof setTimeout>>();
 
@@ -89,6 +94,33 @@ class AudioEngine {
     return this.muted;
   }
 
+  /**
+   * Set the background-music volume (0–1), applied live to the current track.
+   *
+   * Uses a short `fade()` rather than `volume()`. On a continuously-playing
+   * Web Audio track, Howler's `volume()` writes the gain with
+   * `setValueAtTime`, which gets masked by the fade-in's `linearRampToValueAtTime`
+   * still sitting on the AudioParam's automation timeline — so the audible gain
+   * never moves (verified: gain stayed 0.18 after volume(0)). `fade()` issues a
+   * new linearRamp, which DOES move the gain (it's exactly what the fade-in used).
+   */
+  setBgmVolume(v: number): void {
+    this.bgmVolume = Math.max(0, Math.min(1, v));
+    const cb = this.currentBgm;
+    if (!cb) return;
+    if (cb.playing()) {
+      cb.fade(cb.volume(), this.bgmVolume, 100);
+    } else {
+      cb.volume(this.bgmVolume);
+    }
+  }
+
+  /** Set the sound-effects volume (0–1), applied to every cached effect. */
+  setSfxVolume(v: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    for (const h of this.sfxCache.values()) h.volume(this.sfxVolume);
+  }
+
   playBgm(key: string, storyId?: string): void {
     const cacheKey = storyId ? `${storyId}/${key}` : key;
     const next = this.getOrCreateBgm(cacheKey, key, storyId);
@@ -104,7 +136,7 @@ class AudioEngine {
     // playing. Avoids restarting from 0 on every same-bgm scene change.
     if (this.currentBgm === next) {
       if (!next.playing()) {
-        next.volume(BGM_VOLUME);
+        next.volume(this.bgmVolume);
         next.play();
       }
       this.currentBgmKey = cacheKey;
@@ -126,7 +158,7 @@ class AudioEngine {
       next.volume(0);
       next.play();
     }
-    next.fade(startVol, BGM_VOLUME, CROSSFADE_MS);
+    next.fade(startVol, this.bgmVolume, CROSSFADE_MS);
 
     this.currentBgm = next;
     this.currentBgmKey = cacheKey;
@@ -200,7 +232,7 @@ class AudioEngine {
       const howl = new Howl({
         src: [url],
         loop: true,
-        volume: BGM_VOLUME,
+        volume: this.bgmVolume,
         // Web Audio mode (html5:false) plays reliably after Howler's global
         // unlock on first user gesture. html5:true streams but each track
         // creates its own <audio> element that iOS refuses to play unless
@@ -216,7 +248,7 @@ class AudioEngine {
             this.currentBgm = replacement;
             replacement.volume(0);
             replacement.play();
-            replacement.fade(0, BGM_VOLUME, CROSSFADE_MS);
+            replacement.fade(0, this.bgmVolume, CROSSFADE_MS);
           }
         },
         onplayerror: (_id, err) => {
@@ -254,7 +286,7 @@ class AudioEngine {
     try {
       const howl = new Howl({
         src: [`/audio/sfx/${key}.${SFX_EXTS[i]}`],
-        volume: SFX_VOLUME,
+        volume: this.sfxVolume,
         pool: 4,
         onloaderror: () => {
           // This extension 404'd or the browser can't decode it — try next.
@@ -273,7 +305,12 @@ class AudioEngine {
   }
 }
 
-let _instance: AudioEngine | null = null;
+// The singleton lives on globalThis (not a module-scoped `let`) so it survives
+// dev hot-reloads. HMR re-evaluates this module, which would orphan the running
+// BGM on the old instance while a fresh module-scoped instance (currentBgm =
+// null) answers getAudio() — making volume changes silently hit the wrong
+// engine. One instance keyed on globalThis avoids that whole class of bug.
+type AudioGlobal = typeof globalThis & { __storyRangerAudio?: AudioEngine };
 
 /** Lazy singleton — safe to call from any client component or effect. */
 export function getAudio(): AudioEngine {
@@ -281,11 +318,14 @@ export function getAudio(): AudioEngine {
     return {
       setMuted: () => {},
       isMuted: () => false,
+      setBgmVolume: () => {},
+      setSfxVolume: () => {},
       playBgm: () => {},
       stopBgm: () => {},
       playSfx: () => {},
     } as unknown as AudioEngine;
   }
-  if (!_instance) _instance = new AudioEngine();
-  return _instance;
+  const g = globalThis as AudioGlobal;
+  g.__storyRangerAudio ??= new AudioEngine();
+  return g.__storyRangerAudio;
 }

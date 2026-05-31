@@ -39,6 +39,9 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   const [showNewHero, setShowNewHero] = useState(false);
   const [name, setName] = useState("");
   const [gender, setGender] = useState<HeroGender>("girl");
+  /** Non-null while the "dive into the page" transition runs — holds the
+   *  play route to push to once the screen has darkened. */
+  const [diveTo, setDiveTo] = useState<string | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
@@ -59,11 +62,19 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
     return active.id === wizardOfOz.id ? wizardOfOz : null;
   }, [active.id]);
 
+  /** Kick off the slow "pulled into the page" transition, then route. The
+   *  zoom + darkening play out here; the play screen lifts the same darkness
+   *  on mount, so the route swap itself is invisible. */
+  function beginDive(href: string) {
+    setShowNewHero(false);
+    setDiveTo(href);
+  }
+
   function startNew(hero: Hero) {
     if (!story) return;
     clearState(active.id);
     saveState(newPlayState(story, hero));
-    router.push(`/play/${active.id}`);
+    beginDive(`/play/${active.id}`);
   }
 
   function handleSubmit(e: FormEvent) {
@@ -75,8 +86,20 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
 
   return (
     <main className="fixed inset-0 z-0 overflow-hidden bg-ink">
-      {/* Full-bleed cover */}
-      <AnimatePresence mode="wait">
+      {/* Everything (cover + title + buttons) zooms slowly toward the viewer
+          on "dive", as if being pulled into the storybook page. */}
+      <motion.div
+        className="absolute inset-0 origin-center"
+        initial={false}
+        animate={
+          diveTo
+            ? { scale: 1.6, filter: "blur(3px)" }
+            : { scale: 1, filter: "blur(0px)" }
+        }
+        transition={{ duration: 1.5, ease: [0.55, 0, 1, 0.45] }}
+      >
+        {/* Full-bleed cover */}
+        <AnimatePresence mode="wait">
         <motion.div
           key={active.id}
           initial={{ opacity: 0, scale: 1.03 }}
@@ -142,7 +165,7 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
             {saved && (
               <button
                 type="button"
-                onClick={() => router.push(`/play/${active.id}`)}
+                onClick={() => beginDive(`/play/${active.id}`)}
                 className="group inline-flex min-h-14 w-full items-center justify-between gap-3 rounded-button bg-paper/85 px-5 text-left text-base text-ink ring-1 ring-ink-soft/10 shadow-card backdrop-blur transition-all hover:bg-paper hover:-translate-y-px active:translate-y-0"
               >
                 <span className="flex flex-col">
@@ -188,6 +211,7 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
           </div>
         )}
       </div>
+      </motion.div>
 
       {/* New-hero overlay */}
       <AnimatePresence>
@@ -277,6 +301,23 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
               </div>
             </motion.form>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Darkness that swallows the screen as we dive in. Sits above
+          everything and (being interactive) blocks repeat taps; once fully
+          black we route to the story, which lifts the same veil on mount. */}
+      <AnimatePresence>
+        {diveTo && (
+          <motion.div
+            key="dive-veil"
+            aria-hidden
+            className="absolute inset-0 z-50 bg-ink"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.2, ease: "easeIn", delay: 0.25 }}
+            onAnimationComplete={() => router.push(diveTo)}
+          />
         )}
       </AnimatePresence>
     </main>

@@ -68,6 +68,10 @@ import type { EncounterDef } from "@/types/encounter";
 /** Upper bound on the global hero-memory log kept in PlayState. */
 const HERO_MEMORY_CAP = 30;
 
+/** Default channel volumes (0–1). Music sits low under the narration; the
+ *  Settings "Reset" button restores these. */
+const DEFAULT_VOLUMES = { voice: 1, bgm: 0.18, sfx: 0.7 } as const;
+
 /** Stable empty default for `bgmKeys` so the BGM effect doesn't re-run every
  *  render when the prop is omitted (e.g. the admin scene preview). */
 const EMPTY_BGM_KEYS: string[] = [];
@@ -167,7 +171,12 @@ export function StoryPlayer({
     items: string[];
   } | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [muted, setMuted] = useState(false);
+  // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
+  // narration TTS, music is BGM, effects are SFX. Seeded from the historic mix
+  // defaults (BGM sits low under the voice); hydrated from localStorage below.
+  const [voiceVolume, setVoiceVolume] = useState<number>(DEFAULT_VOLUMES.voice);
+  const [bgmVolume, setBgmVolume] = useState<number>(DEFAULT_VOLUMES.bgm);
+  const [sfxVolume, setSfxVolume] = useState<number>(DEFAULT_VOLUMES.sfx);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** True while a SceneDialogueLayer bubble is open — hides the
@@ -368,32 +377,47 @@ export function StoryPlayer({
         setState(saved);
       }
     }
-    const savedMute = window.localStorage.getItem("storyranger:muted") === "1";
-    if (savedMute) setMuted(true);
+    // Restore saved channel volumes; migrate the legacy single mute toggle
+    // (which silenced everything) by starting all channels at 0 if it was on.
+    const ls = window.localStorage;
+    const legacyMuted = ls.getItem("storyranger:muted") === "1";
+    const readVol = (key: string, fallback: number) => {
+      const n = Number(ls.getItem(key));
+      if (Number.isFinite(n) && ls.getItem(key) !== null) {
+        return Math.max(0, Math.min(1, n));
+      }
+      return legacyMuted ? 0 : fallback;
+    };
+    setVoiceVolume(readVol("storyranger:voiceVolume", DEFAULT_VOLUMES.voice));
+    setBgmVolume(readVol("storyranger:bgmVolume", DEFAULT_VOLUMES.bgm));
+    setSfxVolume(readVol("storyranger:sfxVolume", DEFAULT_VOLUMES.sfx));
     setHydrated(true);
   }, [story, slot, previewMode]);
 
-  // Persist mute preference + propagate to audio engine
+  // Persist channel volumes + push BGM/SFX levels to the audio engine. (Voice
+  // is applied to the narration <audio> directly via the NarrationAudio prop.)
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem("storyranger:muted", muted ? "1" : "0");
-    getAudio().setMuted(muted);
-  }, [muted, hydrated]);
+    const ls = window.localStorage;
+    ls.setItem("storyranger:voiceVolume", String(voiceVolume));
+    ls.setItem("storyranger:bgmVolume", String(bgmVolume));
+    ls.setItem("storyranger:sfxVolume", String(sfxVolume));
+    const audio = getAudio();
+    audio.setBgmVolume(bgmVolume);
+    audio.setSfxVolume(sfxVolume);
+  }, [voiceVolume, bgmVolume, sfxVolume, hydrated]);
 
-  // Global click SFX — every <button> in the game plays the generic click
-  // sound, so the whole UI feels responsive without wiring each handler.
-  // A button may override via `data-sfx`: any key plays that sound instead,
-  // and "none" stays silent (used where the action has its own cue). HTML
-  // `disabled` buttons emit no click event, so they're naturally skipped.
+  // Click SFX — only buttons that opt in via `data-sfx` make a sound (e.g.
+  // the free-input send button, the battle item button). A generic
+  // every-button click sound proved too noisy, so there's no default cue.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const el = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>(
         "button",
       );
-      if (!el) return;
-      const override = el.dataset.sfx;
-      if (override === "none") return;
-      getAudio().playSfx(override || SFX.CHOICE);
+      const key = el?.dataset.sfx;
+      if (!key || key === "none") return;
+      getAudio().playSfx(key);
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
@@ -834,7 +858,7 @@ export function StoryPlayer({
   // First-time visit to either becomes an IndexedDB cache hit on click,
   // skipping the OpenAI roundtrip that the user perceived as "slow start".
   useEffect(() => {
-    if (!hydrated || muted) return;
+    if (!hydrated || voiceVolume <= 0) return;
     const currentVoice = speaker?.voice;
     const currentSpeed = speaker?.voiceSpeed ?? 1;
     for (const branch of currentScene.branches ?? []) {
@@ -857,7 +881,7 @@ export function StoryPlayer({
     }
   }, [
     hydrated,
-    muted,
+    voiceVolume,
     currentScene,
     speaker,
     story.scenes,
@@ -931,18 +955,29 @@ export function StoryPlayer({
       {/* Full-bleed scene image as background — both old & new in DOM at
           the same time so the swap is a true cross-fade. Long duration for
           a slow, painterly transition between storybook pages. */}
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={`img-${displayedSceneKey}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 2.4, ease: "easeInOut" }}
-          className="absolute inset-0"
-        >
-          <SceneImage src={displayedImage} alt={`${story.title} — scene`} />
-        </motion.div>
-      </AnimatePresence>
+      <motion.div
+        className="absolute inset-0"
+        // On entry from the home "dive", the world emerges: the scene starts
+        // slightly zoomed-in and settles back. One-shot on mount; skipped in
+        // admin preview. Subsequent scene swaps still cross-fade (inner
+        // AnimatePresence) without re-zooming.
+        initial={previewMode ? false : { scale: 1.12 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={`img-${displayedSceneKey}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2.4, ease: "easeInOut" }}
+            className="absolute inset-0"
+          >
+            <SceneImage src={displayedImage} alt={`${story.title} — scene`} />
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
 
       {/* Top + bottom gradient veils for UI legibility over the image */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-ink/35 to-transparent" />
@@ -1114,12 +1149,25 @@ export function StoryPlayer({
                   : "flex flex-col items-stretch gap-3 sm:flex-row sm:gap-4"
               }
             >
-              {askChoices.map((ask, i) =>
-                tile(
+              {askChoices.map((ask, i) => {
+                // Portrait of the character being asked — same source chain as
+                // the dialogue portrait (dedicated head-shot → in-scene sprite).
+                const ch = characters.characters.find(
+                  (c) => c.id === ask.characterId,
+                );
+                const iconBase =
+                  ch?.dialogueImage ??
+                  dialoguePortraitPath(story.id, ask.characterId, heroId);
+                const iconFallbackBase = ch
+                  ? characterSpriteBase(story.id, ch, heroId)
+                  : characterImagePath(story.id, ask.characterId, heroId);
+                return tile(
                   ask.id,
                   i,
                   <AskChip
                     label={ask.label}
+                    iconBase={iconBase}
+                    iconFallbackBase={iconFallbackBase}
                     onSelect={() =>
                       setAskRequest({
                         characterId: ask.characterId,
@@ -1128,8 +1176,8 @@ export function StoryPlayer({
                       })
                     }
                   />,
-                ),
-              )}
+                );
+              })}
               {branches.map((branch, i) =>
                 tile(
                   branch.id,
@@ -1158,7 +1206,7 @@ export function StoryPlayer({
         <NarrationAudio
           text={displayedNarration}
           character={displayedSpeaker}
-          muted={muted}
+          volume={voiceVolume}
           playKey={narrationKey}
         />
       )}
@@ -1299,26 +1347,105 @@ export function StoryPlayer({
         }}
         storyTitle={story.title}
         heroName={state.hero.name}
-        muted={muted}
-        onToggleMute={() => setMuted((m) => !m)}
+        voiceVolume={voiceVolume}
+        bgmVolume={bgmVolume}
+        sfxVolume={sfxVolume}
+        onVoiceVolume={setVoiceVolume}
+        onBgmVolume={setBgmVolume}
+        onSfxVolume={setSfxVolume}
+        onResetVolumes={() => {
+          setVoiceVolume(DEFAULT_VOLUMES.voice);
+          setBgmVolume(DEFAULT_VOLUMES.bgm);
+          setSfxVolume(DEFAULT_VOLUMES.sfx);
+        }}
+        onPreviewSfx={() => getAudio().playSfx(SFX.MEDAL)}
       />
+
+      {/* "Arriving in the world" veil — starts black (continuing the home
+          dive's fade-out) and lifts on mount, so the route handoff is
+          seamless. One-shot; skipped in admin preview. */}
+      {!previewMode && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-40 bg-ink"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 1.5, ease: "easeOut" }}
+        />
+      )}
     </div>
   );
 }
 
-/** Ask question, rendered identically to a branch ChoiceButton (the player
- *  shouldn't have to distinguish a question from a choice visually). */
+/** Ask question, rendered like a branch ChoiceButton (the player shouldn't
+ *  have to distinguish a question from a choice) — plus a small portrait of
+ *  the character being asked, pinned to the right edge. */
 function AskChip({
   label,
+  iconBase,
+  iconFallbackBase,
   onSelect,
 }: {
   label: string;
+  iconBase?: string;
+  iconFallbackBase?: string;
   onSelect: () => void;
 }) {
   return (
     <button type="button" onClick={onSelect} className={choiceButtonClass}>
-      <span>{label}</span>
+      <span className={iconBase ? "pr-[75px]" : undefined}>{label}</span>
+      {iconBase && (
+        <span className="absolute right-5 top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+          <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
+        </span>
+      )}
     </button>
+  );
+}
+
+const ASK_ICON_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
+
+/** Tiny character portrait for an ask chip — tries each extension of `base`,
+ *  then of `fallbackBase` (the in-scene sprite), like the dialogue portrait. */
+function AskAvatar({
+  base,
+  fallbackBase,
+  alt,
+}: {
+  base: string;
+  fallbackBase?: string;
+  alt: string;
+}) {
+  const list = useMemo(
+    () => [
+      ...ASK_ICON_EXTS.map((e) => base + e),
+      ...(fallbackBase ? ASK_ICON_EXTS.map((e) => fallbackBase + e) : []),
+    ],
+    [base, fallbackBase],
+  );
+  const [idx, setIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
+    setIdx(0);
+    setFailed(false);
+  }, [base, fallbackBase]);
+
+  if (failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- extension fallback
+    <img
+      src={list[idx]}
+      alt={alt}
+      draggable={false}
+      aria-hidden
+      className="block h-full w-full object-cover object-top"
+      onError={() => {
+        if (idx + 1 < list.length) setIdx(idx + 1);
+        else setFailed(true);
+      }}
+    />
   );
 }
 
