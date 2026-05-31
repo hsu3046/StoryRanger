@@ -55,10 +55,15 @@ export const CharacterSchema = z.object({
   /** Optional override of the in-scene sprite path. Stored as a base
    *  path without extension (e.g. `/stories/wizard-of-oz/characters/
    *  alt-scarecrow`); AssetThumb / runtime extension fallback resolves
-   *  the file. Omit to use the id-based convention. Dialogue portraits
-   *  (head-shots in /dialogue/) and battle stances (/characters/battle/)
-   *  still follow the id-based path — they're separate artistic intents. */
+   *  the file. Omit to use the id-based convention (`characters/<id>`). */
   image: z.string().optional(),
+  /** Optional override of the dialogue head-shot (`/dialogue/<id>`), used in
+   *  the conversation rail + admin chips. Extensionless base. Omit for the
+   *  id-based convention. */
+  dialogueImage: z.string().optional(),
+  /** Optional override of the battle-stance art (`/characters/battle/<id>`).
+   *  Extensionless base. Omit for the id-based convention. */
+  battleImage: z.string().optional(),
 });
 
 export const CharactersFileSchema = z.object({

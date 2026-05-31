@@ -1,6 +1,6 @@
 # Story Ranger — Audio Asset Prompts
 
-> **BGM**: 6 tracks. Generate with **Suno** (custom mode + Instrumental flag).
+> **BGM**: 6 Wizard-of-Oz scene tracks + 6 engine-general mood tracks (battle / victory / farewell / puzzle / night-rest / sneak). Generate with **Suno** (custom mode + Instrumental flag).
 > **SFX**: 10 one-shots. Use **freesound.org** / **pixabay.com** (CC0) for fastest results — Suno is overkill for sub-2s stings, but works if you prefer one source.
 > **Export**: MP3 128 kbps. Place files at the exact paths below. Code auto-loads on the filename via [src/lib/audio-engine.ts](src/lib/audio-engine.ts). Missing files = silent (game still works).
 
@@ -154,6 +154,183 @@ No vocals.
 ```
 
 **Mood reference**: *Coraline* 가벼운 cue, *Over the Garden Wall*.
+
+---
+
+## 🎵 추가 BGM 6곡 — 더 다양한 무드 (엔진 공용)
+
+위 6곡은 Wizard-of-Oz 씬에 매핑된 트랙입니다. 아래 6곡은 **특정 씬이 아니라 "분위기"** 단위로 만든 **엔진 공용 무드 트랙** — 어느 스토리에서든 `public/stories/<story>/audio/bgm/<key>.mp3` 에 떨어트리면 admin 의 BGM 드롭다운(Scene / Background) 에서 골라 쓸 수 있습니다. 기존 6곡으로 안 채워지던 빈틈(전투·승리·이별·퍼즐·휴식·잠입)을 메웁니다.
+
+> **일관성 팁**: 위 6곡과 **같은 Suno 세션**에서 이어 생성하면 악기 톤·믹스 캐릭터가 비슷하게 유지됩니다. 같은 "fairy-tale storybook orchestra" 팔레트를 공유하도록 각 Style 블록에 동일한 키워드를 깔아뒀습니다.
+
+---
+
+### 7. `battle.mp3` — Combat (배틀 화면 / 인카운터)
+
+**Style**:
+```
+[intro]
+fast staccato strings, punchy snare-and-tom groove, 145 BPM
+
+[verse]
+bold brass riff charges in, energetic call-and-response between brass
+and high strings, light cymbal crashes, heroic and adventurous,
+major key with heroic minor lift, fully orchestral fairy-tale palette,
+kid-friendly JRPG battle music, bright and exciting, never frightening
+
+[chorus]
+driving brass melody builds to full orchestral climax, horns and strings
+in unison, timpani rolls, triumphant and heroic, forward momentum
+
+[bridge]
+high strings carry tension, brass punctuates, building intensity,
+cymbal swells, adventurous and bold
+
+[outro]
+full orchestral statement, brass and strings together, heroic resolution,
+fade into loop point
+
+instrumental only, no vocals, no spoken word
+```
+
+**Mood reference**: Pokémon trainer-battle / Final Fantasy "Battle 1" / Chrono Trigger battle — kid-friendly 16-bit JRPG 전투. 긴장감 있되 무섭지 않게.
+
+**Hook tip**: 첫 2초 안에 리듬+brass riff 가 동시에 터져야 함. Suno 가 ambient intro 로 시작하면 *"start immediately on the driving groove, no slow intro"* 후속 변형. 배틀은 짧게 자주 반복되니 loop point 깔끔한 variant 우선.
+
+---
+
+### 8. `victory.mp3` — Win fanfare (전투 승리 / 챕터 클리어)
+
+**Style**:
+```
+Instrumental triumphant victory fanfare for a children's storybook game,
+loopable. THE HOOK: open cold on a bright ascending brass fanfare (the
+classic "you won!" flourish) in the first second, then settle into a warm,
+jubilant march-like melody carried by horns and glockenspiel with rolling
+timpani and shimmering harp. Tempo around 105 BPM. Joyful, celebratory,
+proud — "the party cheers after the battle". Major key, luminous and
+warm, fully orchestral fairy-tale palette. Keep it short and loopable so
+it can play under a victory screen. No vocals.
+```
+
+**Mood reference**: JRPG 승리 팡파르(FF victory theme)를 길게 늘여 loop 가능하게. Mario course-clear 의 밝은 느낌.
+
+**Hook tip**: 첫 1초 = 상승 brass flourish 필수("you won!"). 이후 melody 로 자연스럽게 이어지게.
+
+---
+
+### 9. `farewell.mp3` — Tender / parting (동료와 헤어짐, 가슴 뭉클한 순간)
+
+**Style**:
+```
+Instrumental tender, bittersweet emotional cue for a children's storybook
+— a gentle farewell as a friend leaves the party. Solo piano carries a
+simple, heartfelt melody; warm soft strings swell underneath; a distant
+solo English horn or cello answers the phrases. Sparse, intimate, lots of
+breathing space. Very slow around 64 BPM. Wistful and hopeful, NOT
+despairing — "we'll meet again", a few tears but mostly warmth. Major key
+with a touch of minor color. Fully acoustic orchestral fairy-tale palette,
+no synths. Loopable seamless. No vocals.
+```
+
+**Mood reference**: Joe Hisaishi 지브리 잔잔한 cue, *Up* "Married Life" 의 따뜻한 슬픔, *Spirited Away* "그날의 강". 새 companion-leave 연출(헤어짐 분기)에 딱.
+
+---
+
+### 10. `puzzle.mp3` — Curious thinking (Educational Challenge 게이트)
+
+**Style**:
+```
+Instrumental light, playful, curious puzzle-solving theme for a children's
+storybook. Bouncy pizzicato strings and a soft marimba/glockenspiel trade
+a gentle inquisitive motif over a quiet ticking pulse (light woodblock or
+muted plucks). Occasional twinkly bell when an idea clicks. Tempo around
+92 BPM. Inquisitive, focused-but-fun — "hmm, let's figure this out" — never
+tense. Major key, slightly quirky and cute. Unobtrusive so it can sit
+UNDER on-screen math problems and reading. Fully orchestral fairy-tale
+palette. Loopable seamless. No vocals.
+```
+
+**Mood reference**: *Professor Layton* 퍼즐 테마, *Animal Crossing* 낮 BGM, *Picross* 가벼운 사고 음악. 아이가 문제 푸는 동안 깔리는 배경이므로 멜로디가 도드라지지 않게.
+
+---
+
+### 11. `night-rest.mp3` — Cozy safe haven (밤 / 캠프파이어 / 안전한 휴식)
+
+**Style**:
+```
+Instrumental warm, cozy nighttime rest theme for a children's storybook —
+a campfire under a starry sky, safe and peaceful. Soft fingerpicked
+acoustic guitar or gentle harp leads a simple lullaby-like melody; warm
+low strings pad underneath; a distant solo flute drifts on top. Very slow
+around 58 BPM. Restful, tender, secure — "the party settles in for the
+night". Major key, lullaby warmth, lots of space and air. Fully acoustic
+orchestral fairy-tale palette, no synths. Loopable seamless and very
+gentle. No vocals.
+```
+
+**Mood reference**: Zelda 여관/모닥불 cue, *Stardew Valley* 저녁, 지브리 고요한 밤. 잔잔하지만 `kansas-calm`(오프닝의 신비로운 기대감)과 달리 **안도·휴식**에 무게.
+
+---
+
+### 12. `sneak.mp3` — Playful stealth (몰래 지나가기 / 장난스런 긴장)
+
+**Style**:
+```
+Instrumental playful tiptoe sneaking theme for a children's storybook —
+creeping quietly past a sleeping monster. Staccato pizzicato strings and a
+muted bassoon "walking" bassline step along on a sneaky off-beat groove;
+soft brushed percussion taps; an occasional cheeky muted-trumpet or
+clarinet trill pokes in. Tempo around 96 BPM with a mischievous swing.
+Suspenseful-but-fun and a little comedic — "shhh, don't wake it" — light
+minor color but bright and never genuinely scary. Fully orchestral
+fairy-tale palette. Loopable seamless. No vocals.
+```
+
+**Mood reference**: *Pink Panther* 라이트, Looney Tunes 살금살금, *Zelda* 잠입 cue 의 귀여운 버전.
+
+---
+
+## ⚡ 전투 결과 stinger 2개 — 아주 짧은 one-shot (루프 X)
+
+전투가 끝나는 순간 1회만 울리는 **짧은 결과 음악** (≈ 3–4초). 위 12곡과 달리 **루프하지 않고**, 인트로 없이 곧바로 정점에서 시작해 한 번에 맺습니다. **BGM이 아니라 one-shot SFX**로 재생됩니다 (전투가 `victory`/`defeat` phase에 도달하는 순간 `playSfx`). 따라서 드롭 경로는 `public/audio/sfx/`이고, SFX 볼륨(0.7)으로 또렷하게 들립니다 — **풀밴드보다 가볍고 또렷한** 편성으로.
+
+### 13. `victory.mp3` — 전투 승리 (짧은 팡파레)
+
+**Style**:
+```
+Very short triumphant victory fanfare for a children's storybook game —
+about 3 to 4 seconds, one-shot, NO loop. A bright rising bugle/horn flourish
+lands on a big major chord, sealed by a sparkling glockenspiel/celesta
+arpeggio and a single soft cymbal swell and timpani roll. Joyful, warm,
+"you did it!" — like a fairy-tale level-clear jingle. Starts immediately at
+full energy (no intro), resolves cleanly on a sustained major chord with a
+gentle decay tail. Fully orchestral fairy-tale palette. No vocals.
+```
+
+**Mood reference**: *젤다* 보물 발견 점프 cue, *마리오* 스테이지 클리어, 짧은 동화풍 승리 징글.
+
+### 14. `defeat.mp3` — 전투 패배 (짧고 부드러운 낙담)
+
+**Style**:
+```
+Very short gentle "oh no" defeat sting for a children's storybook game —
+about 3 to 4 seconds, one-shot, NO loop. A soft descending woodwind/oboe
+phrase sags into a mellow minor chord, with a low pizzicato "boing" and a
+single muted French-horn fall. Disappointed but kind and never harsh or
+scary — a "let's try again" feeling, comforting for young kids. Starts
+immediately, settles on a soft minor chord with a short decay tail. Fully
+orchestral fairy-tale palette, light and small. No vocals.
+```
+
+**Mood reference**: 동화풍 "아쉽다~" cue, *Animal Crossing* 실패 jingle, 부드러운 단조 하강.
+
+---
+
+> **드롭 경로 (BGM 12곡)**: `public/stories/<story-id>/audio/bgm/{battle, victory, farewell, puzzle, night-rest, sneak}.mp3`
+> 코드 변경 불필요 — admin BGM 드롭다운이 폴더를 스캔해 자동 노출. 후처리(-18 LUFS, fade)는 기존 6곡과 동일.
+>
+> **드롭 경로 (결과 stinger 2개)**: `public/audio/sfx/{victory, defeat}.mp3` — **SFX 폴더**(공통, 루프 아님). 엔진이 `mp3 → ogg → wav → m4a` 순으로 자동 매칭하므로 확장자는 무엇이든 가능. 전투 종료 시 코드가 이미 `SFX.VICTORY`/`SFX.DEFEAT`로 재생하므로 파일만 떨구면 됨.
 
 ---
 

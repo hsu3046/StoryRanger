@@ -1,5 +1,6 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { commonAssetPath } from "@/lib/asset-paths";
 
 const EXTS = [
   ".webp",
@@ -35,4 +36,15 @@ export function resolveAssetPath(base: string): string | null {
     if (existsSync(fsPath)) return candidate;
   }
   return null;
+}
+
+/**
+ * Resolve story-first, then the shared/common twin (`/stories/<id>/x` →
+ * `/x`). Lets per-story previews fall back to a common asset.
+ */
+export function resolveAssetWithCommon(base: string): string | null {
+  const own = resolveAssetPath(base);
+  if (own) return own;
+  const common = commonAssetPath(base);
+  return common ? resolveAssetPath(common) : null;
 }

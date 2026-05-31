@@ -12,9 +12,6 @@ export interface EncounterTrigger {
   /** Branch id within `sceneId` that, when traversed, may roll this
    *  encounter. */
   branchId: string;
-  /** How many copies of this battle to drop into the shuffle pool when
-   *  the branch is taken. Default 1. */
-  count?: number;
   /** Optional gating requirements. */
   requires?: {
     companion?: CompanionId;
@@ -27,23 +24,17 @@ export interface EncounterIntro {
 }
 
 export interface EncounterRewards {
-  medalId?: string;
+  /** Encounter-level drop items on victory, in addition to monster drops. */
+  items?: string[];
   moodBoost?: { companionId: CompanionId; delta: number }[];
-}
-
-export interface EncounterOutro {
-  victory: string;
-  defeat?: string;
 }
 
 export interface EncounterDef {
   id: string;
-  title: string;
   trigger: EncounterTrigger;
   intro: EncounterIntro;
   body: { kind: "battle"; monsterIds: string[] };
   rewards: EncounterRewards;
-  outro: EncounterOutro;
   /** Optional monster sprites to show in intro even when monsterIds is empty. */
   displayMonsters?: string[];
 }

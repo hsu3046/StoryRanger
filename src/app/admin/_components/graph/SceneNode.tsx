@@ -11,10 +11,20 @@ export interface SceneNodeData {
   sceneId: string;
   scene: SceneT;
   isStart: boolean;
+  /** Terminal/ending scene — derived from connectivity (no branch leads to an
+   *  existing scene), not the manual flag. Computed by the graph editor. */
+  isEnding: boolean;
   /** Story id — needed to resolve dialogue portrait paths. */
   storyId: string;
   /** The story's protagonist id — its dialogue portrait lives at `hero.*`. */
   heroId: SpeakerId;
+  /** Primary dialogue-portrait base per character id (honors `dialogueImage`,
+   *  else `/dialogue/<id>`). */
+  dialogueBaseById: Record<string, string>;
+  /** Fallback portrait base per character id (the in-scene sprite, honoring
+   *  `image`). Used when a character has no dedicated dialogue head-shot yet
+   *  — keeps the chip from showing "?". */
+  spriteBaseById: Record<string, string>;
   selected?: boolean;
   [key: string]: unknown;
 }
@@ -32,8 +42,16 @@ function dialoguePortrait(
 
 export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) {
   const d = data as unknown as SceneNodeData;
-  const { sceneId, scene, isStart, storyId, heroId } = d;
-  const isEnding = !!scene.ending;
+  const {
+    sceneId,
+    scene,
+    isStart,
+    isEnding,
+    storyId,
+    heroId,
+    dialogueBaseById,
+    spriteBaseById,
+  } = d;
   const dialogueChars = scene.dialogueCharacters ?? [];
 
   const accent = isEnding
@@ -60,26 +78,39 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
     // mutating CSS `transform: translate(...)`, and `transition-all` would
     // queue a CSS animation on every frame's transform change, fighting
     // the drag and causing visible flicker/jitter across the whole graph.
+    // No `overflow-hidden` here — it would clip the connection dots (which sit
+    // half outside the node border). Corner-rounding is re-established on the
+    // banner (top) below; the bottom is plain `bg-paper` which the root's own
+    // border-radius already clips.
     <div
-      className={`flex h-[240px] w-[280px] flex-col overflow-hidden rounded-card-lg border-2 bg-paper shadow-card transition-colors ${
+      className={`group relative flex h-[240px] w-[280px] flex-col rounded-card-lg border-2 bg-paper shadow-card transition-colors ${
         selected
           ? "border-accent-deep ring-2 ring-accent/40"
           : "border-ink-soft/15"
       }`}
     >
+      {/* Connection dots: hidden at rest, revealed on node hover (or while the
+          node is selected) so the canvas stays clean. `!z-10` keeps them above
+          the banner/text, which paint later in DOM order. */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-2 !w-2 !bg-ink-soft/40"
+        className={`!z-10 !h-4 !w-4 !border-2 !border-paper !bg-ink-soft/50 !opacity-0 !transition-opacity !duration-150 group-hover:!opacity-100 ${
+          selected ? "!opacity-100" : ""
+        }`}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2 !w-2 !bg-accent-deep"
+        className={`!z-10 !h-4 !w-4 !border-2 !border-paper !bg-accent-deep !opacity-0 !transition-opacity !duration-150 group-hover:!opacity-100 ${
+          selected ? "!opacity-100" : ""
+        }`}
       />
 
-      {/* Image banner — generous height so 16:9-ish scene art reads clearly */}
-      <div className="relative h-40 w-full overflow-hidden bg-paper-deep/40">
+      {/* Image banner — generous height so 16:9-ish scene art reads clearly.
+          `rounded-t-[18px]` (root 20px − 2px border) restores the card's top
+          corners now that the root no longer clips with overflow-hidden. */}
+      <div className="relative h-40 w-full overflow-hidden rounded-t-[18px] bg-paper-deep/40">
         <AssetThumb
           base={scene.image}
           alt={sceneId}
@@ -111,16 +142,25 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
         </p>
 
         <div className="flex items-center justify-between gap-1 text-[10px] text-ink-soft/70">
-          <span>
-            {scene.branches.length} branch
-            {scene.branches.length === 1 ? "" : "es"}
+          <span className="flex items-center gap-2">
+            <span>
+              {scene.branches.length} branch
+              {scene.branches.length === 1 ? "" : "es"}
+            </span>
+            {(scene.asks?.length ?? 0) > 0 && (
+              <span>
+                {scene.asks!.length} ask
+                {scene.asks!.length === 1 ? "" : "s"}
+              </span>
+            )}
           </span>
           {dialogueChars.length > 0 && (
             <div className="flex items-center gap-0.5">
               {dialogueChars.map((id) => (
                 <AssetThumb
                   key={id}
-                  base={dialoguePortrait(storyId, id, heroId)}
+                  base={dialogueBaseById[id] ?? dialoguePortrait(storyId, id, heroId)}
+                  fallbackBase={spriteBaseById[id]}
                   alt={id}
                   className="h-5 w-5"
                   shape="circle"

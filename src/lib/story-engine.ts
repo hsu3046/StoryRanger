@@ -11,7 +11,7 @@ import type {
   Story,
 } from "@/types/story";
 import type { RewardT } from "@/data/schemas";
-import { checkNewMedals } from "./medals-engine";
+import { checkMedals } from "./medals-engine";
 import { DEFAULT_HERO } from "./narrative";
 
 export interface TransitionResult {
@@ -29,6 +29,24 @@ export const DEFAULT_MAX_HP: Record<AttackerId, number> = {
   tinman: 2,
   lion: 2,
 };
+
+/**
+ * A scene is a TERMINAL (ending) scene when none of its branches lead to an
+ * EXISTING scene — i.e. there's no connected next node. Branches pointing at
+ * a missing/not-yet-created scene don't count as a connection, so a scene with
+ * only dangling branches still reads as terminal (and a 0-branch scene always
+ * is). Connecting a branch to a real scene flips this off automatically.
+ *
+ * `scene.ending` (id/label) is kept as optional metadata — used for the end
+ * screen label + ending-trigger medals — but only takes effect while the
+ * scene is terminal; it is never auto-deleted, so medal references can't dangle.
+ */
+export function isTerminalScene(
+  scene: Pick<Scene, "branches">,
+  scenes: Record<string, unknown>,
+): boolean {
+  return !scene.branches.some((b) => Object.prototype.hasOwnProperty.call(scenes, b.next));
+}
 
 export function newPlayState(story: Story, hero: Hero = DEFAULT_HERO): PlayState {
   return {
@@ -55,8 +73,9 @@ export function newPlayState(story: Story, hero: Hero = DEFAULT_HERO): PlayState
 }
 
 /**
- * Apply a `Reward` to play state — folds items / medal / mood deltas in.
- * Pure. Caller passes the resulting state along.
+ * Apply a `Reward` to play state — folds items + mood deltas in. (Medals are
+ * no longer granted by rewards; they're earned from play metrics — see
+ * `checkMedals`.) Pure. Caller passes the resulting state along.
  */
 export function applyReward(state: PlayState, reward: RewardT): PlayState {
   if (!reward) return state;
@@ -65,11 +84,6 @@ export function applyReward(state: PlayState, reward: RewardT): PlayState {
     reward.items && reward.items.length > 0
       ? [...(state.inventory ?? []), ...reward.items]
       : state.inventory;
-
-  const earnedMedals =
-    reward.medalId && !state.earnedMedals.includes(reward.medalId)
-      ? [...state.earnedMedals, reward.medalId]
-      : state.earnedMedals;
 
   const companionMoods = { ...(state.companionMoods ?? {}) };
   if (reward.moodBoost) {
@@ -80,7 +94,7 @@ export function applyReward(state: PlayState, reward: RewardT): PlayState {
     }
   }
 
-  return { ...state, inventory, earnedMedals, companionMoods };
+  return { ...state, inventory, companionMoods };
 }
 
 /**
@@ -88,10 +102,10 @@ export function applyReward(state: PlayState, reward: RewardT): PlayState {
  * branch reward (if any), then auto-grant the new scene's one-shot
  * reward (if any), and detect newly earned medals.
  *
- * NOTE: Caller is responsible for puzzle handling — when `branch.puzzle`
- * exists, the UI runs the puzzle FIRST, then calls `takeBranch` with the
- * branch only after puzzle resolution. Pass `skipReward=true` if the
- * puzzle failed in `skip` mode.
+ * NOTE: Caller is responsible for challenge handling — when `branch.challenge`
+ * is enabled, the UI runs the educational challenge FIRST, then calls
+ * `takeBranch` only after it resolves. Pass `skipReward=true` if the challenge
+ * failed in `skip` mode.
  *
  * Pure — returns a new state. Caller persists & dispatches UI side effects.
  */
@@ -107,7 +121,13 @@ export function takeBranch(
     throw new Error(`Scene not found: ${branch.next}`);
   }
 
-  const companions = addCompanion(state.companions, branch.addsCompanion);
+  // A branch may add a companion (join) and/or remove one (parting). Removal
+  // only drops them from the active party — their mood + HP entries are kept so
+  // a later re-join restores the relationship instead of resetting it.
+  const companions = removeCompanion(
+    addCompanion(state.companions, branch.addsCompanion),
+    branch.removesCompanion,
+  );
   const branchHistory = [...state.branchHistory, branch.id];
 
   // v2.0 — initialise mood for newly added companion at 5/10
@@ -152,11 +172,9 @@ export function takeBranch(
     sceneReward = sceneRewardDef;
   }
 
-  const earnedMedals = checkNewMedals(medalsCatalog, nextState, {
-    enteredSceneId: branch.next,
-    tookBranchId: branch.id,
-    reachedEndingId: nextScene.ending?.id,
-  });
+  // Award any metric medals now reached (e.g. choices/friends counters
+  // changed by this branch).
+  const earnedMedals = checkMedals(medalsCatalog, nextState);
 
   if (earnedMedals.length > 0) {
     nextState = {
@@ -177,4 +195,14 @@ function addCompanion(
 ): CompanionId[] {
   if (!add || current.includes(add)) return current;
   return [...current, add];
+}
+
+/** Drop a companion from the active party (no-op if absent). Mood + HP are
+ *  intentionally NOT cleared by the caller, so a later re-join restores them. */
+function removeCompanion(
+  current: CompanionId[],
+  remove?: CompanionId,
+): CompanionId[] {
+  if (!remove || !current.includes(remove)) return current;
+  return current.filter((id) => id !== remove);
 }

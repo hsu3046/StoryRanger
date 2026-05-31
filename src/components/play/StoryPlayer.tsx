@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,14 +28,18 @@ import type {
 import type { BattleState } from "@/lib/battle-engine";
 import {
   DEFAULT_MAX_HP,
+  isTerminalScene,
   newPlayState,
   takeBranch,
 } from "@/lib/story-engine";
-import { PatternPuzzle } from "../encounter/PatternPuzzle";
+import { checkMedals } from "@/lib/medals-engine";
+import { assetUrl } from "@/lib/asset-paths";
+import { ChallengeGate } from "../challenge/ChallengeGate";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
 import {
   characterAssetSlug,
+  characterSpriteBase,
   formatNarration,
   resolveHeroId,
 } from "@/lib/narrative";
@@ -50,11 +61,21 @@ import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow"
 import { canTalkTo, trimDialogueHistory } from "@/lib/dialogue-personas";
 import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
-import { itemIcon, prettyItem } from "@/data/items";
+import { prettyItem } from "@/data/items";
+import { isBranchVisible } from "@/lib/branch-conditions";
+import { ageFromRange, generateChallenge } from "@/lib/education";
 import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
 const HERO_MEMORY_CAP = 30;
+
+/** Default channel volumes (0–1). Music sits low under the narration; the
+ *  Settings "Reset" button restores these. */
+const DEFAULT_VOLUMES = { voice: 1, bgm: 0.18, sfx: 0.7 } as const;
+
+/** Stable empty default for `bgmKeys` so the BGM effect doesn't re-run every
+ *  render when the prop is omitted (e.g. the admin scene preview). */
+const EMPTY_BGM_KEYS: string[] = [];
 
 /**
  * Resolve a character image base path. The hero (speakerId "dorothy")
@@ -105,6 +126,18 @@ interface Props {
    *  PlayState at this scene. State is NOT persisted in this mode —
    *  intended for the admin per-scene preview modal. */
   initialSceneId?: string;
+  /** Admin branch preview — a branch id on `initialSceneId`. When set, the
+   *  preview auto-takes that branch on mount, so it starts RIGHT AFTER the
+   *  choice (its outcome / encounter / challenge → next scene) instead of on
+   *  the source scene's choice list. */
+  initialBranchId?: string;
+  /** BGM track keys that actually exist for this story (scanned server-side).
+   *  Gates the encounter crossfade — we only switch to `battle` / `puzzle`
+   *  when the file is present, else the scene BGM keeps playing. */
+  bgmKeys?: string[];
+  /** BGM keys in the SHARED/common pool (`public/audio/bgm`). A story can use
+   *  these too; story keys override same-named common keys. */
+  commonBgmKeys?: string[];
 }
 
 export function StoryPlayer({
@@ -116,6 +149,9 @@ export function StoryPlayer({
   onStateChange,
   extraTopBar,
   initialSceneId,
+  initialBranchId,
+  bgmKeys = EMPTY_BGM_KEYS,
+  commonBgmKeys = EMPTY_BGM_KEYS,
 }: Props) {
   const previewMode = !!initialSceneId;
   const [state, setState] = useState<PlayState>(() => {
@@ -134,10 +170,14 @@ export function StoryPlayer({
   const [pendingSceneReward, setPendingSceneReward] = useState<{
     sceneId: string;
     items: string[];
-    medalId?: string;
   } | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [muted, setMuted] = useState(false);
+  // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
+  // narration TTS, music is BGM, effects are SFX. Seeded from the historic mix
+  // defaults (BGM sits low under the voice); hydrated from localStorage below.
+  const [voiceVolume, setVoiceVolume] = useState<number>(DEFAULT_VOLUMES.voice);
+  const [bgmVolume, setBgmVolume] = useState<number>(DEFAULT_VOLUMES.bgm);
+  const [sfxVolume, setSfxVolume] = useState<number>(DEFAULT_VOLUMES.sfx);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** True while a SceneDialogueLayer bubble is open — hides the
@@ -165,15 +205,23 @@ export function StoryPlayer({
     }));
   }
 
-  const pendingPuzzle = useMemo(() => {
+  const pendingChallenge = useMemo(() => {
     const i = state.interaction;
-    if (!i || i.kind !== "puzzle") return null;
+    if (!i || i.kind !== "challenge") return null;
     const branch = story.scenes[i.sourceSceneId]?.branches.find(
       (b) => b.id === i.branchId,
     );
-    if (!branch?.puzzle) return null;
-    return { branch, puzzle: branch.puzzle, attemptKey: i.attemptKey };
-  }, [state.interaction, story.scenes]);
+    if (!branch?.challenge?.enabled) return null;
+    // A fresh problem per attempt AND per solved-step (the memo re-runs when
+    // `interaction` changes — attemptKey on retry, solved on advance). Difficulty
+    // = story age tier. `count` is how many must be solved to pass the gate.
+    const challenge = generateChallenge({
+      age: ageFromRange(story.ageRange),
+      category: branch.challenge.category,
+    });
+    const total = Math.max(1, branch.challenge.count ?? 1);
+    return { branch, challenge, attemptKey: i.attemptKey, solved: i.solved, total };
+  }, [state.interaction, story.scenes, story.ageRange]);
 
   const pendingOutcome = useMemo(() => {
     const i = state.interaction;
@@ -182,17 +230,12 @@ export function StoryPlayer({
       (b) => b.id === i.branchId,
     );
     if (!branch?.outcome) return null;
-    const medal = i.medalId
-      ? medals.medals.find((m) => m.id === i.medalId) ?? null
-      : null;
     return {
       branch,
       sourceSceneId: i.sourceSceneId,
       text: branch.outcome,
-      items: i.items,
-      medal,
     };
-  }, [state.interaction, story.scenes, medals.medals]);
+  }, [state.interaction, story.scenes]);
 
   const pendingEncounter: EncounterDef | null = useMemo(() => {
     const i = state.interaction;
@@ -200,6 +243,34 @@ export function StoryPlayer({
     const headId = i.queue[0];
     return headId ? getEncounter(headId) : null;
   }, [state.interaction]);
+
+  // Length of the remaining encounter queue. A `count: N` encounter expands to
+  // N identical ids, so the id alone can't distinguish occurrence 1 from 2.
+  // The queue strictly shrinks per battle (applyEncounterResult slices it), so
+  // this length gives each occurrence a distinct identity for remount keys +
+  // effect deps — without it, consecutive same-id battles reuse the frozen
+  // EncounterFlow/BattleScreen instance (battle 2 shows battle 1's victory).
+  const encounterQueueLen =
+    state.interaction?.kind === "encounter"
+      ? state.interaction.queue.length
+      : 0;
+
+  // Bumped when an encounter ends, so the scene background re-mounts and
+  // zoom-reveals — the world "returns" after a battle rather than just popping
+  // back. Normal scene-to-scene changes leave this untouched (they keep the
+  // painterly cross-fade instead).
+  const [sceneRevealKey, setSceneRevealKey] = useState(0);
+  // Bumped by "Try again" after a defeat — part of the EncounterFlow key so the
+  // battle re-mounts fresh.
+  const [encounterRetryNonce, setEncounterRetryNonce] = useState(0);
+  const prevEncounterActiveRef = useRef(false);
+  useEffect(() => {
+    const active = !!pendingEncounter;
+    if (prevEncounterActiveRef.current && !active) {
+      setSceneRevealKey((k) => k + 1);
+    }
+    prevEncounterActiveRef.current = active;
+  }, [pendingEncounter]);
 
   // Deterministic "adventures so far" line for ambient dialogue awareness.
   // No LLM — derived from already-tracked structured state.
@@ -299,18 +370,8 @@ export function StoryPlayer({
         dialogueCount: prev.dialogueCount + 1,
         updatedAt: new Date().toISOString(),
       };
-      // Check dialogue-count medals.
-      const earned: Medal[] = [];
-      const already = new Set(nextState.earnedMedals);
-      for (const m of medals.medals) {
-        if (already.has(m.id)) continue;
-        if (
-          m.trigger.type === "dialogue_count" &&
-          nextState.dialogueCount >= m.trigger.min
-        ) {
-          earned.push(m);
-        }
-      }
+      // Dialogues counter changed → award any metric medals now reached.
+      const earned = checkMedals(medals, nextState);
       if (earned.length > 0) {
         setMedalQueue((q) => [...q, ...earned]);
         getAudio().playSfx(SFX.MEDAL);
@@ -334,17 +395,51 @@ export function StoryPlayer({
         setState(saved);
       }
     }
-    const savedMute = window.localStorage.getItem("storyranger:muted") === "1";
-    if (savedMute) setMuted(true);
+    // Restore saved channel volumes; migrate the legacy single mute toggle
+    // (which silenced everything) by starting all channels at 0 if it was on.
+    const ls = window.localStorage;
+    const legacyMuted = ls.getItem("storyranger:muted") === "1";
+    const readVol = (key: string, fallback: number) => {
+      const n = Number(ls.getItem(key));
+      if (Number.isFinite(n) && ls.getItem(key) !== null) {
+        return Math.max(0, Math.min(1, n));
+      }
+      return legacyMuted ? 0 : fallback;
+    };
+    setVoiceVolume(readVol("storyranger:voiceVolume", DEFAULT_VOLUMES.voice));
+    setBgmVolume(readVol("storyranger:bgmVolume", DEFAULT_VOLUMES.bgm));
+    setSfxVolume(readVol("storyranger:sfxVolume", DEFAULT_VOLUMES.sfx));
     setHydrated(true);
   }, [story, slot, previewMode]);
 
-  // Persist mute preference + propagate to audio engine
+  // Persist channel volumes + push BGM/SFX levels to the audio engine. (Voice
+  // is applied to the narration <audio> directly via the NarrationAudio prop.)
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem("storyranger:muted", muted ? "1" : "0");
-    getAudio().setMuted(muted);
-  }, [muted, hydrated]);
+    const ls = window.localStorage;
+    ls.setItem("storyranger:voiceVolume", String(voiceVolume));
+    ls.setItem("storyranger:bgmVolume", String(bgmVolume));
+    ls.setItem("storyranger:sfxVolume", String(sfxVolume));
+    const audio = getAudio();
+    audio.setBgmVolume(bgmVolume);
+    audio.setSfxVolume(sfxVolume);
+  }, [voiceVolume, bgmVolume, sfxVolume, hydrated]);
+
+  // Click SFX — only buttons that opt in via `data-sfx` make a sound (e.g.
+  // the free-input send button, the battle item button). A generic
+  // every-button click sound proved too noisy, so there's no default cue.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+        "button",
+      );
+      const key = el?.dataset.sfx;
+      if (!key || key === "none") return;
+      getAudio().playSfx(key);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
 
   useEffect(() => {
     // Preview mode is ephemeral — never write to localStorage so closing
@@ -370,12 +465,87 @@ export function StoryPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, hydrated]);
 
-  // Drive BGM by current scene. Auto-crossfades between scenes.
-  // Stop BGM only when StoryPlayer itself unmounts (story exit).
+  // Drive BGM by the scene the player has actually SETTLED on, not by
+  // `state.currentSceneId`. The latter advances to the destination at
+  // branch-commit time, but during an outcome bridge or a battle the player
+  // hasn't arrived yet — the outgoing scene's art / the battle bg is on screen.
+  // Holding BGM until `interaction` clears makes the track change on ARRIVAL at
+  // the next scene (A → B), not a beat early on the branch (A → branch(B) → B).
+  // Auto-crossfades; stopped only when StoryPlayer unmounts (story exit).
+  const audibleSceneIdRef = useRef(state.currentSceneId);
+  // A BGM key may live in the story's own folder OR the shared/common pool.
+  // Story overrides common: resolve by passing story.id when the story has the
+  // file, else undefined (→ audio-engine uses the common `/audio/bgm/<key>`).
+  const playResolvedBgm = useCallback(
+    (key: string) => {
+      const audio = getAudio();
+      if (commonBgmKeys.includes(key) && !bgmKeys.includes(key)) {
+        audio.playBgm(key); // common-only
+      } else {
+        audio.playBgm(key, story.id); // story (or default attempt)
+      }
+    },
+    [bgmKeys, commonBgmKeys, story.id],
+  );
+  // Battle / puzzle BGM variant pools — every file named `battle`, `battle_1`,
+  // `battle_2`, … (and likewise `puzzle*`), from EITHER the story or common
+  // pool, is an interchangeable variant; one is picked at random per encounter.
+  const allBgmKeys = useMemo(
+    () => [...new Set([...bgmKeys, ...commonBgmKeys])],
+    [bgmKeys, commonBgmKeys],
+  );
+  const battleBgmVariants = useMemo(
+    () => allBgmKeys.filter((k) => k === "battle" || k.startsWith("battle_")),
+    [allBgmKeys],
+  );
+  const puzzleBgmVariants = useMemo(
+    () => allBgmKeys.filter((k) => k === "puzzle" || k.startsWith("puzzle_")),
+    [allBgmKeys],
+  );
+  // The variant chosen for the CURRENT interaction — kept stable while it lasts
+  // (a re-render mid-battle must not re-roll + restart the track); re-picked
+  // only when a new encounter / challenge begins.
+  const interactionBgmRef = useRef<{ kind: string; track: string } | null>(null);
+  // Track only the interaction KIND, not the whole object — a battle snapshot
+  // mutates state.interaction every turn but must not re-evaluate BGM.
+  const interactionKind = state.interaction?.kind;
   useEffect(() => {
-    const scene = story.scenes[state.currentSceneId];
-    if (scene) getAudio().playBgm(scene.bgm, story.id);
-  }, [story, state.currentSceneId]);
+    if (!interactionKind) {
+      // Arrived — the branch transition is over: adopt the destination scene
+      // (puzzle keeps currentSceneId at the source anyway; outcome/encounter
+      // advance it early, which is why we wait for the overlay to clear).
+      audibleSceneIdRef.current = state.currentSceneId;
+      interactionBgmRef.current = null;
+    }
+    // During a battle / challenge, crossfade to a RANDOM matching variant —
+    // but ONLY when at least one such file exists, else keep the scene BGM
+    // rather than cutting to silence.
+    if (interactionKind === "encounter" || interactionKind === "challenge") {
+      const pool =
+        interactionKind === "encounter" ? battleBgmVariants : puzzleBgmVariants;
+      if (pool.length > 0) {
+        let cur = interactionBgmRef.current;
+        if (!cur || cur.kind !== interactionKind) {
+          const track = pool[Math.floor(Math.random() * pool.length)];
+          cur = { kind: interactionKind, track };
+          interactionBgmRef.current = cur;
+        }
+        playResolvedBgm(cur.track);
+        return;
+      }
+    }
+    // BGM follows the scene the player has settled on (held through any
+    // in-flight transition overlay).
+    const scene = story.scenes[audibleSceneIdRef.current];
+    if (scene) playResolvedBgm(scene.bgm);
+  }, [
+    story,
+    state.currentSceneId,
+    interactionKind,
+    battleBgmVariants,
+    puzzleBgmVariants,
+    playResolvedBgm,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -384,6 +554,13 @@ export function StoryPlayer({
   }, []);
 
   const currentScene: Scene = story.scenes[state.currentSceneId];
+  // Conditional branches (require an item / companion) only appear once their
+  // gate is met. Shared by the bottom choice row AND the in-dialogue reply
+  // cards so a gated branch can't be taken while chatting either.
+  const visibleBranches = useMemo(
+    () => (currentScene.branches ?? []).filter((b) => isBranchVisible(b, state)),
+    [currentScene, state],
+  );
   const heroId = useMemo(() => resolveHeroId(characters), [characters]);
   const characterMap = useMemo(() => {
     const map: Record<string, (typeof characters.characters)[number]> = {};
@@ -402,20 +579,37 @@ export function StoryPlayer({
   );
 
   function handleChoose(branch: Branch) {
-    // Branch puzzle gates the reward. Stage it on `interaction` — engine
-    // state stays on the source scene until the puzzle resolves, so a
-    // refresh re-mounts the same puzzle.
-    if (branch.puzzle) {
+    // An educational-challenge gate blocks the reward. Stage it on
+    // `interaction` — engine state stays on the source scene until the
+    // challenge resolves, so a refresh re-mounts the same gate.
+    if (branch.challenge?.enabled) {
       setInteraction({
-        kind: "puzzle",
+        kind: "challenge",
         sourceSceneId: state.currentSceneId,
         branchId: branch.id,
         attemptKey: 0,
+        solved: 0,
       });
       return;
     }
     commitBranch(branch, { skipReward: false });
   }
+
+  // Admin branch preview — auto-take the requested branch ONCE on mount so the
+  // preview opens right after the choice (outcome / encounter / challenge →
+  // next scene) rather than on the source scene's choice list.
+  const autoChoseRef = useRef(false);
+  useEffect(() => {
+    if (autoChoseRef.current || !initialBranchId || !initialSceneId) return;
+    const branch = story.scenes[initialSceneId]?.branches.find(
+      (b) => b.id === initialBranchId,
+    );
+    if (!branch) return;
+    autoChoseRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot mount: replay the chosen branch so the preview opens after the choice
+    handleChoose(branch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount auto-take
+  }, []);
 
   /** Apply the branch transition. `skipReward` lets the caller suppress
    *  reward grant (used when a puzzle fails in `skip` mode).
@@ -426,28 +620,28 @@ export function StoryPlayer({
    *  inline. Tap anywhere fires `continueFromOutcome()` and the scene
    *  transition proceeds. */
   function commitBranch(branch: Branch, opts: { skipReward: boolean }) {
+    // Drop any pending ask so it can't ride an encounter/outcome bridge and
+    // auto-open the previous scene's character over the destination scene.
+    setAskRequest(null);
     const audio = getAudio();
-    audio.playSfx(SFX.PAGE_TURN);
+    // The choice button's click already plays the generic click SFX (global
+    // delegated listener below). Here we only add the event-specific cue.
     if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
 
     const prevSceneId = state.currentSceneId;
 
     const result = takeBranch(state, branch, story, medals, opts);
-    // Trigger-based medals (checkNewMedals) announce immediately. The entered
-    // scene's `reward` (items + reward.medalId) is instead DEFERRED — it shows
-    // as toasts only once the player lands on the destination scene (see the
+    // Metric medals earned by this transition (choices/friends counters)
+    // announce immediately. The entered scene's reward ITEMS are deferred —
+    // shown as a toast once the player lands on the destination scene (see the
     // scene-reward arrival effect), never on the bridge page.
     if (result.earnedMedals.length > 0) {
       setMedalQueue((q) => [...q, ...result.earnedMedals]);
       audio.playSfx(SFX.MEDAL);
     }
     const sr = result.sceneReward;
-    if (sr && ((sr.items?.length ?? 0) > 0 || sr.medalId)) {
-      setPendingSceneReward({
-        sceneId: branch.next,
-        items: sr.items ?? [],
-        medalId: sr.medalId,
-      });
+    if (sr && (sr.items?.length ?? 0) > 0) {
+      setPendingSceneReward({ sceneId: branch.next, items: sr.items ?? [] });
     }
 
     // Outcome path: pause on the outgoing scene art with the branch outcome
@@ -460,8 +654,6 @@ export function StoryPlayer({
           kind: "outcome",
           sourceSceneId: prevSceneId,
           branchId: branch.id,
-          items: [],
-          medalId: undefined,
         },
         updatedAt: new Date().toISOString(),
       });
@@ -482,6 +674,9 @@ export function StoryPlayer({
 
   function continueFromOutcome() {
     if (!pendingOutcome) return;
+    // Same guard as commitBranch — the outcome bridge unmounts/remounts the
+    // dialogue layer, so a leaked ask would re-open on the destination scene.
+    setAskRequest(null);
     const { sourceSceneId, branch } = pendingOutcome;
     // Build the encounter pool for the branch we just traversed and let
     // the regular flow consume it before the destination scene narrates.
@@ -493,23 +688,24 @@ export function StoryPlayer({
     );
   }
 
-  function handlePuzzleResolved(correct: boolean) {
-    if (!pendingPuzzle) return;
-    const { branch } = pendingPuzzle;
+  function handleChallengeResolved(correct: boolean) {
+    if (!pendingChallenge) return;
+    const { branch, solved, total } = pendingChallenge;
     if (correct) {
-      setInteraction(undefined);
-      commitBranch(branch, { skipReward: false });
-      return;
-    }
-    // Fail handling depends on branch.onFailMode.
-    if (branch.onFailMode === "retry") {
+      // Advance through the gate's `count` problems; commit only after the last.
+      if (solved + 1 >= total) {
+        setInteraction(undefined);
+        commitBranch(branch, { skipReward: false });
+        return;
+      }
       setState((s) =>
-        s.interaction?.kind === "puzzle"
+        s.interaction?.kind === "challenge"
           ? {
               ...s,
               interaction: {
                 ...s.interaction,
-                attemptKey: s.interaction.attemptKey + 1,
+                solved: s.interaction.solved + 1,
+                attemptKey: 0,
               },
               updatedAt: new Date().toISOString(),
             }
@@ -517,9 +713,20 @@ export function StoryPlayer({
       );
       return;
     }
-    // "skip" (or unset → skip default): proceed without reward.
-    setInteraction(undefined);
-    commitBranch(branch, { skipReward: true });
+    // Wrong answer → always retry until solved: bump attemptKey to re-roll a
+    // fresh problem (the gate can't be failed out of).
+    setState((s) =>
+      s.interaction?.kind === "challenge"
+        ? {
+            ...s,
+            interaction: {
+              ...s.interaction,
+              attemptKey: s.interaction.attemptKey + 1,
+            },
+            updatedAt: new Date().toISOString(),
+          }
+        : s,
+    );
   }
 
   /** Persist live BattleState changes from the active EncounterFlow into
@@ -535,14 +742,37 @@ export function StoryPlayer({
     });
   }
 
+  /** "Try again" after a defeat — restart the lost battle from the top with the
+   *  party fully restored, keeping the player at the same point in the story.
+   *  Bumping the nonce re-mounts EncounterFlow; clearing `battle` re-inits it. */
+  function retryEncounter() {
+    setState((prev) => {
+      if (prev.interaction?.kind !== "encounter") return prev;
+      return {
+        ...prev,
+        partyHp: { ...(prev.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }) },
+        fallenAttackers: [],
+        interaction: { ...prev.interaction, battle: undefined },
+      };
+    });
+    setEncounterRetryNonce((n) => n + 1);
+  }
+
   function applyEncounterResult(res: EncounterResult) {
-    // Whole-party defeat → game over. The BattleScreen's TerminalPanel
-    // already showed the defeat message; on Continue we wipe the save
-    // for this slot and send the player back to the title screen so
-    // they can start over. Demo mode follows the same flow (the demo
-    // bar's Reset already gives a "Start over" path).
+    // Whole-party defeat → the player picked "Leave the story" on the defeat
+    // panel ("Try again" is handled by retryEncounter, never reaching here).
+    // Keep their progress: drop the lost battle overlay, restore the party so
+    // a later Continue resumes cleanly, save, and return to the title screen.
     if (res.outcome === "defeat") {
-      clearState(story.id, slot);
+      const next: PlayState = {
+        ...state,
+        interaction: undefined,
+        partyHp: { ...(state.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }) },
+        fallenAttackers: [],
+        updatedAt: new Date().toISOString(),
+      };
+      setState(next);
+      if (!previewMode) saveState(next, slot);
       router.push("/");
       return;
     }
@@ -560,9 +790,6 @@ export function StoryPlayer({
       const inventory = res.itemsGained.length
         ? [...afterConsumed, ...res.itemsGained]
         : afterConsumed;
-      const earnedMedals = res.medalId
-        ? Array.from(new Set([...prev.earnedMedals, res.medalId]))
-        : prev.earnedMedals;
       const companionMoods = { ...(prev.companionMoods ?? {}) };
       if (res.moodBoost) {
         for (const mb of res.moodBoost) {
@@ -597,22 +824,28 @@ export function StoryPlayer({
             : undefined;
       }
 
-      return {
+      const base: PlayState = {
         ...prev,
         completedEncounters: completed,
         inventory,
-        earnedMedals,
         companionMoods,
         partyHp,
         fallenAttackers,
         interaction: nextInteraction,
         updatedAt: new Date().toISOString(),
       };
+      // Battles-cleared counter changed → award any metric medals now reached.
+      const earned = checkMedals(medals, base);
+      if (earned.length > 0) {
+        setMedalQueue((q) => [...q, ...earned]);
+        getAudio().playSfx(SFX.MEDAL);
+        return {
+          ...base,
+          earnedMedals: [...base.earnedMedals, ...earned.map((m) => m.id)],
+        };
+      }
+      return base;
     });
-
-    // The medal is shown on the battle victory panel itself (TerminalPanel),
-    // not as a post-Continue toast — so we only fold it into earnedMedals
-    // above and don't re-announce it here.
   }
 
   function handleReset() {
@@ -639,18 +872,25 @@ export function StoryPlayer({
       outcome: "victory",
       partyHp: state.partyHp ?? { hero: DEFAULT_MAX_HP.hero },
       fallenAttackers: [],
-      itemsGained: [],
+      // Demo skip grants the encounter-level drops (monster drops are skipped
+      // along with the battle).
+      itemsGained: pendingEncounter.rewards.items ?? [],
       itemsConsumed: [],
-      medalId: pendingEncounter.rewards.medalId,
       moodBoost: pendingEncounter.rewards.moodBoost,
     });
     // Only react to skipBattles toggling or a new pendingEncounter
     // appearing — we don't want every state.partyHp tick to retrigger.
+    // `encounterQueueLen` distinguishes occurrences of a same-id `count: N`
+    // chain so the auto-resolve re-fires for each queued battle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skipBattles, pendingEncounter?.id]);
+  }, [skipBattles, pendingEncounter?.id, encounterQueueLen]);
 
   const speaker = characterMap[currentScene.speaker];
-  const isEnding = !!currentScene.ending;
+  // Ending = manually marked (currentScene.ending) AND terminal (no branch
+  // leads onward). The terminal gate means a scene that later gains a branch
+  // stops being an ending automatically.
+  const isEnding =
+    !!currentScene.ending && isTerminalScene(currentScene, story.scenes);
 
   // Warm the TTS cache while the player listens to the current scene.
   // For every branch on the current scene, fire-and-forget prefetches for
@@ -659,7 +899,7 @@ export function StoryPlayer({
   // First-time visit to either becomes an IndexedDB cache hit on click,
   // skipping the OpenAI roundtrip that the user perceived as "slow start".
   useEffect(() => {
-    if (!hydrated || muted) return;
+    if (!hydrated || voiceVolume <= 0) return;
     const currentVoice = speaker?.voice;
     const currentSpeed = speaker?.voiceSpeed ?? 1;
     for (const branch of currentScene.branches ?? []) {
@@ -682,7 +922,7 @@ export function StoryPlayer({
     }
   }, [
     hydrated,
-    muted,
+    voiceVolume,
     currentScene,
     speaker,
     story.scenes,
@@ -696,26 +936,18 @@ export function StoryPlayer({
   // scene up by id from interaction (works even on refresh-resume).
   const showingOutcome = !!pendingOutcome;
 
-  // Scene reward arrival — fire the medal + item toasts only once the player
-  // has actually LANDED on the rewarded scene (outcome bridge dismissed, no
+  // Scene reward arrival — show the item toast only once the player has
+  // actually LANDED on the rewarded scene (outcome bridge dismissed, no
   // encounter overlay). Clearing `pendingSceneReward` stops it re-firing.
+  // (Medals are earned from metrics, not scene rewards.)
   useEffect(() => {
     const r = pendingSceneReward;
     if (!r || r.sceneId !== state.currentSceneId) return;
     if (showingOutcome || pendingEncounter) return;
-    // Announce the reward once on arrival; `setPendingSceneReward(null)` below
-    // clears the trigger so these can't cascade.
-    if (r.medalId) {
-      const m = medals.medals.find((x) => x.id === r.medalId);
-      if (m) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot reward announce
-        setMedalQueue((q) => [...q, m]);
-        getAudio().playSfx(SFX.MEDAL);
-      }
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; cleared below
     if (r.items.length > 0) setItemToast(r.items);
     setPendingSceneReward(null);
-  }, [pendingSceneReward, state.currentSceneId, showingOutcome, pendingEncounter, medals]);
+  }, [pendingSceneReward, state.currentSceneId, showingOutcome, pendingEncounter]);
 
   const outcomePrevScene = pendingOutcome
     ? story.scenes[pendingOutcome.sourceSceneId]
@@ -764,18 +996,32 @@ export function StoryPlayer({
       {/* Full-bleed scene image as background — both old & new in DOM at
           the same time so the swap is a true cross-fade. Long duration for
           a slow, painterly transition between storybook pages. */}
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={`img-${displayedSceneKey}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 2.4, ease: "easeInOut" }}
-          className="absolute inset-0"
-        >
-          <SceneImage src={displayedImage} alt={`${story.title} — scene`} />
-        </motion.div>
-      </AnimatePresence>
+      <motion.div
+        // Re-mounts (zoom-reveal) on the home "dive" AND whenever a battle
+        // ends (`sceneRevealKey` bump) — the world settles back in. Normal
+        // scene swaps don't change the key, so they keep the painterly
+        // cross-fade from the inner AnimatePresence instead.
+        key={`reveal-${sceneRevealKey}`}
+        className="absolute inset-0"
+        // The scene starts slightly zoomed-in and settles back. Skipped in
+        // admin preview.
+        initial={previewMode ? false : { scale: 1.12 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={`img-${displayedSceneKey}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2.4, ease: "easeInOut" }}
+            className="absolute inset-0"
+          >
+            <SceneImage src={displayedImage} alt={`${story.title} — scene`} />
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
 
       {/* Top + bottom gradient veils for UI legibility over the image */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-ink/35 to-transparent" />
@@ -844,10 +1090,14 @@ export function StoryPlayer({
             {!pendingEncounter && !dialogueActive && (
               <motion.div
                 key={`narr-${narrationKey}`}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.3 }}
+                // Fast exit so the OLD narration clears almost instantly on a
+                // choice tap (mode="wait" otherwise holds it for the full
+                // duration, reading as "the previous text lingers then
+                // vanishes"). The new scene's text then types in cleanly.
+                exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                transition={{ duration: 0.25 }}
                 // No fixed height cap — the narration block grows up
                 // from the bottom (parent is `absolute bottom-0 flex
                 // flex-col`), so longer text simply raises its top Y while
@@ -875,27 +1125,11 @@ export function StoryPlayer({
             "tap anywhere to continue" hint. */}
         {(() => {
           if (showingOutcome && pendingOutcome) {
+            // Outcome bridge shows only the outgoing-scene pause + outcome text.
+            // Rewards surface as toasts on the destination scene; metric medals
+            // toast separately.
             return (
               <div className="flex flex-col items-center gap-3">
-                {(pendingOutcome.items.length > 0 || pendingOutcome.medal) && (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {pendingOutcome.medal && (
-                      <span className="inline-flex items-center gap-1.5 rounded-pill bg-amber-300/40 px-3 py-1.5 text-sm font-semibold text-amber-900 ring-1 ring-amber-700/30 shadow-soft">
-                        <span aria-hidden>{pendingOutcome.medal.icon}</span>
-                        <span>{pendingOutcome.medal.name}</span>
-                      </span>
-                    )}
-                    {pendingOutcome.items.map((id, i) => (
-                      <span
-                        key={`${id}-${i}`}
-                        className="inline-flex items-center gap-1.5 rounded-pill bg-paper/90 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/15 shadow-soft"
-                      >
-                        <span aria-hidden>{itemIcon(id)}</span>
-                        <span>{prettyItem(id)}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
                 <span
                   className="text-sm font-semibold uppercase tracking-wide text-paper"
                   style={{
@@ -912,7 +1146,7 @@ export function StoryPlayer({
           if (isEnding) {
             return (
               <EndingPanel
-                endingLabel={currentScene.ending!.label}
+                endingLabel={currentScene.ending?.label ?? ""}
                 medalCount={state.earnedMedals.length}
                 totalMedals={medals.medals.length}
                 onReset={handleReset}
@@ -920,7 +1154,7 @@ export function StoryPlayer({
             );
           }
 
-          const branches = currentScene.branches;
+          const branches = visibleBranches;
           // Asks render as additional choices in the SAME left-right row as
           // the branches (not a separate stack above) — to the player an
           // "ask" is just another choice. Hidden during an encounter, matching
@@ -963,12 +1197,25 @@ export function StoryPlayer({
                   : "flex flex-col items-stretch gap-3 sm:flex-row sm:gap-4"
               }
             >
-              {askChoices.map((ask, i) =>
-                tile(
+              {askChoices.map((ask, i) => {
+                // Portrait of the character being asked — same source chain as
+                // the dialogue portrait (dedicated head-shot → in-scene sprite).
+                const ch = characters.characters.find(
+                  (c) => c.id === ask.characterId,
+                );
+                const iconBase =
+                  ch?.dialogueImage ??
+                  dialoguePortraitPath(story.id, ask.characterId, heroId);
+                const iconFallbackBase = ch
+                  ? characterSpriteBase(story.id, ch, heroId)
+                  : characterImagePath(story.id, ask.characterId, heroId);
+                return tile(
                   ask.id,
                   i,
                   <AskChip
                     label={ask.label}
+                    iconBase={iconBase}
+                    iconFallbackBase={iconFallbackBase}
                     onSelect={() =>
                       setAskRequest({
                         characterId: ask.characterId,
@@ -977,8 +1224,8 @@ export function StoryPlayer({
                       })
                     }
                   />,
-                ),
-              )}
+                );
+              })}
               {branches.map((branch, i) =>
                 tile(
                   branch.id,
@@ -1007,7 +1254,7 @@ export function StoryPlayer({
         <NarrationAudio
           text={displayedNarration}
           character={displayedSpeaker}
-          muted={muted}
+          volume={voiceVolume}
           playKey={narrationKey}
         />
       )}
@@ -1027,6 +1274,10 @@ export function StoryPlayer({
           scene's characters over the outgoing scene's art. */}
       {!pendingEncounter && !showingOutcome && (
         <SceneDialogueLayer
+          // Remount per scene so dialogue session state (active character,
+          // bubble, in-flight fetch) can never bleed into the next scene if a
+          // future branch path forgets to closeSession().
+          key={state.currentSceneId}
           storyId={story.id}
           sceneId={state.currentSceneId}
           sceneSpeaker={currentScene.speaker}
@@ -1035,20 +1286,35 @@ export function StoryPlayer({
           companions={state.companions}
           extraDialogueCharacters={currentScene.dialogueCharacters ?? []}
           characters={characters}
-          portraitBase={(id) =>
-            dialoguePortraitPath(story.id, id as SpeakerId | CompanionId, heroId)
-          }
+          // Prefer the `dialogueImage` override, else the /dialogue/<id>
+          // convention.
+          portraitBase={(id) => {
+            const ch = characters.characters.find((c) => c.id === id);
+            return (
+              ch?.dialogueImage ??
+              dialoguePortraitPath(story.id, id as SpeakerId | CompanionId, heroId)
+            );
+          }}
+          // No dedicated dialogue head-shot yet (e.g. a newly added character)
+          // → fall back to the in-scene sprite (honors `image`).
+          portraitFallbackBase={(id) => {
+            const ch = characters.characters.find((c) => c.id === id);
+            return ch
+              ? characterSpriteBase(story.id, ch, heroId)
+              : characterImagePath(story.id, id as SpeakerId, heroId);
+          }}
           mood={(id) => state.companionMoods?.[id as CompanionId] ?? 5}
           hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
           heroMemory={state.heroMemory ?? []}
           journeyNote={journeyNote}
-          branches={currentScene.branches}
+          branches={visibleBranches}
           onTakeBranch={handleChoose}
           history={(id) => state.dialogueHistory?.[id] ?? []}
           askRequest={askRequest}
           onApplyTurn={handleApplyDialogueTurn}
           onSessionClose={() => handleDialogueClose()}
           onActiveChange={setDialogueActive}
+          onAskConsumed={() => setAskRequest(null)}
         />
       )}
 
@@ -1067,22 +1333,25 @@ export function StoryPlayer({
       <AnimatePresence>
         {pendingEncounter && (
           <EncounterFlow
-            key={pendingEncounter.id}
+            key={`${pendingEncounter.id}#${encounterQueueLen}#${encounterRetryNonce}`}
             encounter={pendingEncounter}
             storyId={story.id}
-            hero={state.hero}
+            age={ageFromRange(story.ageRange)}
             companions={state.companions}
             companionMoods={state.companionMoods ?? {}}
             partyHp={state.partyHp ?? { hero: DEFAULT_MAX_HP.hero }}
             partyMaxHp={state.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }}
             fallenAttackers={state.fallenAttackers ?? []}
             characterImageBase={(id, mode = "default") => {
-              // Honor per-character `image` override when set, but only
-              // for the default in-scene sprite. Battle-stance art keeps
-              // the id-based convention under /characters/battle/.
-              if (mode === "default") {
-                const ch = characters.characters.find((c) => c.id === id);
-                if (ch?.image) return ch.image;
+              // Honor the per-mode override (`image` for the in-scene sprite,
+              // `battleImage` for the combat stance); else fall back to the
+              // id-based convention for that folder.
+              const ch = characters.characters.find((c) => c.id === id);
+              if (mode === "default" && ch) {
+                return characterSpriteBase(story.id, ch, heroId);
+              }
+              if (mode === "battle" && ch?.battleImage) {
+                return ch.battleImage;
               }
               return characterImagePath(story.id, id, heroId, mode);
             }}
@@ -1092,26 +1361,31 @@ export function StoryPlayer({
             initialBattleState={persistedBattleState}
             onBattleStateChange={handleBattleStateChange}
             onComplete={applyEncounterResult}
+            onRetry={retryEncounter}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
       </AnimatePresence>
 
-      {/* Branch puzzle — overlay shown after picking a branch with
-          `puzzle`. `attemptKey` remounts PatternPuzzle for retry. */}
-      {pendingPuzzle && (
-        <div
-          className="fixed inset-0 z-[55] bg-ink/85 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <PatternPuzzle
-            key={`${pendingPuzzle.branch.id}-${pendingPuzzle.attemptKey}`}
-            puzzle={pendingPuzzle.puzzle}
-            onSolved={handlePuzzleResolved}
+      {/* Branch educational-challenge gate — narrated bookend (intro line →
+          problem(s) → outro line) over a dim/blur veil. AnimatePresence plays
+          the veil's fade-out when the gate resolves and pendingChallenge clears. */}
+      <AnimatePresence>
+        {pendingChallenge && (
+          <ChallengeGate
+            key={pendingChallenge.branch.id}
+            challenge={pendingChallenge.challenge}
+            solvedCount={pendingChallenge.solved}
+            total={pendingChallenge.total}
+            attemptKey={pendingChallenge.attemptKey}
+            seed={[...pendingChallenge.branch.id].reduce(
+              (a, c) => a + c.charCodeAt(0),
+              0,
+            )}
+            onResolved={(correct) => handleChallengeResolved(correct)}
           />
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       <SettingsModal
         open={settingsOpen}
@@ -1122,26 +1396,105 @@ export function StoryPlayer({
         }}
         storyTitle={story.title}
         heroName={state.hero.name}
-        muted={muted}
-        onToggleMute={() => setMuted((m) => !m)}
+        voiceVolume={voiceVolume}
+        bgmVolume={bgmVolume}
+        sfxVolume={sfxVolume}
+        onVoiceVolume={setVoiceVolume}
+        onBgmVolume={setBgmVolume}
+        onSfxVolume={setSfxVolume}
+        onResetVolumes={() => {
+          setVoiceVolume(DEFAULT_VOLUMES.voice);
+          setBgmVolume(DEFAULT_VOLUMES.bgm);
+          setSfxVolume(DEFAULT_VOLUMES.sfx);
+        }}
+        onPreviewSfx={() => getAudio().playSfx(SFX.MEDAL)}
       />
+
+      {/* "Arriving in the world" veil — starts black (continuing the home
+          dive's fade-out) and lifts on mount, so the route handoff is
+          seamless. One-shot; skipped in admin preview. */}
+      {!previewMode && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-40 bg-ink"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 1.5, ease: "easeOut" }}
+        />
+      )}
     </div>
   );
 }
 
-/** Ask question, rendered identically to a branch ChoiceButton (the player
- *  shouldn't have to distinguish a question from a choice visually). */
+/** Ask question, rendered like a branch ChoiceButton (the player shouldn't
+ *  have to distinguish a question from a choice) — plus a small portrait of
+ *  the character being asked, pinned to the right edge. */
 function AskChip({
   label,
+  iconBase,
+  iconFallbackBase,
   onSelect,
 }: {
   label: string;
+  iconBase?: string;
+  iconFallbackBase?: string;
   onSelect: () => void;
 }) {
   return (
     <button type="button" onClick={onSelect} className={choiceButtonClass}>
       <span>{label}</span>
+      {iconBase && (
+        <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+          <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
+        </span>
+      )}
     </button>
+  );
+}
+
+const ASK_ICON_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
+
+/** Tiny character portrait for an ask chip — tries each extension of `base`,
+ *  then of `fallbackBase` (the in-scene sprite), like the dialogue portrait. */
+function AskAvatar({
+  base,
+  fallbackBase,
+  alt,
+}: {
+  base: string;
+  fallbackBase?: string;
+  alt: string;
+}) {
+  const list = useMemo(
+    () => [
+      ...ASK_ICON_EXTS.map((e) => base + e),
+      ...(fallbackBase ? ASK_ICON_EXTS.map((e) => fallbackBase + e) : []),
+    ],
+    [base, fallbackBase],
+  );
+  const [idx, setIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
+    setIdx(0);
+    setFailed(false);
+  }, [base, fallbackBase]);
+
+  if (failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- extension fallback
+    <img
+      src={assetUrl(list[idx])}
+      alt={alt}
+      draggable={false}
+      aria-hidden
+      className="block h-full w-full object-cover object-top"
+      onError={() => {
+        if (idx + 1 < list.length) setIdx(idx + 1);
+        else setFailed(true);
+      }}
+    />
   );
 }
 
@@ -1159,7 +1512,9 @@ function EndingPanel({
   return (
     <div className="flex flex-col items-center gap-4 rounded-card-lg bg-paper-deep/60 p-6 text-center ring-1 ring-ink-soft/10 shadow-card">
       <p className="font-handwritten text-3xl text-accent-deep">The End</p>
-      <h2 className="text-2xl font-semibold text-ink">{endingLabel}</h2>
+      {endingLabel && (
+        <h2 className="text-2xl font-semibold text-ink">{endingLabel}</h2>
+      )}
       <p className="text-base text-ink-soft">
         You earned{" "}
         <span className="font-semibold text-accent-deep">

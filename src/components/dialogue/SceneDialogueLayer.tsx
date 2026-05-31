@@ -13,6 +13,7 @@ import type {
   SpeakerId,
 } from "@/types/story";
 import { canTalkTo } from "@/lib/dialogue-personas";
+import { assetUrl } from "@/lib/asset-paths";
 import { DialogueBubble } from "./DialogueBubble";
 import { DialogueChoiceCards } from "./DialogueChoiceCards";
 
@@ -30,6 +31,10 @@ interface Props {
   /** Resolve a portrait base path (no extension) for the rail thumbnails.
    *  Convention: `/stories/<storyId>/dialogue/<characterId>` (1024×1024). */
   portraitBase: (id: SpeakerId) => string;
+  /** Fallback base when no dedicated dialogue head-shot exists — the in-scene
+   *  sprite (honors the `image` override). Keeps freshly added characters from
+   *  rendering as a blank color disc. */
+  portraitFallbackBase?: (id: SpeakerId) => string;
   /** Current mood per character (from PlayState.companionMoods or 5). */
   mood: (id: SpeakerId) => number;
   /** Whether this character has already gifted the hero (gate input). */
@@ -59,6 +64,11 @@ interface Props {
    *  "ask" chips). When `key` changes, the layer opens `characterId` and
    *  immediately sends `question` as a normal hero turn. */
   askRequest?: { characterId: SpeakerId; question: string; key: number } | null;
+  /** Fired once the current `askRequest` has been claimed, so the caller can
+   *  clear it. Without this the request is write-only and a later
+   *  unmount→remount (encounter / outcome bridge) re-opens the stale ask's
+   *  character over the NEW scene. */
+  onAskConsumed?: () => void;
 }
 
 const IMAGE_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
@@ -80,6 +90,7 @@ export function SceneDialogueLayer({
   extraDialogueCharacters,
   characters,
   portraitBase,
+  portraitFallbackBase,
   mood,
   hasGifted,
   heroMemory,
@@ -91,6 +102,7 @@ export function SceneDialogueLayer({
   onSessionClose,
   onActiveChange,
   askRequest,
+  onAskConsumed,
 }: Props) {
   void storyId;
   const [active, setActive] = useState<SpeakerId | null>(null);
@@ -191,7 +203,13 @@ export function SceneDialogueLayer({
     if (!askRequest) return;
     if (handledAskKeyRef.current === askRequest.key) return;
     handledAskKeyRef.current = askRequest.key;
+    // Claim it immediately so the parent clears `askRequest`. If we left it set,
+    // a later unmount→remount (encounter / outcome bridge) would re-open this
+    // ask's character over the NEXT scene.
+    onAskConsumed?.();
     const { characterId, question } = askRequest;
+    // (Asks may target an off-rail persona character by design — railIds line
+    // surfaces them while talking — so we gate only on persona presence.)
     if (!canTalkTo(characterMap[characterId])) return;
     if (active && active !== characterId) closeSession();
     sessionStartedRef.current = characterId;
@@ -205,6 +223,17 @@ export function SceneDialogueLayer({
   useEffect(() => {
     onActiveChange?.(active !== null);
   }, [active, onActiveChange]);
+
+  // Clear the parent's "dialogue active" flag on unmount. Taking a branch with
+  // an `outcome` (or one that starts an encounter) flips `showingOutcome` /
+  // `pendingEncounter` in the same click that closes the session, which
+  // unmounts this layer BEFORE the active-sync effect above can fire `false`.
+  // Without this, `dialogueActive` sticks `true` and the parent hides the
+  // outcome narration + bottom UI. Deps are the stable setter only, so this
+  // runs exactly on unmount (no per-turn flicker).
+  useEffect(() => {
+    return () => onActiveChange?.(false);
+  }, [onActiveChange]);
 
   /** Abort the in-flight dialogue fetch (close, character switch). */
   const abortRef = useRef<AbortController | null>(null);
@@ -289,6 +318,11 @@ export function SceneDialogueLayer({
     }
     setActive(null);
     setLatestReply(null);
+    // Clear the parent's flag in THIS commit rather than waiting for the
+    // active-sync effect — otherwise a dialogue-driven branch advance renders
+    // the new scene for one frame with the bottom UI hidden + narration
+    // unmounted (dialogueActive still true).
+    onActiveChange?.(false);
   }
 
   function characterColor(id: SpeakerId): string {
@@ -376,6 +410,7 @@ export function SceneDialogueLayer({
               >
                 <PortraitImg
                   base={portraitBase(id)}
+                  fallbackBase={portraitFallbackBase?.(id)}
                   alt={characterName(id)}
                   color={characterColor(id)}
                 />
@@ -432,22 +467,32 @@ export function SceneDialogueLayer({
  */
 function PortraitImg({
   base,
+  fallbackBase,
   alt,
   color,
 }: {
   base: string;
+  /** Tried (own extension chain) after `base` 404s — the in-scene sprite, so
+   *  characters without a dedicated dialogue head-shot still show. */
+  fallbackBase?: string;
   alt: string;
   color: string;
 }) {
   const [idx, setIdx] = useState(0);
   const [failed, setFailed] = useState(false);
-  const list = useMemo(() => IMAGE_EXTS.map((e) => base + e), [base]);
+  const list = useMemo(
+    () => [
+      ...IMAGE_EXTS.map((e) => base + e),
+      ...(fallbackBase ? IMAGE_EXTS.map((e) => fallbackBase + e) : []),
+    ],
+    [base, fallbackBase],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
     setIdx(0);
     setFailed(false);
-  }, [base]);
+  }, [base, fallbackBase]);
 
   if (failed) {
     return (
@@ -461,7 +506,7 @@ function PortraitImg({
   return (
     // eslint-disable-next-line @next/next/no-img-element -- extension fallback
     <img
-      src={list[idx]}
+      src={assetUrl(list[idx])}
       alt={alt}
       draggable={false}
       className="block h-full w-full object-cover"

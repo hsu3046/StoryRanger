@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { CompanionIdSchema, SpeakerIdSchema } from "./primitives";
+import {
+  ChallengeCategorySchema,
+  CompanionIdSchema,
+  SpeakerIdSchema,
+} from "./primitives";
 
 /**
  * Story graph: Scene nodes connected by Branch edges.
@@ -7,7 +11,6 @@ import { CompanionIdSchema, SpeakerIdSchema } from "./primitives";
 
 export const RewardSchema = z.object({
   items: z.array(z.string()).optional(),
-  medalId: z.string().optional(),
   moodBoost: z
     .array(
       z.object({
@@ -18,24 +21,48 @@ export const RewardSchema = z.object({
     .optional(),
 });
 
-export const PatternPuzzleDefSchema = z.object({
-  kind: z.literal("sequence"),
-  title: z.string(),
-  symbols: z.array(z.string()),
-  sequence: z.array(z.number()),
+/** Visibility gate for a branch. Every present clause must be satisfied (AND),
+ *  and each clause requires ALL of its listed ids. Absent/empty → the branch is
+ *  always shown. Evaluated at render time against PlayState (no persistence). */
+export const BranchConditionSchema = z.object({
+  /** Player must hold ALL of these item ids in their inventory. */
+  hasItems: z.array(z.string()).optional(),
+  /** ALL of these companions must be in the party. */
+  hasCompanions: z.array(CompanionIdSchema).optional(),
+});
+
+/** Branch gate: an age-appropriate educational challenge auto-generated at
+ *  runtime. `enabled` is a literal so the field is presence-toggled; `category`
+ *  defaults to "auto" (pick an age-appropriate one) — authors rarely set it. */
+export const BranchChallengeSchema = z.object({
+  enabled: z.literal(true),
+  category: z.union([z.literal("auto"), ChallengeCategorySchema]).default("auto"),
+  /** How many problems the player must solve (in sequence) to pass the gate.
+   *  Default 1. A wrong answer always re-rolls a fresh problem — the gate
+   *  retries until solved (there is no skip / fail-out). */
+  count: z.number().int().min(1).max(10).default(1),
 });
 
 export const BranchSchema = z.object({
   id: z.string(),
   label: z.string(),
   next: z.string(),
+  /** Companion who JOINS the party when this branch is taken (dedup — a
+   *  no-op if already in the party). */
   addsCompanion: CompanionIdSchema.optional(),
-  bgmOverride: z.string().optional(),
-  /** Optional mini-puzzle. `onFailMode` controls retry vs continue.
-   *  Boards are narrative only — actual rewards live on the next
-   *  scene's `reward`. */
-  puzzle: PatternPuzzleDefSchema.optional(),
-  onFailMode: z.enum(["retry", "skip"]).optional(),
+  /** Companion who LEAVES the party when this branch is taken (parting
+   *  moment). Their mood + HP are kept, so re-joining later restores them. */
+  removesCompanion: CompanionIdSchema.optional(),
+  /** Optional visibility gate — the branch only appears as a choice when the
+   *  condition is met (e.g. holds an item, has a companion). */
+  condition: BranchConditionSchema.optional(),
+  /** Optional educational challenge gate. When enabled, an age-appropriate
+   *  math problem must be solved to take the branch (a wrong answer always
+   *  retries with a fresh problem — no skip).
+   *  (The pre-v4 hand-authored `puzzle` field + the old `onFailMode` toggle are
+   *  no longer in the schema; any legacy value is dropped by Zod on the next
+   *  admin save. No bundled content depends on them.) */
+  challenge: BranchChallengeSchema.optional(),
   /** Outcome narration shown AFTER the branch is taken and BEFORE
    *  navigating to the next scene. Single tap continues. */
   outcome: z.string().optional(),
@@ -91,6 +118,7 @@ export const StorySchema = z.object({
 export type StoryT = z.infer<typeof StorySchema>;
 export type SceneT = z.infer<typeof SceneSchema>;
 export type BranchT = z.infer<typeof BranchSchema>;
+export type BranchConditionT = z.infer<typeof BranchConditionSchema>;
+export type BranchChallengeT = z.infer<typeof BranchChallengeSchema>;
 export type SceneAskT = z.infer<typeof SceneAskSchema>;
 export type RewardT = z.infer<typeof RewardSchema>;
-export type PatternPuzzleDefT = z.infer<typeof PatternPuzzleDefSchema>;

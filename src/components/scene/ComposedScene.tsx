@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { CompanionId, SpeakerId } from "@/types/story";
+import { assetUrl, commonAssetPath } from "@/lib/asset-paths";
 
 export type StagePosition =
   | "far-left"
@@ -128,7 +128,11 @@ export function ComposedScene({
 const EXTS = [".webp", ".png", ".jpg", ".jpeg"];
 
 function getCandidates(base: string): string[] {
-  return EXTS.map((ext) => base + ext);
+  const exts = (b: string) => EXTS.map((ext) => b + ext);
+  // Try the story-scoped path first, then the shared/common twin (a story
+  // overrides a common asset by keeping its own same-named file).
+  const common = commonAssetPath(base);
+  return common ? [...exts(base), ...exts(common)] : exts(base);
 }
 
 function BackgroundLayer({ base, alt }: { base: string; alt: string }) {
@@ -151,15 +155,15 @@ function BackgroundLayer({ base, alt }: { base: string; alt: string }) {
   }
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element -- served directly from the asset CDN (no next/image proxy); extension fallback via onError
+    <img
       key={candidates[idx]}
-      src={candidates[idx]}
+      src={assetUrl(candidates[idx])}
       alt={alt}
-      fill
-      priority
-      sizes="100vw"
-      quality={82}
-      className="object-cover object-center"
+      loading="eager"
+      fetchPriority="high"
+      draggable={false}
+      className="absolute inset-0 h-full w-full object-cover object-center"
       onError={() => {
         if (idx + 1 < candidates.length) setIdx(idx + 1);
         else setFailed(true);
@@ -191,11 +195,27 @@ function SpriteLayer({
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const candidates = getCandidates(layer.base);
 
+  // Measure as soon as the <img> is attached IF it's already decoded (a cached
+  // image — e.g. a 2nd instance of the same monster — whose `onLoad` never
+  // fires). Without this the ratio stays null, `width:auto` kicks in, and the
+  // browser's aspect-ratio shrink quirk renders that instance at ~40% size —
+  // the "random tiny duplicate monster" bug. Stable identity (useCallback) so
+  // React only invokes it on real mount/unmount.
+  const measureOnAttach = useCallback((img: HTMLImageElement | null) => {
+    if (img && img.complete && img.naturalWidth > 0) {
+      setAspectRatio((prev) => prev ?? img.naturalWidth / img.naturalHeight);
+    }
+  }, []);
+
   useEffect(() => {
+    // Reset the extension-fallback cursor when the image path changes. We do
+    // NOT null `aspectRatio` here — the <img> remounts on its `key` (the
+    // resolved src) and `measureOnAttach` / `onLoad` re-measure the new image.
+    // Nulling it would race with (and clobber) the synchronous cached-image
+    // measurement, dropping the sprite back to the `width:auto` shrink path.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on base change
     setIdx(0);
     setFailed(false);
-    setAspectRatio(null);
   }, [layer.base]);
 
   const scale = layer.scale ?? defaultScale;
@@ -324,7 +344,8 @@ function SpriteLayer({
           measured we swap to the exact width derived from `naturalAspect`. */}
       <motion.img
         key={candidates[idx]}
-        src={candidates[idx]}
+        ref={measureOnAttach}
+        src={assetUrl(candidates[idx])}
         alt={layer.alt ?? ""}
         draggable={false}
         animate={innerAnimate}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
+import { Backpack, GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
 
 import {
   attackerName,
@@ -10,8 +10,6 @@ import {
   canUseItem,
   chooseHeroAction,
   enterMonsterAttack,
-  puzzleKindFor,
-  resolvePuzzleKind,
   resolveDefense,
   resolvePuzzleAttack,
   setupBattle,
@@ -22,21 +20,22 @@ import {
   type SetupArgs,
 } from "@/lib/battle-engine";
 import { getAudio, SFX } from "@/lib/audio-engine";
+import { encounterOutroLine } from "@/lib/encounter-lines";
+import { assetUrl } from "@/lib/asset-paths";
 import { MONSTERS } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
 import { characterSize, sizeScale } from "@/lib/sprite-size";
+import { generateChallenge, type Challenge } from "@/lib/education";
 
 import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
 import { HitsBar } from "./HpBar";
-import { MathPuzzle } from "./MathPuzzle";
-import type { PuzzleKind } from "@/lib/puzzle";
+import { EducationalChallenge } from "../challenge/EducationalChallenge";
 import { DamageNumber, type FloatingEffect } from "./DamageNumber";
 
 import type {
   Character,
   CompanionId,
-  Medal,
   PartyHp,
   SpeakerId,
 } from "@/types/story";
@@ -68,17 +67,19 @@ interface Props {
     /** Items spent during the battle — removed from PlayState.inventory. */
     itemsConsumed: string[];
   }) => void;
+  /** "Try again" on the defeat panel — restart this battle fresh. When absent,
+   *  the defeat panel falls back to a single "Leave the story" button. */
+  onRetry?: () => void;
   /** Open the global Settings modal from inside the battle. */
   onOpenSettings?: () => void;
   /** Player inventory (item ids, may repeat). Drives the in-battle item
    *  row; consumed items are removed from PlayState when the battle ends. */
   inventory?: string[];
-  /** Authored victory line (encounter.outro.victory, already templated).
-   *  Shown on the victory panel; falls back to a default when empty. */
-  victoryNarration?: string;
-  /** Medal awarded for winning this encounter — shown on the victory panel
-   *  (a separate row above the loot), so items + medal sit on one screen. */
-  victoryMedal?: Medal | null;
+  /** Encounter-level drop items (in addition to monster drops) — folded into
+   *  the victory panel's loot. */
+  victoryItems?: string[];
+  /** Target age (story midpoint) — drives challenge difficulty tier. */
+  age: number;
 }
 
 const HERO_POSITIONS: Record<number, StagePosition[]> = {
@@ -97,10 +98,11 @@ export function BattleScreen({
   initialState,
   onStateChange,
   onComplete,
+  onRetry,
   onOpenSettings,
   inventory = [],
-  victoryNarration,
-  victoryMedal,
+  victoryItems,
+  age,
 }: Props) {
   const [state, setState] = useState<BattleState>(
     () => initialState ?? setupBattle(setup),
@@ -310,15 +312,42 @@ export function BattleScreen({
     state.monsters,
   ]);
 
-  const lastLog = state.log[state.log.length - 1];
+  // Per-attack SFX: an attack landing (hit/crit) vs. missing (target dodges).
+  // Scan the log lines ADDED this update from the end (not just the very last
+  // entry): the killing blow appends a "victory" line in the same turn, so the
+  // hit/crit that ended the battle is no longer the final entry — without this
+  // the final attack would be silent and only the victory stinger would play.
+  const prevLogLen = useRef<number | null>(null);
   useEffect(() => {
-    if (!lastLog) return;
-    if (lastLog.tone === "hit" || lastLog.tone === "crit") {
-      getAudio().playSfx(SFX.PAGE_TURN);
-    } else if (lastLog.tone === "victory") {
-      getAudio().playSfx(SFX.MEDAL);
+    if (prevLogLen.current === null) {
+      prevLogLen.current = state.log.length; // don't replay pre-existing log
+      return;
     }
-  }, [lastLog?.text, lastLog?.tone, lastLog]);
+    const fresh = state.log.slice(prevLogLen.current);
+    prevLogLen.current = state.log.length;
+    for (let i = fresh.length - 1; i >= 0; i--) {
+      const t = fresh[i].tone;
+      if (t === "hit" || t === "crit") {
+        getAudio().playSfx(SFX.ATTACK);
+        break;
+      }
+      if (t === "miss") {
+        getAudio().playSfx(SFX.DODGE);
+        break;
+      }
+    }
+  }, [state.log]);
+
+  // Battle-end stinger — fire once when the battle reaches a terminal phase.
+  // Driven by `phase` (not the log tone): the "defeat" tone also marks a single
+  // party member falling, whereas phase only flips on a full win/wipe. Delayed
+  // so the killing-blow attack cue (above) is heard first, then the stinger.
+  useEffect(() => {
+    if (state.phase !== "victory" && state.phase !== "defeat") return;
+    const key = state.phase === "victory" ? SFX.VICTORY : SFX.DEFEAT;
+    const t = setTimeout(() => getAudio().playSfx(key), 450);
+    return () => clearTimeout(t);
+  }, [state.phase]);
 
   const heroPartyIds: (SpeakerId | CompanionId)[] = useMemo(
     () => [heroId, ...state.companions],
@@ -393,6 +422,16 @@ export function BattleScreen({
 
   const isTerminal = state.phase === "victory" || state.phase === "defeat";
 
+  // Hold the Victory/Defeat panel back ~0.5s after the battle resolves so the
+  // final blow lands and registers before the result card pops in — appearing
+  // the same frame the last monster falls reads as abrupt.
+  const [showTerminal, setShowTerminal] = useState(false);
+  useEffect(() => {
+    if (!isTerminal) return;
+    const t = setTimeout(() => setShowTerminal(true), 500);
+    return () => clearTimeout(t);
+  }, [isTerminal]);
+
   // Derive what (if any) puzzle is active. Two flavours: attack (hero is
   // hitting a monster) and defend (a monster is hitting the hero).
   type ActivePuzzle =
@@ -410,23 +449,22 @@ export function BattleScreen({
           }
         : null;
 
-  // Resolve the puzzle kind once per active puzzle. Doing it inline in JSX
-  // would re-roll any "random" kind on every re-render (animation state,
-  // etc.), regenerating the puzzle mid-solve. Memoizing on the puzzle's
-  // identity keeps the question stable until a new puzzle opens.
-  const activePuzzleKind = useMemo<PuzzleKind | null>(() => {
+  // Generate the challenge once per active puzzle. Doing it inline in JSX
+  // would re-roll on every re-render (animation state, etc.), regenerating
+  // the problem mid-solve. Memoizing on the puzzle's identity keeps the
+  // question stable until a new puzzle opens. Difficulty is age-driven; the
+  // category is auto-picked for the age tier.
+  const activeChallenge = useMemo<Challenge | null>(() => {
     if (!activePuzzle) return null;
-    if (activePuzzle.mode === "attack") {
-      return puzzleKindFor(state.activeAttacker, activePuzzle.monster);
-    }
-    return resolvePuzzleKind(activePuzzle.monster.puzzleKind);
+    return generateChallenge({ age, category: "auto" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-roll only on puzzle identity change
   }, [
+    age,
     activePuzzle?.mode,
     activePuzzle?.monster.monsterId,
     state.activeAttacker,
     // Key on the target INSTANCE index too, so two monsters sharing a
-    // monsterId each get a fresh "random" roll instead of a cached one.
+    // monsterId each get a fresh roll instead of a cached one.
     state.pendingTargetIdx,
     state.defendingMonsterIdx,
   ]);
@@ -446,20 +484,32 @@ export function BattleScreen({
         className="absolute inset-x-0 top-0 z-50 flex items-start justify-between gap-3 px-4 sm:px-6"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <PartyHpRow
-          party={["hero", ...state.companions]}
-          active={state.activeAttacker}
-          characterImageBase={characterImageBase}
-          heroId={heroId}
-          canSwap={state.phase === "hero-choose"}
-          canAct={(a) => canAttackerAct(a, state)}
-          partyLives={state.partyLives}
-          partyMaxLives={state.partyMaxLives}
-          fallenAttackers={state.fallenAttackers}
-          onSwitch={(to) =>
-            setState((s) => chooseHeroAction(s, { kind: "switch", to }))
-          }
-        />
+        {/* Left column: party HP icons + a bag below them (use items). */}
+        <div className="flex flex-col items-start gap-2">
+          <PartyHpRow
+            party={["hero", ...state.companions]}
+            active={state.activeAttacker}
+            characterImageBase={characterImageBase}
+            heroId={heroId}
+            canSwap={state.phase === "hero-choose"}
+            canAct={(a) => canAttackerAct(a, state)}
+            partyLives={state.partyLives}
+            partyMaxLives={state.partyMaxLives}
+            fallenAttackers={state.fallenAttackers}
+            onSwitch={(to) =>
+              setState((s) => chooseHeroAction(s, { kind: "switch", to }))
+            }
+          />
+          <BattleBag
+            inventory={inventory}
+            state={state}
+            onUse={(itemId) =>
+              setState((s) =>
+                chooseHeroAction(s, { kind: "useItem", itemId }),
+              )
+            }
+          />
+        </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-start justify-end gap-2">
           {state.monsters.map((m, i) => (
             <HitsBar
@@ -500,24 +550,13 @@ export function BattleScreen({
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {state.phase === "hero-choose" && (
-          <>
-            <ItemRow
-              inventory={inventory}
-              state={state}
-              onUse={(itemId) =>
-                setState((s) =>
-                  chooseHeroAction(s, { kind: "useItem", itemId }),
-                )
-              }
-            />
-            <ActionRow
-              monsters={aliveMonsters}
-              onAction={(a) => setState((s) => chooseHeroAction(s, a))}
-            />
-          </>
+          <ActionRow
+            monsters={aliveMonsters}
+            onAction={(a) => setState((s) => chooseHeroAction(s, a))}
+          />
         )}
 
-        {isTerminal && (
+        {isTerminal && showTerminal && (
           <TerminalPanel
             outcome={
               state.phase === "victory"
@@ -526,9 +565,9 @@ export function BattleScreen({
                   ? "defeat"
                   : "escaped"
             }
-            victoryNarration={victoryNarration}
-            victoryMedal={victoryMedal}
+            victoryItems={victoryItems}
             rewards={state.rewards}
+            onRetry={onRetry}
             onContinue={() =>
               onComplete({
                 outcome:
@@ -549,10 +588,12 @@ export function BattleScreen({
 
       {/* Math puzzle overlay — attack OR defend */}
       <AnimatePresence>
-        {activePuzzle && activePuzzle.mode === "attack" && (
-          <MathPuzzle
+        {activePuzzle && activeChallenge && activePuzzle.mode === "attack" && (
+          <EducationalChallenge
+            mode="attack"
+            withTimer
+            challenge={activeChallenge}
             targetName={activePuzzle.monster.name}
-            kind={activePuzzleKind ?? "add-1d"}
             attackerLabel={attackerName(state.activeAttacker)}
             streak={state.streak}
             onSolved={(correct, durationMs) => {
@@ -563,11 +604,12 @@ export function BattleScreen({
             }}
           />
         )}
-        {activePuzzle && activePuzzle.mode === "defend" && (
-          <MathPuzzle
+        {activePuzzle && activeChallenge && activePuzzle.mode === "defend" && (
+          <EducationalChallenge
             mode="defend"
+            withTimer
+            challenge={activeChallenge}
             targetName={activePuzzle.monster.name}
-            kind={activePuzzleKind ?? "add-1d"}
             streak={0}
             onSolved={(correct, durationMs) => {
               if (correct) {
@@ -657,7 +699,7 @@ function PartyHpRow({
                 <span
                   className="block h-8 w-8 overflow-hidden rounded-full"
                   style={{
-                    backgroundImage: `url(${imageBase}.webp)`,
+                    backgroundImage: `url(${assetUrl(`${imageBase}.webp`)})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center top",
                   }}
@@ -756,7 +798,13 @@ function ActionRow({
  * (`canUseItem`) decide enablement — no per-effect UI branches, so future
  * battle items appear here automatically.
  */
-function ItemRow({
+/**
+ * In-battle bag — a Backpack icon (under the party HP, top-left) that opens a
+ * small panel listing the player's items. Non-event items (`itemUsableIn`
+ * "battle" → heal, etc.) are usable when it's the hero's turn and the effect
+ * applies (`canUseItem`); event/story items are shown greyed for reference.
+ */
+function BattleBag({
   inventory,
   state,
   onUse,
@@ -765,41 +813,92 @@ function ItemRow({
   state: BattleState;
   onUse: (itemId: string) => void;
 }) {
-  // Available count = how many of each id remain after this battle's spends.
+  const [open, setOpen] = useState(false);
+
+  // Available count per id = inventory minus what's already been spent.
   const counts = new Map<string, number>();
   for (const id of inventory) counts.set(id, (counts.get(id) ?? 0) + 1);
   for (const id of state.itemsConsumed) {
     counts.set(id, (counts.get(id) ?? 0) - 1);
   }
-  const usable = [...counts.keys()]
+  const entries = [...counts.keys()]
     .map((id) => ({ id, item: getItem(id), avail: counts.get(id) ?? 0 }))
-    .filter((e) => e.avail > 0 && e.item && itemUsableIn(e.item, "battle"));
-
-  if (usable.length === 0) return null;
+    .filter((e) => e.avail > 0 && !!e.item);
+  const heroTurn = state.phase === "hero-choose";
 
   return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {usable.map(({ id, item, avail }) => {
-        if (!item) return null;
-        const enabled = canUseItem(state, item);
-        return (
-          <button
-            key={id}
-            type="button"
-            disabled={!enabled}
-            onClick={() => onUse(id)}
-            title={enabled ? item.description : "Can't use right now"}
-            className="inline-flex min-h-11 items-center gap-2 rounded-pill bg-paper/60 px-4 text-sm font-medium text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-paper/60"
-          >
-            <span aria-hidden>{item.icon ?? "🎁"}</span>
-            <span>{item.name}</span>
-            <span className="text-xs text-ink-soft">
-              {effectLabel(item.effect)}
-              {avail > 1 ? ` ×${avail}` : ""}
-            </span>
-          </button>
-        );
-      })}
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Open bag"
+        aria-expanded={open}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-paper/85 text-ink ring-1 ring-ink-soft/10 shadow-button backdrop-blur transition-all hover:bg-paper active:scale-95"
+      >
+        <Backpack size={22} weight="duotone" className="text-accent" />
+      </button>
+
+      {open && (
+        <>
+          {/* iOS-safe outside-tap close — a transparent backdrop catches the
+              tap (pointerdown listeners don't bubble from non-interactive
+              elements on iOS). */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-card-lg bg-paper/95 p-2 shadow-overlay ring-1 ring-ink-soft/15 backdrop-blur">
+            {entries.length === 0 ? (
+              <p className="px-2 py-3 text-center text-sm text-ink-soft/70">
+                Your bag is empty.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {entries.map(({ id, item, avail }) => {
+                  if (!item) return null;
+                  const usable = itemUsableIn(item, "battle");
+                  const enabled = usable && heroTurn && canUseItem(state, item);
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        disabled={!enabled}
+                        data-sfx="ruby-click"
+                        onClick={() => {
+                          onUse(id);
+                          setOpen(false);
+                        }}
+                        title={
+                          !usable
+                            ? "Story item — used when the moment comes"
+                            : !heroTurn
+                              ? "Wait for your turn"
+                              : enabled
+                                ? item.description
+                                : "Can't use right now"
+                        }
+                        className="flex w-full items-center gap-2 rounded-card px-2 py-1.5 text-left text-sm text-ink transition-colors enabled:hover:bg-paper-deep/60 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <span className="text-lg" aria-hidden>
+                          {item.icon ?? "🎁"}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {item.name}
+                          {avail > 1 ? ` ×${avail}` : ""}
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-soft">
+                          {usable ? effectLabel(item.effect) : "Story"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -827,17 +926,27 @@ function BattleActionButton({
 
 function TerminalPanel({
   outcome,
-  victoryNarration,
-  victoryMedal,
+  victoryItems,
   rewards,
   onContinue,
+  onRetry,
 }: {
   outcome: "victory" | "defeat" | "escaped";
-  victoryNarration?: string;
-  victoryMedal?: Medal | null;
+  victoryItems?: string[];
   rewards: string[];
   onContinue: () => void;
+  /** Defeat only — "Try again" restarts the battle. When absent, only the
+   *  single "Leave the story" path is offered. */
+  onRetry?: () => void;
 }) {
+  // Loot = monster drops (`rewards`) + encounter-level drops on victory.
+  const loot =
+    outcome === "victory" ? [...rewards, ...(victoryItems ?? [])] : rewards;
+  // A random "the way is clear" outro line for the victory subtitle, stable
+  // for this panel's lifetime. eslint-disable-next-line react-hooks/purity --
+  // one-shot seed for a freshly mounted terminal panel.
+  // eslint-disable-next-line react-hooks/purity
+  const outroSeed = useMemo(() => Math.floor(Math.random() * 1000), []);
   const title =
     outcome === "victory"
       ? "Victory!"
@@ -846,9 +955,7 @@ function TerminalPanel({
         : "You fell…";
   const subtitle =
     outcome === "victory"
-      ? // Authored victory line (encounter.outro.victory); the hardcoded
-        // string is the default shown when the author left it blank.
-        (victoryNarration?.trim() || "Well done! The adventure continues!")
+      ? encounterOutroLine(outroSeed)
       : outcome === "escaped"
         ? "Your friends help you find your breath."
         : "Glinda's blessing carries you to safety.";
@@ -857,26 +964,10 @@ function TerminalPanel({
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 rounded-card-lg bg-paper/55 p-5 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur">
       <p className="font-handwritten text-3xl text-accent-deep">{title}</p>
       <p className="text-base text-ink-soft">{subtitle}</p>
-      {/* Medal — its own row above the loot so the two never overlap. */}
-      {outcome === "victory" && victoryMedal && (
-        <div className="flex items-center gap-2 rounded-pill bg-amber-300/40 px-3 py-1.5 ring-1 ring-amber-700/30">
-          <span className="text-2xl leading-none" aria-hidden>
-            {victoryMedal.icon}
-          </span>
-          <span className="flex flex-col items-start text-left leading-tight">
-            <span className="font-handwritten text-xs text-amber-900">
-              New medal!
-            </span>
-            <span className="text-sm font-semibold text-amber-900">
-              {victoryMedal.name}
-            </span>
-          </span>
-        </div>
-      )}
-      {rewards.length > 0 && (
+      {loot.length > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-1.5">
           <span className="text-sm text-ink-soft">Loot:</span>
-          {countItems(rewards).map(({ id, count }) => (
+          {countItems(loot).map(({ id, count }) => (
             <span
               key={id}
               className="inline-flex items-center gap-1 rounded-pill bg-paper-deep/80 px-2.5 py-0.5 text-xs font-semibold text-ink ring-1 ring-ink-soft/15"
@@ -890,13 +981,33 @@ function TerminalPanel({
           ))}
         </div>
       )}
-      <button
-        type="button"
-        onClick={onContinue}
-        className="mt-1 inline-flex min-h-14 min-w-56 items-center justify-center rounded-pill bg-accent-deep px-10 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-64"
-      >
-        Continue
-      </button>
+      {outcome === "defeat" && onRetry ? (
+        // Defeat → let the player retry the battle or step out (progress kept).
+        <div className="mt-1 flex w-full flex-col items-stretch gap-2.5 sm:flex-row sm:justify-center">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex min-h-14 items-center justify-center rounded-pill bg-accent-deep px-8 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-48"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="inline-flex min-h-14 items-center justify-center rounded-pill bg-paper-deep/70 px-8 text-base font-medium text-ink ring-1 ring-ink-soft/15 transition-all hover:bg-paper-deep active:scale-[0.98] sm:min-w-48"
+          >
+            Leave the story
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="mt-1 inline-flex min-h-14 min-w-56 items-center justify-center rounded-pill bg-accent-deep px-10 text-lg font-semibold text-paper shadow-button transition-all active:scale-[0.98] sm:min-w-64"
+        >
+          Continue
+        </button>
+      )}
     </div>
   );
 }

@@ -38,24 +38,13 @@ export default async function EncountersPage({
               render: (e) => <code className="text-ink">{e.id}</code>,
             },
             {
-              key: "title",
-              header: "Title",
-              width: "w-44",
-              render: (e) => <span className="text-ink">{e.title}</span>,
-            },
-            {
               key: "trigger",
               header: "On Branch",
               width: "w-56",
               render: (e) => (
-                <div className="flex flex-col">
-                  <code className="text-ink-soft">
-                    {e.trigger.sceneId} → {e.trigger.branchId}
-                  </code>
-                  <span className="text-xs text-ink-soft/60">
-                    × {e.trigger.count ?? 1}
-                  </span>
-                </div>
+                <code className="text-ink-soft">
+                  {e.trigger.sceneId} → {e.trigger.branchId}
+                </code>
               ),
             },
             {
@@ -79,7 +68,9 @@ export default async function EncountersPage({
               header: "Bonus",
               render: (e) => (
                 <div className="flex flex-col gap-0.5 text-xs">
-                  {e.rewards.medalId && <span>🏅 {e.rewards.medalId}</span>}
+                  {(e.rewards.items ?? []).map((id) => (
+                    <span key={id}>🎁 {id}</span>
+                  ))}
                 </div>
               ),
             },

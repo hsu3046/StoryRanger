@@ -8,7 +8,8 @@ import type { Character } from "@/types/story";
 interface Props {
   text: string;
   character: Character;
-  muted: boolean;
+  /** Narration/voice volume, 0–1. 0 means muted (we skip the fetch + play). */
+  volume: number;
   /** Increments when narration changes — triggers re-play on same text rare-case. */
   playKey: string;
 }
@@ -16,15 +17,25 @@ interface Props {
 /**
  * Loads (cache → fetch → cache) and plays the narration audio.
  *
- * - Re-runs whenever text/voice/speed change OR `muted` flips.
+ * - Re-runs whenever text/voice/speed change OR voice is muted/unmuted
+ *   (the 0-volume boundary). In-range volume changes are applied live in a
+ *   separate effect so dragging the slider never restarts the line.
  * - iOS Safari blocks autoplay before any user gesture; we attempt anyway
  *   and silently swallow the resulting AbortError. After the first tap,
  *   subsequent narrations autoplay normally.
  */
-export function NarrationAudio({ text, character, muted, playKey }: Props) {
+export function NarrationAudio({ text, character, volume, playKey }: Props) {
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
+  const enabled = volume > 0;
+
+  // Apply in-range volume changes to the playing line without reloading it.
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = Math.max(0, Math.min(1, volume));
+    }
+  }, [volume]);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +46,7 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
         textPreview: text.slice(0, 40),
         voice: character.voice,
         voiceSpeed: character.voiceSpeed,
-        muted,
+        enabled,
         playKey,
       });
 
@@ -49,8 +60,8 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
         urlRef.current = null;
       }
 
-      if (muted) {
-        console.log("[narration] skip — muted");
+      if (!enabled) {
+        console.log("[narration] skip — voice muted");
         return;
       }
 
@@ -93,9 +104,9 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
         const url = URL.createObjectURL(blob);
         urlRef.current = url;
         const el = new Audio(url);
-        // Narration sits at full volume; BGM is attenuated in audio-engine.ts
-        // (BGM_VOLUME = 0.18) to keep the voice clearly forward.
-        el.volume = 1.0;
+        // Voice volume from the Settings slider; BGM is attenuated separately
+        // in audio-engine.ts to keep the voice clearly forward.
+        el.volume = Math.max(0, Math.min(1, volume));
         audioRef.current = el;
 
         console.log("[narration] play() attempt");
@@ -125,7 +136,10 @@ export function NarrationAudio({ text, character, muted, playKey }: Props) {
         urlRef.current = null;
       }
     };
-  }, [text, character.voice, character.voiceSpeed, muted, playKey]);
+    // `volume` intentionally excluded — only the 0-boundary (`enabled`) gates
+    // load/play; in-range changes are handled by the live-volume effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, character.voice, character.voiceSpeed, enabled, playKey]);
 
   // Render nothing — audio plays via Web Audio element only.
   // (We could surface an error indicator if needed, but it's noise for kids.)

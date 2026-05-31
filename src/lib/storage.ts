@@ -1,6 +1,8 @@
 import type { PlayState } from "@/types/story";
 import { DEFAULT_HERO } from "./narrative";
 import { ENCOUNTERS } from "@/data/encounters";
+import { MEDALS } from "@/data/medals";
+import { checkMedals } from "@/lib/medals-engine";
 
 /**
  * Renames of stable IDs across versions. Saves out in the wild may still
@@ -59,19 +61,42 @@ export function loadState(
     if (!parsed.companionMoods) parsed.companionMoods = {};
     if (!parsed.dialogueHistory) parsed.dialogueHistory = {};
     if (!parsed.inventory) parsed.inventory = [];
+    if (!parsed.companions) parsed.companions = [];
+    if (!parsed.branchHistory) parsed.branchHistory = [];
+    if (!parsed.giftedCharacters) parsed.giftedCharacters = [];
     if (typeof parsed.dialogueCount !== "number") parsed.dialogueCount = 0;
 
-    // Apply id renames before any other field touches them, so downstream
-    // checks (e.g. medal lookups) see the new id.
-    parsed.earnedMedals = parsed.earnedMedals.map(
-      (id) => MEDAL_ID_RENAMES[id] ?? id,
-    );
+    // Apply id renames, then drop ids no longer in the catalog. Old
+    // trigger-based saves carry medals (e.g. `tornado_survivor`, `silver_shoes`)
+    // that the metric catalog replaced; left in place they inflate the ending
+    // panel count (`earnedMedals.length`) and get re-recorded as global
+    // achievements. De-dupe too, in case a rename collides with an id already
+    // present.
+    const validMedalIds = new Set(MEDALS.medals.map((m) => m.id));
+    parsed.earnedMedals = [
+      ...new Set(
+        (parsed.earnedMedals ?? [])
+          .map((id) => MEDAL_ID_RENAMES[id] ?? id)
+          .filter((id) => validMedalIds.has(id)),
+      ),
+    ];
+
+    // Backfill metric medals whose thresholds the restored counters already
+    // meet — e.g. a save that predates a medal, or one whose stale ids were
+    // just dropped above. Without this the player would only be granted them
+    // on their NEXT qualifying action (next friend / battle / dialogue …).
+    const backfilled = checkMedals(MEDALS, parsed);
+    if (backfilled.length > 0) {
+      parsed.earnedMedals = [
+        ...new Set([...parsed.earnedMedals, ...backfilled.map((m) => m.id)]),
+      ];
+    }
 
     // interaction field is opt-in; missing is the natural "no overlay" state.
     // Sanity-check shape so a corrupted save doesn't crash the player.
     if (parsed.interaction) {
       const k = (parsed.interaction as { kind?: unknown }).kind;
-      if (k !== "puzzle" && k !== "outcome" && k !== "encounter") {
+      if (k !== "challenge" && k !== "outcome" && k !== "encounter") {
         delete parsed.interaction;
       } else if (k === "encounter") {
         // Drop queued encounter ids that no longer exist in the catalog —

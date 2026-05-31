@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 import type {
@@ -8,17 +8,17 @@ import type {
   Character,
   CompanionId,
   CompanionMoods,
-  Hero,
   PartyHp,
   SpeakerId,
 } from "@/types/story";
 import type { EncounterDef } from "@/types/encounter";
 import type { BattleState } from "@/lib/battle-engine";
-import { formatNarration } from "@/lib/narrative";
+import { encounterIntroLine } from "@/lib/encounter-lines";
+import { assetUrl } from "@/lib/asset-paths";
 
 import { BattleScreen } from "../battle/BattleScreen";
+import { EncounterCaption } from "./EncounterCaption";
 import { MONSTERS } from "@/data/monsters";
-import { getMedal } from "@/data/medals";
 
 export interface EncounterResult {
   encounterId: string;
@@ -30,14 +30,12 @@ export interface EncounterResult {
   itemsGained: string[];
   /** Consumables spent during the battle — removed from inventory. */
   itemsConsumed: string[];
-  medalId?: string;
   moodBoost?: { companionId: CompanionId; delta: number }[];
 }
 
 interface Props {
   encounter: EncounterDef;
   storyId: string;
-  hero: Hero;
   companions: CompanionId[];
   companionMoods: CompanionMoods;
   /** Persistent HP carried in from PlayState. */
@@ -63,14 +61,22 @@ interface Props {
   /** Fires on every BattleState change so the parent can persist it. */
   onBattleStateChange?: (state: BattleState) => void;
   onComplete: (result: EncounterResult) => void;
+  /** "Try again" after a defeat — restart this battle fresh (parent restores
+   *  the party + re-mounts via a key bump). */
+  onRetry?: () => void;
   /** Open the parent's Settings modal — surfaced inside battle. */
   onOpenSettings?: () => void;
+  /** Target age (story midpoint) — forwarded to BattleScreen for challenge
+   *  difficulty tiering. */
+  age: number;
 }
 
-type Phase = "alert" | "body";
+type Phase = "intro" | "alert" | "body";
 
+/** How long the intro narration line lingers before the alert splash. */
+const INTRO_DURATION_MS = 1500;
 /** How long the alert splash plays before the battle starts. */
-const ALERT_DURATION_MS = 2400;
+const ALERT_DURATION_MS = 2200;
 
 /**
  * Battle encounter overlay. Dramatic alert splash (monsters + headline) →
@@ -83,7 +89,6 @@ const ALERT_DURATION_MS = 2400;
 export function EncounterFlow({
   encounter,
   storyId,
-  hero,
   companions,
   companionMoods,
   partyHp,
@@ -96,33 +101,58 @@ export function EncounterFlow({
   initialBattleState,
   onBattleStateChange,
   onComplete,
+  onRetry,
   onOpenSettings,
+  age,
 }: Props) {
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
-  // alert splash is purely intro flair, not worth replaying on refresh.
+  // intro line + alert splash are purely intro flair, not worth replaying on
+  // refresh.
   const [phase, setPhase] = useState<Phase>(
-    initialBattleState ? "body" : "alert",
+    initialBattleState ? "body" : "intro",
   );
-
-  // Auto-advance alert → body after the splash plays.
-  useEffect(() => {
-    if (phase !== "alert") return;
-    const t = setTimeout(() => setPhase("body"), ALERT_DURATION_MS);
-    return () => clearTimeout(t);
-  }, [phase]);
 
   const monsterIds =
     encounter.displayMonsters ?? encounter.body.monsterIds;
+  // Stable per-encounter seed so the intro line doesn't re-roll each render
+  // (and consecutive encounters read different lines).
+  const introLine = useMemo(() => {
+    const seed = [...encounter.id].reduce((a, c) => a + c.charCodeAt(0), 0);
+    const lead = monsterIds[0];
+    const name = lead ? (MONSTERS[lead]?.name ?? lead) : undefined;
+    return encounterIntroLine({ kind: "battle", name, seed });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- monsterIds[0] captured via id
+  }, [encounter.id]);
+
+  // Auto-advance intro → alert → body.
+  useEffect(() => {
+    if (phase === "intro") {
+      const t = setTimeout(() => setPhase("alert"), INTRO_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+    if (phase === "alert") {
+      const t = setTimeout(() => setPhase("body"), ALERT_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   let body: React.ReactNode = null;
 
-  if (phase === "alert") {
+  if (phase === "intro") {
+    // Dim + blur the scene behind, with a calm 1-line intro caption.
+    body = (
+      <div className="absolute inset-0 bg-ink/55">
+        <EncounterCaption line={introLine} />
+      </div>
+    );
+  } else if (phase === "alert") {
     body = <EncounterAlertSplash monsterIds={monsterIds} storyId={storyId} />;
   } else {
     body = (
       <BattleScreen
         storyId={storyId}
+        age={age}
         characterImageBase={(id) => characterImageBase(id, "battle")}
         heroId={heroId}
         characters={characters}
@@ -130,16 +160,7 @@ export function EncounterFlow({
         inventory={inventory}
         initialState={initialBattleState}
         onStateChange={onBattleStateChange}
-        victoryNarration={
-          encounter.outro.victory
-            ? formatNarration(encounter.outro.victory, hero)
-            : undefined
-        }
-        victoryMedal={
-          encounter.rewards.medalId
-            ? getMedal(encounter.rewards.medalId)
-            : null
-        }
+        victoryItems={encounter.rewards.items ?? []}
         setup={{
           bg: encounter.intro.bg,
           monsterIds: encounter.body.monsterIds,
@@ -149,16 +170,18 @@ export function EncounterFlow({
           companions,
           companionMoods,
         }}
+        onRetry={onRetry}
         onComplete={(res) => {
           onComplete({
             encounterId: encounter.id,
             outcome: res.outcome,
             partyHp: res.partyHp,
             fallenAttackers: res.fallenAttackers,
-            itemsGained: res.outcome === "victory" ? res.rewards : [],
+            itemsGained:
+              res.outcome === "victory"
+                ? [...res.rewards, ...(encounter.rewards.items ?? [])]
+                : [],
             itemsConsumed: res.itemsConsumed,
-            medalId:
-              res.outcome === "victory" ? encounter.rewards.medalId : undefined,
             moodBoost:
               res.outcome === "victory"
                 ? encounter.rewards.moodBoost
@@ -173,9 +196,20 @@ export function EncounterFlow({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.6, ease: "easeInOut" }}
-      className="fixed inset-0 z-50 overflow-hidden bg-ink"
+      // Leaving the encounter: the battle blooms outward + fades, letting the
+      // story scene (which zoom-reveals underneath) take over — a softer,
+      // more deliberate hand-off than a plain cut.
+      exit={{
+        opacity: 0,
+        scale: 1.06,
+        transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+      }}
+      transition={{ duration: 0.45, ease: "easeInOut" }}
+      // Intro beat = let the scene show through, dimmed + blurred. Alert/battle
+      // draw their own full backgrounds, so switch to a solid base then.
+      className={`fixed inset-0 z-50 overflow-hidden ${
+        phase === "intro" ? "backdrop-blur-md" : "bg-ink"
+      }`}
     >
       {body}
     </motion.div>
@@ -242,7 +276,9 @@ function EncounterAlertSplash({
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- ext fallback */}
           <img
-            src={`${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`}
+            src={assetUrl(
+              `${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`,
+            )}
             onError={(e) => {
               const el = e.currentTarget;
               if (!el.src.endsWith(".png")) el.src = el.src.replace(".webp", ".png");
@@ -285,7 +321,7 @@ function EncounterAlertSplash({
             className="rounded-pill bg-ink/70 px-5 py-1.5 text-lg font-semibold uppercase tracking-wide text-paper sm:text-xl"
           >
             {monsterIds.length > 1
-              ? `${primaryName} +${monsterIds.length - 1}`
+              ? `${primaryName} ×${monsterIds.length}`
               : primaryName}
           </motion.p>
         )}

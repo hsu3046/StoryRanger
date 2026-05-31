@@ -1,17 +1,11 @@
-import { contentRepo } from "@/lib/content-repo";
 import { listMedals } from "@/data/medals";
 import { MedalsEditor } from "@/app/admin/_components/MedalsEditor";
 
 /**
- * Medals is a GLOBAL achievement catalog shared by every story. Triggers
- * carry their own storyId, so the editor offers a story picker per trigger.
+ * Medals is a GLOBAL achievement catalog shared by every story. Each medal is
+ * earned automatically from a play metric (friends made, battles cleared, …)
+ * reaching its threshold — no per-story ids.
  */
 export default function MedalsPage() {
-  const repo = contentRepo();
-  const stories = repo.listStoryIds().map((id) => ({
-    id,
-    title: repo.getStory(id)?.story.title ?? id,
-  }));
-
-  return <MedalsEditor initial={listMedals()} stories={stories} />;
+  return <MedalsEditor initial={listMedals()} />;
 }

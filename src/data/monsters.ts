@@ -8,7 +8,6 @@
 
 import monstersJson from "@/stories/wizard-of-oz/monsters.json";
 import { MonstersFileSchema, type MonsterStatsT } from "./schemas";
-import type { PuzzleKind } from "@/lib/puzzle";
 import type { SpriteSize } from "@/lib/sprite-size";
 
 export type MonsterType = "hostile" | "neutral" | "friendly";
@@ -20,7 +19,6 @@ export interface MonsterStats {
   hits: number;
   drops?: string[];
   size: SpriteSize;
-  puzzleKind?: PuzzleKind | "random";
   airborne?: boolean;
   notes?: string;
   /** Optional sprite path override (extensionless base). */

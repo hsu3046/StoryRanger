@@ -2,9 +2,12 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowCounterClockwise,
   House,
-  SpeakerHigh,
-  SpeakerSlash,
+  type Icon,
+  Microphone,
+  MusicNotes,
+  Waveform,
   X,
 } from "@phosphor-icons/react";
 
@@ -14,8 +17,17 @@ interface Props {
   onLeave: () => void;
   storyTitle: string;
   heroName: string;
-  muted: boolean;
-  onToggleMute: () => void;
+  /** Channel volumes, 0–1. */
+  voiceVolume: number;
+  bgmVolume: number;
+  sfxVolume: number;
+  onVoiceVolume: (v: number) => void;
+  onBgmVolume: (v: number) => void;
+  onSfxVolume: (v: number) => void;
+  /** Restore all three channels to their defaults. */
+  onResetVolumes: () => void;
+  /** Play a sample effect so the Effects slider can be auditioned. */
+  onPreviewSfx: () => void;
 }
 
 export function SettingsModal({
@@ -24,8 +36,14 @@ export function SettingsModal({
   onLeave,
   storyTitle,
   heroName,
-  muted,
-  onToggleMute,
+  voiceVolume,
+  bgmVolume,
+  sfxVolume,
+  onVoiceVolume,
+  onBgmVolume,
+  onSfxVolume,
+  onResetVolumes,
+  onPreviewSfx,
 }: Props) {
   return (
     <AnimatePresence>
@@ -73,27 +91,43 @@ export function SettingsModal({
               </button>
             </header>
 
-            <div className="flex flex-col gap-2">
-              {/* Sound toggle */}
-              <button
-                type="button"
-                onClick={onToggleMute}
-                aria-label={muted ? "Turn sound on" : "Turn sound off"}
-                className="inline-flex min-h-14 items-center justify-between gap-2.5 rounded-button bg-paper-deep/60 px-5 text-base font-medium text-ink ring-1 ring-ink-soft/10 transition-all hover:bg-paper-deep hover:ring-accent/40 active:scale-[0.98]"
-              >
-                <span className="flex items-center gap-2.5">
-                  {muted ? (
-                    <SpeakerSlash size={20} weight="duotone" className="text-ink-soft" />
-                  ) : (
-                    <SpeakerHigh size={20} weight="duotone" className="text-accent" />
-                  )}
-                  <span>Sound</span>
+            {/* Volume sliders — one per audio channel. */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft/70">
+                  Sound
                 </span>
-                <span className="text-sm font-semibold text-ink-soft">
-                  {muted ? "OFF" : "ON"}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={onResetVolumes}
+                  className="inline-flex items-center gap-1 rounded-pill px-2 py-1 text-xs font-medium text-ink-soft transition-colors hover:bg-paper-deep/60 hover:text-ink active:scale-95"
+                >
+                  <ArrowCounterClockwise size={14} weight="bold" />
+                  Reset
+                </button>
+              </div>
+              <VolumeRow
+                icon={Microphone}
+                label="Voice"
+                value={voiceVolume}
+                onChange={onVoiceVolume}
+              />
+              <VolumeRow
+                icon={MusicNotes}
+                label="Music"
+                value={bgmVolume}
+                onChange={onBgmVolume}
+              />
+              <VolumeRow
+                icon={Waveform}
+                label="Effects"
+                value={sfxVolume}
+                onChange={onSfxVolume}
+                onCommit={onPreviewSfx}
+              />
+            </div>
 
+            <div className="flex flex-col gap-2">
               {/* Leave story */}
               <button
                 type="button"
@@ -111,5 +145,44 @@ export function SettingsModal({
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+function VolumeRow({
+  icon: IconComp,
+  label,
+  value,
+  onChange,
+  onCommit,
+}: {
+  icon: Icon;
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  /** Fired when a drag/keypress settles — used to audition effects. */
+  onCommit?: () => void;
+}) {
+  const off = value <= 0;
+  return (
+    <div className="flex items-center gap-3 rounded-button bg-paper-deep/60 px-4 py-3 ring-1 ring-ink-soft/10">
+      <IconComp
+        size={20}
+        weight="duotone"
+        className={off ? "text-ink-soft/45" : "text-accent"}
+      />
+      <span className="w-16 shrink-0 text-sm font-medium text-ink">{label}</span>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onPointerUp={onCommit}
+        onKeyUp={onCommit}
+        aria-label={`${label} volume`}
+        className="h-2 flex-1 cursor-pointer accent-accent-deep"
+      />
+    </div>
   );
 }

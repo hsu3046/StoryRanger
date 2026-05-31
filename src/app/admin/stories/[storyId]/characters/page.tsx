@@ -9,17 +9,15 @@ import { characterAssetSlug } from "@/lib/narrative";
 
 const IMAGE_EXTS = new Set([".webp", ".png", ".jpeg", ".jpg"]);
 
-/** Scan /public/stories/<id>/characters/ for image stems so the editor
- *  can offer them as override options. Mirrors the Scene image picker
- *  scan in graph/page.tsx. */
-async function listCharacterImageStems(storyId: string): Promise<string[]> {
-  const dir = path.join(
-    process.cwd(),
-    "public",
-    "stories",
-    storyId,
-    "characters",
-  );
+/** Scan /public/stories/<id>/<...subdir> for image stems so the editor can
+ *  offer them as override options. Mirrors the Scene image picker scan in
+ *  graph/page.tsx. Returns `{ value: web-path-without-ext, label: stem }`. */
+async function listImageOptions(
+  storyId: string,
+  subdir: string[],
+): Promise<{ value: string; label: string }[]> {
+  const dir = path.join(process.cwd(), "public", "stories", storyId, ...subdir);
+  const webBase = `/stories/${storyId}/${subdir.join("/")}`;
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const stems = new Set<string>();
@@ -29,7 +27,9 @@ async function listCharacterImageStems(storyId: string): Promise<string[]> {
       if (!IMAGE_EXTS.has(ext)) continue;
       stems.add(e.name.slice(0, -ext.length));
     }
-    return [...stems].sort();
+    return [...stems]
+      .sort()
+      .map((stem) => ({ value: `${webBase}/${stem}`, label: stem }));
   } catch {
     return [];
   }
@@ -58,10 +58,14 @@ export default async function CharactersPage({
     assetMap[c.id] = resolveAssetPath(base);
   }
 
-  const imageOptions = (await listCharacterImageStems(storyId)).map((stem) => ({
-    value: `/stories/${storyId}/characters/${stem}`,
-    label: stem,
-  }));
+  // One picker per artistic intent: in-scene sprite, dialogue head-shot,
+  // battle stance — each scanned from its own folder.
+  const [imageOptions, dialogueImageOptions, battleImageOptions] =
+    await Promise.all([
+      listImageOptions(storyId, ["characters"]),
+      listImageOptions(storyId, ["dialogue"]),
+      listImageOptions(storyId, ["characters", "battle"]),
+    ]);
 
   return (
     <CharactersEditor
@@ -70,6 +74,8 @@ export default async function CharactersPage({
       initial={characters}
       assetMap={assetMap}
       imageOptions={imageOptions}
+      dialogueImageOptions={dialogueImageOptions}
+      battleImageOptions={battleImageOptions}
       itemCatalog={repo.listItems(storyId)}
     />
   );

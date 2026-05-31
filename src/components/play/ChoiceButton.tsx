@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowCircleRight } from "@phosphor-icons/react";
+
 import type { Branch } from "@/types/story";
 
 interface Props {
@@ -33,8 +35,14 @@ export function ChoiceButton({ branch, disabled, onSelect }: Props) {
       type="button"
       disabled={disabled}
       onClick={() => onSelect(branch)}
-      className={choiceButtonClass}
+      className={choiceButtonAccentClass}
     >
+      <ArrowCircleRight
+        size={22}
+        weight="fill"
+        className="shrink-0 text-accent-deep"
+        aria-hidden
+      />
       <span>{branch.label}</span>
     </button>
   );

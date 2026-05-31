@@ -14,6 +14,7 @@ import { effectLabel } from "@/data/item-effects";
 import { saveItemsAction } from "../_actions/saveJson";
 import { useConfirm } from "./ConfirmDialog";
 import { uniqueId } from "../_lib/uniqueId";
+import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { Field, StyledSelect, inputCls } from "./form";
 
 /** Effect kinds offered in the editor. Add a kind here + a default + a
@@ -54,6 +55,8 @@ export function ItemsEditor({
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // New items' ids auto-follow their name until saved / hand-edited.
+  const idLink = useNameLinkedId();
 
   const dirty = useMemo(
     () => JSON.stringify(initial) !== JSON.stringify(items),
@@ -81,6 +84,8 @@ export function ItemsEditor({
       }
       ids.add(it.id);
     }
+    // Committed → freeze all ids (renaming must never rewrite a saved id).
+    idLink.reset();
     startTransition(async () => {
       const res = await saveItemsAction(storyId, payload);
       if (!res.ok) setError(res.error);
@@ -89,8 +94,9 @@ export function ItemsEditor({
   }
 
   function startCreate() {
+    const id = uniqueId("new-item", items.map((i) => i.id));
     const placeholder: ItemDefT = {
-      id: uniqueId("new-item", items.map((i) => i.id)),
+      id,
       name: "New Item",
       icon: "🎁",
       description: "",
@@ -98,6 +104,7 @@ export function ItemsEditor({
     };
     setItems((prev) => [...prev, placeholder]);
     setSelectedIdx(items.length);
+    idLink.register(id);
     setError(null);
   }
 
@@ -108,6 +115,22 @@ export function ItemsEditor({
     );
   }
 
+  /** Name edit — retargets the id while it's auto-linked (new drafts). */
+  function changeName(value: string) {
+    if (selectedIdx === null) return;
+    const cur = items[selectedIdx];
+    const others = items.filter((_, i) => i !== selectedIdx).map((i) => i.id);
+    const newId = idLink.fromName(cur.id, value, others);
+    updateSelected((it) => ({ ...it, name: value, ...(newId ? { id: newId } : {}) }));
+  }
+
+  /** Manual id edit — takes the id off auto-follow. */
+  function changeId(value: string) {
+    if (selectedIdx === null) return;
+    idLink.detach(items[selectedIdx].id);
+    updateSelected((it) => ({ ...it, id: value }));
+  }
+
   async function deleteSelected() {
     if (selectedIdx === null) return;
     const it = items[selectedIdx];
@@ -116,6 +139,7 @@ export function ItemsEditor({
       message: `Delete item "${it.name}"?\nThis cannot be undone.`,
     });
     if (!ok) return;
+    idLink.detach(it.id);
     setItems((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -169,6 +193,7 @@ export function ItemsEditor({
               setItems(initial);
               setSelectedIdx(null);
               setError(null);
+              idLink.reset();
             }}
             disabled={!dirty || isPending}
             className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep disabled:opacity-50"
@@ -240,6 +265,8 @@ export function ItemsEditor({
               item={selected}
               isNew={!initial.some((i) => i.id === selected.id)}
               onChange={updateSelected}
+              onNameChange={changeName}
+              onIdChange={changeId}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
             />
@@ -254,12 +281,16 @@ function ItemForm({
   item,
   isNew,
   onChange,
+  onNameChange,
+  onIdChange,
   onDelete,
   onClose,
 }: {
   item: ItemDefT;
   isNew: boolean;
   onChange: (mut: (it: ItemDefT) => ItemDefT) => void;
+  onNameChange: (value: string) => void;
+  onIdChange: (value: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -291,7 +322,7 @@ function ItemForm({
         <Field label="ID (kebab-case)">
           <input
             value={item.id}
-            onChange={(e) => onChange((it) => ({ ...it, id: e.target.value }))}
+            onChange={(e) => onIdChange(e.target.value)}
             className={inputCls}
             placeholder="e.g. magic-key"
           />
@@ -301,9 +332,7 @@ function ItemForm({
       <Field label="Name">
         <input
           value={item.name}
-          onChange={(e) =>
-            onChange((it) => ({ ...it, name: e.target.value }))
-          }
+          onChange={(e) => onNameChange(e.target.value)}
           className={inputCls}
         />
       </Field>

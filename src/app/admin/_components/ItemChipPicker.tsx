@@ -26,7 +26,7 @@ export function ItemChipPicker({
             key={it.id}
             type="button"
             onClick={() => onToggle(it.id)}
-            className={`rounded-pill px-2 py-0.5 text-xs transition-colors ${
+            className={`rounded-pill px-1.5 py-0.5 text-[10px] transition-colors ${
               on
                 ? "bg-accent-deep text-paper"
                 : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"

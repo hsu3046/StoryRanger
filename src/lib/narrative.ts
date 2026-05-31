@@ -85,3 +85,22 @@ export function characterAssetSlug(
 ): string {
   return id === heroId ? "hero" : id;
 }
+
+/**
+ * In-scene sprite base path for a character — honors the per-character
+ * `image` override, else the id-based convention (`characters/<slug>`).
+ *
+ * Used as the FALLBACK for dialogue portraits: the dedicated `/dialogue/<id>`
+ * head-shot is preferred, but when none exists yet (e.g. a freshly added
+ * character with only one uploaded sprite) we reuse the in-scene sprite so it
+ * still renders everywhere instead of showing a "?" placeholder.
+ */
+export function characterSpriteBase(
+  storyId: string,
+  c: { id: SpeakerId; image?: string },
+  heroId: SpeakerId,
+): string {
+  return (
+    c.image ?? `/stories/${storyId}/characters/${characterAssetSlug(c.id, heroId)}`
+  );
+}

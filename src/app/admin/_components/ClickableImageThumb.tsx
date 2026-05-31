@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
 
+import { assetUrl } from "@/lib/asset-paths";
 import { AssetThumb } from "./AssetThumb";
 
 interface Props {
@@ -127,7 +128,7 @@ function ImageLightbox({
           natural intrinsic dimensions; next/image would force layout
           constraints we don't want here */}
       <img
-        src={src}
+        src={assetUrl(src)}
         alt={alt}
         onError={() => {
           setExtIdx((i) => Math.min(i + 1, LIGHTBOX_EXTS.length - 1));

@@ -14,6 +14,7 @@ import {
 } from "@/data/schemas";
 import type { SpeakerId } from "@/types/story";
 import { saveCharactersAction } from "../_actions/saveJson";
+import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { AssetThumb } from "./AssetThumb";
 import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
@@ -49,9 +50,12 @@ interface Props {
   /** Map from character.id → resolved asset path (or null). Server-side
    *  precomputed so the browser never flickers through an onError chain. */
   assetMap: Record<string, string | null>;
-  /** Image stems scanned from /public/stories/<id>/characters/. Drives
-   *  the in-form image picker. */
+  /** Image options scanned from each asset folder — drive the three in-form
+   *  pickers: in-scene sprite (`characters/`), dialogue head-shot
+   *  (`dialogue/`), battle stance (`characters/battle/`). */
   imageOptions: { value: string; label: string }[];
+  dialogueImageOptions: { value: string; label: string }[];
+  battleImageOptions: { value: string; label: string }[];
   /** Item catalogue — drives the persona's giftable-items toggle chips
    *  (same picker as the Monsters editor's drops). */
   itemCatalog: ItemDefT[];
@@ -63,6 +67,8 @@ export function CharactersEditor({
   initial,
   assetMap,
   imageOptions,
+  dialogueImageOptions,
+  battleImageOptions,
   itemCatalog,
 }: Props) {
   const router = useRouter();
@@ -71,6 +77,8 @@ export function CharactersEditor({
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // New characters' ids auto-follow their name until saved / hand-edited.
+  const idLink = useNameLinkedId();
 
   const dirty = useMemo(
     () => JSON.stringify(initial) !== JSON.stringify(characters),
@@ -112,6 +120,8 @@ export function CharactersEditor({
       ids.add(c.id);
     }
     setCharacters(cleaned);
+    // Committed → freeze all ids (renaming must never rewrite a saved id).
+    idLink.reset();
     startTransition(async () => {
       const res = await saveCharactersAction(storyId, payload);
       if (!res.ok) setError(res.error);
@@ -141,7 +151,34 @@ export function CharactersEditor({
     };
     setCharacters((prev) => [...prev, placeholder]);
     setSelectedIdx(characters.length);
+    // Until saved / hand-edited, this draft's id tracks its name.
+    idLink.register(id);
     setError(null);
+  }
+
+  /** Name field edit — also retargets the id while it's auto-linked. */
+  function changeName(value: string) {
+    if (selectedIdx === null) return;
+    const cur = characters[selectedIdx];
+    const others = characters
+      .filter((_, i) => i !== selectedIdx)
+      .map((c) => c.id);
+    const newId = idLink.fromName(cur.id, value, others);
+    updateSelected((c) => ({
+      ...c,
+      name: value,
+      ...(newId ? { id: newId as SpeakerId } : {}),
+    }));
+  }
+
+  /** Manual id edit — takes the id off auto-follow + keeps it slug-shaped. */
+  function changeId(value: string) {
+    if (selectedIdx === null) return;
+    idLink.detach(characters[selectedIdx].id);
+    const slug = value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-") as SpeakerId;
+    updateSelected((c) => ({ ...c, id: slug }));
   }
 
   function updateSelected(mut: (c: CharacterT) => CharacterT) {
@@ -159,6 +196,7 @@ export function CharactersEditor({
       message: `Delete character "${c.name}"?\nThis cannot be undone.`,
     });
     if (!ok) return;
+    idLink.detach(c.id);
     setCharacters((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
   }
@@ -201,6 +239,7 @@ export function CharactersEditor({
               setCharacters(initial);
               setSelectedIdx(null);
               setError(null);
+              idLink.reset();
             }}
             disabled={!dirty || isPending}
             className="rounded-pill bg-paper-deep/60 px-3 py-1 text-sm text-ink-soft hover:bg-paper-deep disabled:opacity-50"
@@ -299,8 +338,12 @@ export function CharactersEditor({
               character={selected}
               isNew={!initial.some((c) => c.id === selected.id)}
               imageOptions={imageOptions}
+              dialogueImageOptions={dialogueImageOptions}
+              battleImageOptions={battleImageOptions}
               itemCatalog={itemCatalog}
               onChange={updateSelected}
+              onNameChange={changeName}
+              onIdChange={changeId}
               onDelete={deleteSelected}
               onClose={() => setSelectedIdx(null)}
             />
@@ -311,13 +354,84 @@ export function CharactersEditor({
   );
 }
 
+/**
+ * One image-override picker: a thumbnail + a select listing the scanned files
+ * for that folder, with a leading "Default (id-based)" entry. Picking the
+ * default clears the override (passes `undefined`); any other file passes its
+ * extensionless base path. A current override that isn't on disk is shown as a
+ * "(custom)" row so it stays selected.
+ */
+function ImageOverrideField({
+  label,
+  hint,
+  alt,
+  currentBase,
+  defaultBase,
+  options,
+  onPick,
+}: {
+  label: string;
+  hint?: string;
+  alt: string;
+  currentBase: string;
+  defaultBase: string;
+  options: { value: string; label: string }[];
+  onPick: (value: string | undefined) => void;
+}) {
+  const selectable = [
+    { value: defaultBase, label: "Default (id-based)" },
+    ...options.filter((o) => o.value !== defaultBase),
+  ];
+  const known = selectable.some((o) => o.value === currentBase);
+  return (
+    <Field label={label} hint={hint}>
+      <div className="flex items-start gap-3">
+        <ClickableImageThumb
+          base={currentBase}
+          alt={alt}
+          className="h-20 w-20 shrink-0"
+          shape="square"
+          fit="contain"
+          placeholder={
+            <User size={32} weight="duotone" className="text-ink-soft/50" />
+          }
+        />
+        <StyledSelect
+          className="flex-1"
+          value={currentBase}
+          onChange={(e) => {
+            const v = e.target.value;
+            // Picking the convention clears the override — keeps JSON clean.
+            onPick(v === defaultBase ? undefined : v);
+          }}
+        >
+          {!known && (
+            <option value={currentBase}>
+              {`${currentBase.split("/").pop() ?? currentBase} (custom)`}
+            </option>
+          )}
+          {selectable.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </StyledSelect>
+      </div>
+    </Field>
+  );
+}
+
 function CharacterForm({
   storyId,
   character,
   isNew,
   imageOptions,
+  dialogueImageOptions,
+  battleImageOptions,
   itemCatalog,
   onChange,
+  onNameChange,
+  onIdChange,
   onDelete,
   onClose,
 }: {
@@ -325,18 +439,29 @@ function CharacterForm({
   character: CharacterT;
   isNew: boolean;
   imageOptions: { value: string; label: string }[];
+  dialogueImageOptions: { value: string; label: string }[];
+  battleImageOptions: { value: string; label: string }[];
   itemCatalog: ItemDefT[];
   onChange: (mut: (c: CharacterT) => CharacterT) => void;
+  /** Name edit — retargets the id too while it's auto-linked (new drafts). */
+  onNameChange: (value: string) => void;
+  /** Manual id edit — slugs + detaches from auto-follow. */
+  onIdChange: (value: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const defaultImageBase = character.isHero
-    ? `/stories/${storyId}/characters/hero`
-    : `/stories/${storyId}/characters/${character.id}`;
-  // The select binds to the effective base path (override or convention).
-  // Picking an option that matches the convention clears the override so
-  // we don't store redundant data; picking anything else writes it.
+  // The hero's art lives under `…/hero.*` regardless of id; everyone else
+  // matches their id. Each intent (sprite / dialogue / battle) has its own
+  // folder + optional override. The select binds to the effective base
+  // (override ?? convention); picking the convention clears the override so
+  // we never store redundant data.
+  const slug = character.isHero ? "hero" : character.id;
+  const defaultImageBase = `/stories/${storyId}/characters/${slug}`;
+  const defaultDialogueBase = `/stories/${storyId}/dialogue/${slug}`;
+  const defaultBattleBase = `/stories/${storyId}/characters/battle/${slug}`;
   const currentImagePath = character.image ?? defaultImageBase;
+  const currentDialoguePath = character.dialogueImage ?? defaultDialogueBase;
+  const currentBattlePath = character.battleImage ?? defaultBattleBase;
 
   return (
     <div className="flex flex-col gap-3">
@@ -357,19 +482,10 @@ function CharacterForm({
             <input
               className={`${inputCls} max-w-[10rem]`}
               value={character.id}
-              onChange={(e) =>
-                onChange((c) => ({
-                  ...c,
-                  // Ids are free-text now (any story can add characters), but
-                  // keep them slug-shaped for tidy asset paths.
-                  id: e.target.value
-                    .toLowerCase()
-                    .replace(/[^a-z0-9-]/g, "-") as SpeakerId,
-                }))
-              }
+              onChange={(e) => onIdChange(e.target.value)}
               placeholder="character-id"
               aria-label="Character id"
-              title="Unique slug-style id (lowercase, hyphens)"
+              title="Unique slug-style id (auto-filled from the name; edit to override)"
             />
           )}
           <button
@@ -399,51 +515,38 @@ function CharacterForm({
       >
         <input
           value={character.name}
-          onChange={(e) =>
-            onChange((c) => ({ ...c, name: e.target.value }))
-          }
+          onChange={(e) => onNameChange(e.target.value)}
           className={inputCls}
         />
       </Field>
 
-      <Field label="Image">
-        <div className="flex items-start gap-3">
-          <ClickableImageThumb
-            base={currentImagePath}
-            alt={character.name}
-            className="h-20 w-20 shrink-0"
-            shape="square"
-            fit="contain"
-            placeholder={
-              <User size={32} weight="duotone" className="text-ink-soft/50" />
-            }
-          />
-          <StyledSelect
-            className="flex-1"
-            value={currentImagePath}
-            onChange={(e) => {
-              const v = e.target.value;
-              onChange((c) => ({
-                ...c,
-                // Skip the override when the picked value is the id-based
-                // convention — keeps JSON clean.
-                image: v === defaultImageBase ? undefined : v,
-              }));
-            }}
-          >
-            {!imageOptions.some((o) => o.value === currentImagePath) && (
-              <option value={currentImagePath}>
-                {currentImagePath.split("/").pop() ?? currentImagePath} (custom)
-              </option>
-            )}
-            {imageOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </StyledSelect>
-        </div>
-      </Field>
+      <ImageOverrideField
+        label="In-scene sprite"
+        hint="Stage art (characters/). Falls back to the id-based file."
+        alt={character.name}
+        currentBase={currentImagePath}
+        defaultBase={defaultImageBase}
+        options={imageOptions}
+        onPick={(v) => onChange((c) => ({ ...c, image: v }))}
+      />
+      <ImageOverrideField
+        label="Dialogue portrait"
+        hint="Head-shot for the conversation rail (dialogue/)."
+        alt={character.name}
+        currentBase={currentDialoguePath}
+        defaultBase={defaultDialogueBase}
+        options={dialogueImageOptions}
+        onPick={(v) => onChange((c) => ({ ...c, dialogueImage: v }))}
+      />
+      <ImageOverrideField
+        label="Battle stance"
+        hint="Combat art (characters/battle/)."
+        alt={character.name}
+        currentBase={currentBattlePath}
+        defaultBase={defaultBattleBase}
+        options={battleImageOptions}
+        onPick={(v) => onChange((c) => ({ ...c, battleImage: v }))}
+      />
 
       <Field label="Voice">
         <StyledSelect

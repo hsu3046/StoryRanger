@@ -5,6 +5,8 @@
  * LLM responses to free input are typed as NarrateResponse.
  */
 
+import type { ChallengeCategory } from "@/lib/education";
+
 /**
  * Speaker ids are OPEN — the bundled Wizard of Oz ids below are kept for
  * autocomplete + documentation, but any non-empty string is valid so new
@@ -42,20 +44,30 @@ export interface Branch {
   label: string;
   /** Next scene to transition to when picked. */
   next: string;
-  /** Optional companion gained (added to party). */
+  /** Optional companion gained (added to party; no-op if already present). */
   addsCompanion?: CompanionId;
-  /** Optional BGM override for this transition. */
-  bgmOverride?: string;
-  /** Optional mini-puzzle. Narrative challenge only — actual rewards
-   *  belong to the next scene's `reward`. */
-  puzzle?: {
-    kind: "sequence";
-    title: string;
-    symbols: string[];
-    sequence: number[];
+  /** Optional companion who leaves the party here (parting moment). Mood + HP
+   *  are kept so a later re-join restores them. */
+  removesCompanion?: CompanionId;
+  /** Optional visibility gate. The branch only appears as a choice when the
+   *  condition is met. Every present clause must hold (AND); each clause
+   *  requires ALL of its ids. Evaluated against PlayState at render time. */
+  condition?: {
+    /** Player must hold ALL of these item ids. */
+    hasItems?: string[];
+    /** ALL of these companions must be in the party. */
+    hasCompanions?: CompanionId[];
   };
-  /** What to do when the puzzle fails. */
-  onFailMode?: "retry" | "skip";
+  /** Optional educational-challenge gate. When `enabled`, an age-appropriate
+   *  math problem (auto-picked, or the forced `category`) must be solved before
+   *  the branch is taken. Difficulty derives from the story's age range. */
+  challenge?: {
+    enabled: true;
+    category: "auto" | ChallengeCategory;
+    /** Number of problems to solve in sequence (default 1). A wrong answer
+     *  always re-rolls a fresh problem — the gate retries until solved. */
+    count?: number;
+  };
   /** Narration shown after the branch resolves, before scene transition. */
   outcome?: string;
 }
@@ -79,7 +91,6 @@ export interface Scene {
   /** One-shot reward granted on first entry. */
   reward?: {
     items?: string[];
-    medalId?: string;
     moodBoost?: { companionId: CompanionId; delta: number }[];
   };
   /** Extra dialogue-able characters present in this scene (added to
@@ -106,23 +117,22 @@ export interface Story {
 }
 
 /**
- * Medal trigger types.
+ * Play metrics a medal can be earned from. All are cumulative counters
+ * derived from PlayState (see `computeMetrics`), so medals are story-agnostic
+ * — no per-scene/branch ids.
  *
- * - "branch": fires when a specific branch.id is taken.
- * - "scene": fires when a specific scene is entered.
- * - "free_input_count": fires after N free-input submissions.
- * - "ending": fires when an ending scene is reached.
+ * - "friends":   companions recruited
+ * - "dialogues": character conversations completed
+ * - "battles":   battle encounters cleared
+ * - "choices":   branch choices taken
+ * - "gifts":     keepsakes received from characters
  */
-export type MedalTrigger =
-  | { type: "branch"; storyId: string; branchId: string }
-  | { type: "scene"; storyId: string; sceneId: string }
-  | { type: "ending"; storyId: string; endingId: string }
-  /** Awarded directly via an encounter's `rewards.medalId`. Never auto-fires
-   *  through `checkNewMedals` — the encounter result pushes the id itself. */
-  | { type: "encounter"; storyId: string; encounterId: string }
-  /** Awarded after N companion dialogues completed (replaces free_input).
-   *  Story-agnostic — no storyId, fires in any story. */
-  | { type: "dialogue_count"; min: number };
+export type MedalMetric =
+  | "friends"
+  | "dialogues"
+  | "battles"
+  | "choices"
+  | "gifts";
 
 export interface Medal {
   id: string;
@@ -130,7 +140,10 @@ export interface Medal {
   /** Emoji or path to SVG/PNG icon under /public/medals. */
   icon: string;
   description: string;
-  trigger: MedalTrigger;
+  /** Play metric this medal tracks. */
+  metric: MedalMetric;
+  /** Award once the metric reaches this count. */
+  threshold: number;
 }
 
 export interface MedalsFile {
@@ -165,8 +178,14 @@ export interface Character {
    *  monsters do. */
   size: "tiny" | "small" | "medium" | "large" | "huge";
   /** Optional override of the in-scene sprite path (extensionless base).
-   *  Omit to use the id-based convention. */
+   *  Omit to use the id-based convention (`characters/<id>`). */
   image?: string;
+  /** Optional override of the dialogue head-shot (`/dialogue/<id>`),
+   *  extensionless base. Omit for the id-based convention. */
+  dialogueImage?: string;
+  /** Optional override of the battle-stance art (`/characters/battle/<id>`),
+   *  extensionless base. Omit for the id-based convention. */
+  battleImage?: string;
   /** Optional interactive-dialogue persona (companions + story NPCs).
    *  Omitted for narrator / hero. */
   persona?: CharacterPersona;
@@ -194,12 +213,13 @@ export type PartyHp = Partial<Record<AttackerId, number>>;
  * so a page refresh resumes on the exact same overlay (puzzle, outcome,
  * encounter) rather than skipping past it.
  *
- *  - "puzzle"   — branch picked, puzzle gating open. Engine state still
- *                 at sourceSceneId. branch.puzzle re-derived from catalog.
+ *  - "challenge"— branch picked, educational-challenge gate open. Engine state
+ *                 still at sourceSceneId. The concrete problem is re-generated
+ *                 from the story's age range, keyed on attemptKey (retry re-rolls).
  *  - "outcome"  — branch resolved, engine state at destination already.
- *                 items/medalId is a SNAPSHOT for chip display only — the
- *                 actual grant was applied to inventory/medals at takeBranch
- *                 time, so we don't re-apply on hydration.
+ *                 Just the outgoing-scene pause with the branch outcome text;
+ *                 rewards surface as toasts on the destination scene, and
+ *                 metric medals are queued at takeBranch time.
  *  - "encounter"— battle queue. `queue[0]` is the active battle; `battle`
  *                 carries the live BattleState (HP, phase, round, etc.) so
  *                 a refresh resumes mid-fight. `battle` is undefined while
@@ -208,17 +228,17 @@ export type PartyHp = Partial<Record<AttackerId, number>>;
  */
 export type InteractionState =
   | {
-      kind: "puzzle";
+      kind: "challenge";
       sourceSceneId: string;
       branchId: string;
       attemptKey: number;
+      /** Problems already solved in this multi-problem gate (0-based progress). */
+      solved: number;
     }
   | {
       kind: "outcome";
       sourceSceneId: string;
       branchId: string;
-      items: string[];
-      medalId?: string;
     }
   | {
       kind: "encounter";
