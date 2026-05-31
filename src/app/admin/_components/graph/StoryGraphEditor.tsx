@@ -1278,7 +1278,11 @@ function StoryGraphEditorInner({
         )}
       </div>
       <ScenePreviewModal
-        story={runtimeStory}
+        // Preview against the EDITED draft scenes (not the on-disk
+        // runtimeStory), so a newly-added branch or an unsaved
+        // challenge/condition change is what the author previews — otherwise
+        // `initialBranchId` isn't found and it falls back to the source scene.
+        story={{ ...runtimeStory, scenes: story.scenes } as unknown as Story}
         medals={runtimeMedalsFile}
         characters={runtimeCharactersFile}
         sceneId={previewSceneId}
