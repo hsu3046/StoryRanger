@@ -65,6 +65,10 @@ const BGM_EXTS = ["mp3", "ogg", "m4a", "wav"] as const;
 class AudioEngine {
   private bgmCache = new Map<string, Howl>();
   private sfxCache = new Map<string, Howl>();
+  /** Keys whose play was requested while their extension was still resolving —
+   *  fired from the resolved Howl's `onload` so the first occurrence of a
+   *  fallback-only (e.g. wav-only) effect isn't swallowed. */
+  private sfxWantPlay = new Set<string>();
   private currentBgm: Howl | null = null;
   private currentBgmKey: string | null = null;
   private muted = false;
@@ -177,7 +181,14 @@ class AudioEngine {
   playSfx(key: string): void {
     const sfx = this.getOrCreateSfx(key);
     if (!sfx) return;
-    sfx.play();
+    if (sfx.state() === "loaded") {
+      sfx.play();
+    } else {
+      // Still resolving its extension — defer the play to the resolved Howl's
+      // onload (carries through to the fallback file if this one 404s), so the
+      // very first trigger of a fallback-only effect isn't silently dropped.
+      this.sfxWantPlay.add(key);
+    }
   }
 
   // ──────────────────────────────────────────────────────
@@ -281,6 +292,7 @@ class AudioEngine {
   private loadSfx(key: string, i: number): Howl | null {
     if (i >= SFX_EXTS.length) {
       this.sfxCache.delete(key);
+      this.sfxWantPlay.delete(key); // no playable file — give up
       return null;
     }
     try {
@@ -288,6 +300,11 @@ class AudioEngine {
         src: [`/audio/sfx/${key}.${SFX_EXTS[i]}`],
         volume: this.sfxVolume,
         pool: 4,
+        onload: () => {
+          // A play requested while the extension was still resolving (the
+          // initial Howl 404'd) lands here once a working file is ready.
+          if (this.sfxWantPlay.delete(key)) howl.play();
+        },
         onloaderror: () => {
           // This extension 404'd or the browser can't decode it — try next.
           this.loadSfx(key, i + 1);
