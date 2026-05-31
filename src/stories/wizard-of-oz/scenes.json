@@ -224,8 +224,9 @@
       "branches": [
         {
           "id": "branch_vlupn",
-          "label": "New choice",
-          "next": "s10_river"
+          "label": "A great adventure awaits us!",
+          "next": "s10_river",
+          "outcome": "You cheered for the journey ahead, your heart racing as the emerald light grew brighter with every step."
         }
       ],
       "dialogueCharacters": [
@@ -273,27 +274,28 @@
       "narration": "You come to a wide river. The current is strong. Across the water is a meadow blazing with bright red flowers.",
       "branches": [
         {
-          "id": "build_raft",
-          "label": "Build a raft from branches",
-          "next": "s10a_stepping_stones"
-        },
-        {
           "id": "wade_across",
-          "label": "Wade carefully across the shallows",
+          "label": "Let's find a shallow spot to cross!",
           "next": "s10a_stepping_stones"
         },
         {
           "id": "branch_rfwlo",
-          "label": "New choice",
+          "label": "Let's chop down some trees and build a raft!",
           "next": "10b-river-boat"
         }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "s11_poppies": {
       "image": "/stories/wizard-of-oz/scenes/11-poppy-field",
       "bgm": "munchkinland",
       "speaker": "narrator",
-      "narration": "The red flowers are poppies — and their sweet smell makes your eyes heavy. Toto yawns. Your feet feel like stones. You cannot quite keep walking.",
+      "narration": "\"Look! A field of red poppies!\" The sight was so beautiful, it took their breath away. You ran toward the blazing red field with excitement — but the moment you stepped inside, a deep, sweet scent filled the air and made your head spin.",
       "branches": [
         {
           "id": "push_through",
@@ -522,13 +524,19 @@
       "image": "/stories/wizard-of-oz/scenes/10a-stepping-stones",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "The river runs deep here, but a chain of mossy stepping stones rises and sinks with the rhythm of the current. Watch — the safe stones glow brighter, one by one.",
+      "narration": "After walking for a long while, they found a narrow, shallow crossing. One by one, they stepped carefully over the mossy stones. The Tin Man worried about rusting — but luckily, everyone made it safely across.",
       "branches": [
         {
           "id": "branch_epnn8",
           "label": "New choice",
           "next": "s11_poppies"
         }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "s05_scarecrow_2": {
@@ -749,13 +757,19 @@
       "image": "/stories/wizard-of-oz/scenes/10b-river-boat.jpeg",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "The Tin Man chopped, the Scarecrow twisted ropes, and together they built a raft. It took hours — but as the sun dipped low, they pushed off from the bank and drifted safely across the glittering river.",
       "branches": [
         {
           "id": "branch_ksvsv",
           "label": "New choice",
           "next": "s11_poppies"
         }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "13b-emerald-city": {
