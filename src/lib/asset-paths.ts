@@ -42,6 +42,10 @@ export const ASSET_BASE_URL = (
  * so it's safe to wrap every `src` indiscriminately.
  */
 export function assetUrl(path: string): string {
-  if (!ASSET_BASE_URL || !path.startsWith("/")) return path;
+  // Guard nullish/empty: callers wrap every `src` indiscriminately, and a
+  // thumbnail with no resolved candidate passes `undefined` here. Returning it
+  // unchanged renders `<img src={undefined}>` (harmless) instead of throwing on
+  // `.startsWith`.
+  if (!path || !ASSET_BASE_URL || !path.startsWith("/")) return path;
   return ASSET_BASE_URL + path;
 }

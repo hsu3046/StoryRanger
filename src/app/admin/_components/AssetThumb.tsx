@@ -141,7 +141,11 @@ export function AssetThumb({
       style={wrapperStyle}
       title={failed ? `${alt} — no image` : alt}
     >
-      {failed ? (
+      {failed || !list[idx] ? (
+        // No candidate to show (precomputed `resolvedSrc === null`, or the
+        // fallback chain is exhausted). Render the placeholder synchronously —
+        // the `failed` flag is set a render late by the effect, so without the
+        // `!list[idx]` guard the first paint would hit `<img src={undefined}>`.
         <div className="flex h-full w-full items-center justify-center text-[10px] text-ink-soft/60">
           {placeholder ?? "?"}
         </div>
