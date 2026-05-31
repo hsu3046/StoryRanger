@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 
 import { contentRepo } from "@/lib/content-repo";
 import { MonstersEditor } from "@/app/admin/_components/MonstersEditor";
-import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
+import { resolveAssetWithCommon } from "@/app/admin/_lib/resolveAsset";
 
 const IMAGE_EXTS = new Set([".webp", ".png", ".jpeg", ".jpg"]);
 
@@ -12,16 +12,9 @@ function monsterImageBase(storyId: string, monsterId: string): string {
   return `/stories/${storyId}/monsters/${monsterId}`;
 }
 
-/** Scan /public/stories/<id>/monsters/ for image stems. Mirrors the
- *  Character image scan in characters/page.tsx. */
-async function listMonsterImageStems(storyId: string): Promise<string[]> {
-  const dir = path.join(
-    process.cwd(),
-    "public",
-    "stories",
-    storyId,
-    "monsters",
-  );
+/** Scan a public monsters folder (story or common) for image stems. */
+async function listMonsterImageStems(...segments: string[]): Promise<string[]> {
+  const dir = path.join(process.cwd(), "public", ...segments);
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const stems = new Set<string>();
@@ -52,13 +45,27 @@ export default async function MonstersPage({
   const assetMap: Record<string, string | null> = {};
   for (const m of monsters) {
     const base = m.image ?? monsterImageBase(storyId, m.id);
-    assetMap[m.id] = resolveAssetPath(base);
+    // Story-first, then the shared/common pool.
+    assetMap[m.id] = resolveAssetWithCommon(base);
   }
 
-  const imageOptions = (await listMonsterImageStems(storyId)).map((stem) => ({
-    value: `/stories/${storyId}/monsters/${stem}`,
-    label: stem,
-  }));
+  // Image picker = this story's monster images + the shared/common pool
+  // (`public/monsters`). Common-only stems are labelled so the author can tell
+  // them apart; a story stem of the same name takes precedence (listed first).
+  const [storyStems, commonStems] = await Promise.all([
+    listMonsterImageStems("stories", storyId, "monsters"),
+    listMonsterImageStems("monsters"),
+  ]);
+  const storySet = new Set(storyStems);
+  const imageOptions = [
+    ...storyStems.map((stem) => ({
+      value: `/stories/${storyId}/monsters/${stem}`,
+      label: stem,
+    })),
+    ...commonStems
+      .filter((stem) => !storySet.has(stem))
+      .map((stem) => ({ value: `/monsters/${stem}`, label: `${stem} (common)` })),
+  ];
 
   return (
     <MonstersEditor

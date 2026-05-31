@@ -71,7 +71,7 @@ export function loadState(
     // Sanity-check shape so a corrupted save doesn't crash the player.
     if (parsed.interaction) {
       const k = (parsed.interaction as { kind?: unknown }).kind;
-      if (k !== "puzzle" && k !== "outcome" && k !== "encounter") {
+      if (k !== "challenge" && k !== "outcome" && k !== "encounter") {
         delete parsed.interaction;
       } else if (k === "encounter") {
         // Drop queued encounter ids that no longer exist in the catalog —

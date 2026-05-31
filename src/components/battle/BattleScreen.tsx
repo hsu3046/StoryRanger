@@ -791,7 +791,6 @@ function BattleBag({
   const entries = [...counts.keys()]
     .map((id) => ({ id, item: getItem(id), avail: counts.get(id) ?? 0 }))
     .filter((e) => e.avail > 0 && !!e.item);
-  const total = entries.reduce((n, e) => n + e.avail, 0);
   const heroTurn = state.phase === "hero-choose";
 
   return (
@@ -801,10 +800,9 @@ function BattleBag({
         onClick={() => setOpen((o) => !o)}
         aria-label="Open bag"
         aria-expanded={open}
-        className="flex h-11 items-center gap-1.5 rounded-pill bg-paper/85 px-3 text-base text-ink ring-1 ring-ink-soft/10 shadow-button backdrop-blur transition-all hover:bg-paper active:scale-95"
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-paper/85 text-ink ring-1 ring-ink-soft/10 shadow-button backdrop-blur transition-all hover:bg-paper active:scale-95"
       >
-        <Backpack size={20} weight="duotone" className="text-accent" />
-        <span className="font-semibold tabular-nums">{total}</span>
+        <Backpack size={22} weight="duotone" className="text-accent" />
       </button>
 
       {open && (

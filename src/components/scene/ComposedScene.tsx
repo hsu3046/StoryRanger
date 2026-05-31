@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 
 import type { CompanionId, SpeakerId } from "@/types/story";
+import { commonAssetPath } from "@/lib/asset-paths";
 
 export type StagePosition =
   | "far-left"
@@ -128,7 +129,11 @@ export function ComposedScene({
 const EXTS = [".webp", ".png", ".jpg", ".jpeg"];
 
 function getCandidates(base: string): string[] {
-  return EXTS.map((ext) => base + ext);
+  const exts = (b: string) => EXTS.map((ext) => b + ext);
+  // Try the story-scoped path first, then the shared/common twin (a story
+  // overrides a common asset by keeping its own same-named file).
+  const common = commonAssetPath(base);
+  return common ? [...exts(base), ...exts(common)] : exts(base);
 }
 
 function BackgroundLayer({ base, alt }: { base: string; alt: string }) {

@@ -306,7 +306,7 @@ function EncounterAlertSplash({
             className="rounded-pill bg-ink/70 px-5 py-1.5 text-lg font-semibold uppercase tracking-wide text-paper sm:text-xl"
           >
             {monsterIds.length > 1
-              ? `${primaryName} +${monsterIds.length - 1}`
+              ? `${primaryName} ×${monsterIds.length}`
               : primaryName}
           </motion.p>
         )}

@@ -11,6 +11,7 @@ import {
 } from "@xyflow/react";
 import type { BranchT } from "@/data/schemas";
 import { MONSTERS } from "@/data/monsters";
+import { commonAssetPath } from "@/lib/asset-paths";
 import { AssetThumb } from "../AssetThumb";
 
 export interface BranchEdgeData {
@@ -259,13 +260,15 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                     className="flex items-center gap-1 whitespace-nowrap text-ruby"
                   >
                     {/* Capped so a big pool doesn't overflow. */}
-                    {enc.monsters.slice(0, 4).map(({ id: mid, count }) => (
+                    {enc.monsters.slice(0, 4).map(({ id: mid, count }) => {
+                      const base =
+                        MONSTERS[mid]?.image ??
+                        `/stories/${storyId}/monsters/${mid}`;
+                      return (
                       <span key={mid} className="flex items-center gap-0.5">
                         <AssetThumb
-                          base={
-                            MONSTERS[mid]?.image ??
-                            `/stories/${storyId}/monsters/${mid}`
-                          }
+                          base={base}
+                          fallbackBase={commonAssetPath(base) ?? undefined}
                           alt={mid}
                           className="h-5 w-5"
                           shape="circle"
@@ -277,7 +280,9 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                           fit="contain"
                           ringColor="#b03333"
                           ringWidth={1.0}
-                          bgColor="#fdf6e3"
+                          // Slightly deeper than the paper canvas (#fdf6e3) so
+                          // the disc reads against the dotted background.
+                          bgColor="#f5e9c8"
                           pad={3}
                         />
                         {count > 1 && (
@@ -286,7 +291,8 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                           </span>
                         )}
                       </span>
-                    ))}
+                      );
+                    })}
                   </span>
                 ))}
               {hasChallenge && (

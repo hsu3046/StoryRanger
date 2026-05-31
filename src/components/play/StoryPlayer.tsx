@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -123,6 +130,9 @@ interface Props {
    *  Gates the encounter crossfade — we only switch to `battle` / `puzzle`
    *  when the file is present, else the scene BGM keeps playing. */
   bgmKeys?: string[];
+  /** BGM keys in the SHARED/common pool (`public/audio/bgm`). A story can use
+   *  these too; story keys override same-named common keys. */
+  commonBgmKeys?: string[];
 }
 
 export function StoryPlayer({
@@ -136,6 +146,7 @@ export function StoryPlayer({
   initialSceneId,
   initialBranchId,
   bgmKeys = EMPTY_BGM_KEYS,
+  commonBgmKeys = EMPTY_BGM_KEYS,
 }: Props) {
   const previewMode = !!initialSceneId;
   const [state, setState] = useState<PlayState>(() => {
@@ -401,16 +412,34 @@ export function StoryPlayer({
   // the next scene (A → B), not a beat early on the branch (A → branch(B) → B).
   // Auto-crossfades; stopped only when StoryPlayer unmounts (story exit).
   const audibleSceneIdRef = useRef(state.currentSceneId);
+  // A BGM key may live in the story's own folder OR the shared/common pool.
+  // Story overrides common: resolve by passing story.id when the story has the
+  // file, else undefined (→ audio-engine uses the common `/audio/bgm/<key>`).
+  const playResolvedBgm = useCallback(
+    (key: string) => {
+      const audio = getAudio();
+      if (commonBgmKeys.includes(key) && !bgmKeys.includes(key)) {
+        audio.playBgm(key); // common-only
+      } else {
+        audio.playBgm(key, story.id); // story (or default attempt)
+      }
+    },
+    [bgmKeys, commonBgmKeys, story.id],
+  );
   // Battle / puzzle BGM variant pools — every file named `battle`, `battle_1`,
-  // `battle_2`, … (and likewise `puzzle*`) is an interchangeable variant; one
-  // is picked at random each time an encounter / challenge starts.
+  // `battle_2`, … (and likewise `puzzle*`), from EITHER the story or common
+  // pool, is an interchangeable variant; one is picked at random per encounter.
+  const allBgmKeys = useMemo(
+    () => [...new Set([...bgmKeys, ...commonBgmKeys])],
+    [bgmKeys, commonBgmKeys],
+  );
   const battleBgmVariants = useMemo(
-    () => bgmKeys.filter((k) => k === "battle" || k.startsWith("battle_")),
-    [bgmKeys],
+    () => allBgmKeys.filter((k) => k === "battle" || k.startsWith("battle_")),
+    [allBgmKeys],
   );
   const puzzleBgmVariants = useMemo(
-    () => bgmKeys.filter((k) => k === "puzzle" || k.startsWith("puzzle_")),
-    [bgmKeys],
+    () => allBgmKeys.filter((k) => k === "puzzle" || k.startsWith("puzzle_")),
+    [allBgmKeys],
   );
   // The variant chosen for the CURRENT interaction — kept stable while it lasts
   // (a re-render mid-battle must not re-roll + restart the track); re-picked
@@ -427,7 +456,6 @@ export function StoryPlayer({
       audibleSceneIdRef.current = state.currentSceneId;
       interactionBgmRef.current = null;
     }
-    const audio = getAudio();
     // During a battle / challenge, crossfade to a RANDOM matching variant —
     // but ONLY when at least one such file exists, else keep the scene BGM
     // rather than cutting to silence.
@@ -441,20 +469,21 @@ export function StoryPlayer({
           cur = { kind: interactionKind, track };
           interactionBgmRef.current = cur;
         }
-        audio.playBgm(cur.track, story.id);
+        playResolvedBgm(cur.track);
         return;
       }
     }
     // BGM follows the scene the player has settled on (held through any
     // in-flight transition overlay).
     const scene = story.scenes[audibleSceneIdRef.current];
-    if (scene) audio.playBgm(scene.bgm, story.id);
+    if (scene) playResolvedBgm(scene.bgm);
   }, [
     story,
     state.currentSceneId,
     interactionKind,
     battleBgmVariants,
     puzzleBgmVariants,
+    playResolvedBgm,
   ]);
 
   useEffect(() => {

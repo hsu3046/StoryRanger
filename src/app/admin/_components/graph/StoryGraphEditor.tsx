@@ -157,6 +157,9 @@ interface Props {
   items: ItemDefT[];
   /** Background catalog used in the scene/encounter `bg` dropdowns. */
   backgrounds: BackgroundMetaT[];
+  /** Shared/common background image stems (`public/backgrounds`) — listed in
+   *  the battle bg dropdown alongside the story catalog. */
+  commonBackgroundKeys: string[];
   /** Scene image options — `value` = full path, `label` = short stem. */
   sceneImages: { value: string; label: string }[];
   /** BGM track keys discovered under /public/stories/<id>/audio/bgm/. */
@@ -192,6 +195,7 @@ function StoryGraphEditorInner({
   monsters,
   items,
   backgrounds,
+  commonBackgroundKeys,
   sceneImages,
   bgmOptions,
   runtimeStory,
@@ -1239,6 +1243,7 @@ function StoryGraphEditorInner({
                     )}
                     monsters={monsters}
                     backgrounds={backgrounds}
+                    commonBackgroundKeys={commonBackgroundKeys}
                     items={items}
                     characters={runtimeCharactersFile.characters}
                     onChange={(mut) =>
@@ -1644,6 +1649,7 @@ function EncounterCard({
   encounter,
   monsters,
   backgrounds,
+  commonBackgroundKeys,
   items,
   onChange,
   onDelete,
@@ -1652,6 +1658,7 @@ function EncounterCard({
   encounter: EncounterDefT;
   monsters: MonsterStatsT[];
   backgrounds: BackgroundMetaT[];
+  commonBackgroundKeys: string[];
   items: ItemDefT[];
   onChange: (mut: (e: EncounterDefT) => EncounterDefT) => void;
   onDelete: () => void;
@@ -1705,9 +1712,10 @@ function EncounterCard({
                 }))
               }
             >
-              {/* Surface the saved value even if it's not in the catalog yet
-                  (e.g. typo or pre-catalog data). */}
+              {/* Surface the saved value even if it's in neither the catalog
+                  nor the common pool (e.g. typo or pre-catalog data). */}
               {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
+                !commonBackgroundKeys.includes(encounter.intro.bg) &&
                 encounter.intro.bg && (
                   <option value={encounter.intro.bg}>
                     {encounter.intro.bg} (not in catalog)
@@ -1718,11 +1726,22 @@ function EncounterCard({
                   {b.label} ({b.key})
                 </option>
               ))}
+              {/* Shared/common background images (resolved from /backgrounds at
+                  runtime) — only those not already in this story's catalog. */}
+              {commonBackgroundKeys
+                .filter((k) => !backgrounds.some((b) => b.key === k))
+                .map((k) => (
+                  <option key={`common-${k}`} value={k}>
+                    {k} (common)
+                  </option>
+                ))}
             </StyledSelect>
-            {/* Preview the picked background — small banner under the select. */}
+            {/* Preview the picked background — small banner under the select.
+                Falls back to the shared/common image for common-only keys. */}
             {encounter.intro.bg && (
               <AssetThumb
                 base={`/stories/${storyId}/backgrounds/${encounter.intro.bg}`}
+                fallbackBase={`/backgrounds/${encounter.intro.bg}`}
                 alt={encounter.intro.bg}
                 className="mt-1.5 h-20 w-full"
                 shape="banner"
@@ -1892,6 +1911,7 @@ function BranchInspector({
   encounters,
   monsters,
   backgrounds,
+  commonBackgroundKeys,
   items,
   characters,
   onChange,
@@ -1917,6 +1937,7 @@ function BranchInspector({
   encounters: EncounterDefT[];
   monsters: MonsterStatsT[];
   backgrounds: BackgroundMetaT[];
+  commonBackgroundKeys: string[];
   /** Item catalog — for the per-encounter reward-items picker. */
   items: ItemDefT[];
   /** Character catalog — Add-companion chips show `name` not raw id. */
@@ -2246,6 +2267,7 @@ function BranchInspector({
                 encounter={enc}
                 monsters={monsters}
                 backgrounds={backgrounds}
+                commonBackgroundKeys={commonBackgroundKeys}
                 items={items}
                 onChange={(mut) => onUpdateEncounter(enc.id, mut)}
                 onDelete={() => onDeleteEncounter(enc.id)}

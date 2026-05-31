@@ -204,17 +204,15 @@ function makeCompare(age: number): Challenge {
   let b = a;
   for (let t = 0; b === a && t < 200; t++) b = randInt(1, cap);
   const bigger = Math.max(a, b);
-  const distractors: number[] = [];
-  for (let t = 0; distractors.length < 2 && t < 200; t++) {
-    const dd = randInt(1, cap);
-    if (dd !== a && dd !== b && !distractors.includes(dd)) distractors.push(dd);
-  }
-  const choices = shuffle([a, b, ...distractors]);
+  // Binary pick — the two named numbers ARE the only choices. Sampling extra
+  // distractors from the range could surface a value larger than both, which
+  // contradicts the "which is bigger: a or b?" prompt.
+  const choices = shuffle([a, b]).map(String);
   return {
     category: "compare",
     prompt: `Which is bigger: ${a} or ${b}?`,
-    choices: choices.map(String),
-    correctIndex: choices.indexOf(bigger),
+    choices,
+    correctIndex: choices.indexOf(String(bigger)),
   };
 }
 
@@ -524,9 +522,12 @@ function makeTime(age: number): Challenge {
     const choices = shuffle([...opts]);
     return { category: "time", prompt: `It is ${startH}:00. What time is it ${add} minutes later?`, choices, correctIndex: choices.indexOf(ans) };
   }
-  const startM = randInt(0, 30);
   const dur = pick([15, 20, 25, 35, 40]) ?? 20;
-  return numericChallenge("time", `From 3:${String(startM).padStart(2, "0")} to 3:${String(startM + dur).padStart(2, "0")} is ? minutes`, dur, 5);
+  // Keep start + dur within the same hour so the end minute is valid (no
+  // "3:70"). Pick the start AFTER the duration so end = start + dur ≤ 59.
+  const startM = randInt(0, 59 - dur);
+  const endM = startM + dur;
+  return numericChallenge("time", `From 3:${String(startM).padStart(2, "0")} to 3:${String(endM).padStart(2, "0")} is ? minutes`, dur, 5);
 }
 
 function makeAverage(age: number): Challenge {

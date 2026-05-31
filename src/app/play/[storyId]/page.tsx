@@ -11,18 +11,12 @@ interface Props {
 
 const AUDIO_EXTS = new Set([".mp3", ".ogg", ".m4a", ".wav"]);
 
-/** Scan the story's BGM folder so the player only crossfades to an encounter
- *  track (`battle`, `puzzle`, …) when the file actually exists — otherwise the
- *  scene BGM keeps playing instead of cutting to silence. */
-async function listBgmKeys(storyId: string): Promise<string[]> {
-  const dir = path.join(
-    process.cwd(),
-    "public",
-    "stories",
-    storyId,
-    "audio",
-    "bgm",
-  );
+/** Scan a BGM folder for track keys (filename without extension). Used for the
+ *  story's own folder + the shared/common pool so the player can resolve a key
+ *  to whichever exists (story overrides common) and only crossfades to an
+ *  encounter track when a file is actually present. */
+async function listBgmKeysAt(...segments: string[]): Promise<string[]> {
+  const dir = path.join(process.cwd(), "public", ...segments);
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const keys = new Set<string>();
@@ -42,13 +36,17 @@ export default async function PlayPage({ params }: Props) {
   const { storyId } = await params;
   const loaded = getStory(storyId);
   if (!loaded) notFound();
-  const bgmKeys = await listBgmKeys(storyId);
+  const [bgmKeys, commonBgmKeys] = await Promise.all([
+    listBgmKeysAt("stories", storyId, "audio", "bgm"),
+    listBgmKeysAt("audio", "bgm"),
+  ]);
   return (
     <StoryPlayer
       story={loaded.story}
       medals={MEDALS}
       characters={loaded.characters}
       bgmKeys={bgmKeys}
+      commonBgmKeys={commonBgmKeys}
     />
   );
 }

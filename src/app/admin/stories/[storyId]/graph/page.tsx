@@ -10,13 +10,12 @@ import type { EncounterDefT, StoryT } from "@/data/schemas";
 const IMAGE_EXTS = new Set([".webp", ".png", ".jpeg", ".jpg"]);
 const AUDIO_EXTS = new Set([".mp3", ".ogg", ".m4a"]);
 
-/** Scan a folder and return de-duped path stems (no extension). */
-async function listStems(
-  storyId: string,
-  subdir: string,
+/** Scan a public folder (segments under /public) → de-duped stems (no ext). */
+async function listStemsAt(
   exts: Set<string>,
+  ...segments: string[]
 ): Promise<string[]> {
-  const dir = path.join(process.cwd(), "public", "stories", storyId, subdir);
+  const dir = path.join(process.cwd(), "public", ...segments);
   try {
     const entries = await fs.readdir(dir);
     const stems = new Set<string>();
@@ -25,10 +24,24 @@ async function listStems(
       if (!exts.has(ext)) continue;
       stems.add(file.slice(0, -ext.length));
     }
-    return [...stems].sort();
+    return [...stems];
   } catch {
     return [];
   }
+}
+
+/** A story's own stems PLUS the shared/common pool's, de-duped + sorted. */
+async function listStems(
+  storyId: string,
+  subdir: string,
+  commonSubdir: string,
+  exts: Set<string>,
+): Promise<string[]> {
+  const [own, common] = await Promise.all([
+    listStemsAt(exts, "stories", storyId, ...subdir.split("/")),
+    listStemsAt(exts, ...commonSubdir.split("/")),
+  ]);
+  return [...new Set([...own, ...common])].sort();
 }
 
 export default async function GraphPage({
@@ -41,9 +54,13 @@ export default async function GraphPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
 
-  const [sceneStems, bgmOptions] = await Promise.all([
-    listStems(storyId, "scenes", IMAGE_EXTS),
-    listStems(storyId, "audio/bgm", AUDIO_EXTS),
+  const [sceneStems, bgmOptions, commonBackgroundKeys] = await Promise.all([
+    // Scenes are story-only; BGM merges the shared/common pool.
+    listStemsAt(IMAGE_EXTS, "stories", storyId, "scenes"),
+    listStems(storyId, "audio/bgm", "audio/bgm", AUDIO_EXTS),
+    // Shared background image stems — offered in the battle bg dropdown
+    // alongside this story's catalog (resolved from /backgrounds at runtime).
+    listStemsAt(IMAGE_EXTS, "backgrounds"),
   ]);
 
   // Scene image dropdown stores the full path but displays only the
@@ -62,6 +79,7 @@ export default async function GraphPage({
       monsters={repo.listMonsters(storyId)}
       items={repo.listItems(storyId)}
       backgrounds={repo.listBackgrounds(storyId)}
+      commonBackgroundKeys={commonBackgroundKeys}
       sceneImages={sceneImages}
       bgmOptions={bgmOptions}
       runtimeStory={loaded.story}
