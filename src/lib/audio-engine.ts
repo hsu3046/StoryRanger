@@ -49,6 +49,8 @@ export const SFX = {
   VICTORY: "victory",
   /** Battle lost — short defeat stinger. */
   DEFEAT: "defeat",
+  /** Encounter alert splash — "ENCOUNTER!" sting. */
+  ENCOUNTER: "encounter",
 } as const;
 
 /**
