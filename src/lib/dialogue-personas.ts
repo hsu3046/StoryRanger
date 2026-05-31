@@ -128,7 +128,9 @@ Respond with JSON only, matching the provided schema. itemGift should be null in
 const HERO_MEMORY_IN_PROMPT = 12;
 
 export function buildDialogueContext(
-  hero: Hero,
+  // Dialogue only personalizes by name + gender; age (challenge difficulty) is
+  // irrelevant here, so don't force it through the dialogue API.
+  hero: Pick<Hero, "name" | "gender">,
   currentMood: number,
   sceneNarration: string,
   companions: CompanionId[],

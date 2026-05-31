@@ -78,7 +78,7 @@ interface Props {
   /** Encounter-level drop items (in addition to monster drops) — folded into
    *  the victory panel's loot. */
   victoryItems?: string[];
-  /** Target age (story midpoint) — drives challenge difficulty tier. */
+  /** Player's age (from onboarding) — drives challenge difficulty tier. */
   age: number;
 }
 

@@ -108,7 +108,6 @@ export const StorySchema = z.object({
    *  still valid; the player UI falls back to title-only. */
   subtitle: z.string().optional(),
   language: z.string(),
-  ageRange: z.tuple([z.number(), z.number()]),
   estimatedMinutes: z.number(),
   coverImage: z.string(),
   startScene: z.string(),

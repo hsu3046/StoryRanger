@@ -55,7 +55,7 @@ import { SettingsModal } from "./SettingsModal";
 import { MedalToast } from "../medals/MedalToast";
 import { ItemToast } from "./ItemToast";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
-import { NarrationAudio } from "../audio/NarrationAudio";
+import { SpeechAudio } from "../audio/SpeechAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
 import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow";
 import { canTalkTo, trimDialogueHistory } from "@/lib/dialogue-personas";
@@ -63,7 +63,7 @@ import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
 import { prettyItem } from "@/data/items";
 import { isBranchVisible } from "@/lib/branch-conditions";
-import { ageFromRange, generateChallenge } from "@/lib/education";
+import { generateChallenge } from "@/lib/education";
 import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
@@ -208,14 +208,14 @@ export function StoryPlayer({
     if (!branch?.challenge?.enabled) return null;
     // A fresh problem per attempt AND per solved-step (the memo re-runs when
     // `interaction` changes — attemptKey on retry, solved on advance). Difficulty
-    // = story age tier. `count` is how many must be solved to pass the gate.
+    // = the player's age tier. `count` is how many must be solved to pass the gate.
     const challenge = generateChallenge({
-      age: ageFromRange(story.ageRange),
+      age: state.hero.age,
       category: branch.challenge.category,
     });
     const total = Math.max(1, branch.challenge.count ?? 1);
     return { branch, challenge, attemptKey: i.attemptKey, solved: i.solved, total };
-  }, [state.interaction, story.scenes, story.ageRange]);
+  }, [state.interaction, story.scenes, state.hero.age]);
 
   const pendingOutcome = useMemo(() => {
     const i = state.interaction;
@@ -407,7 +407,7 @@ export function StoryPlayer({
   }, [story, slot, previewMode]);
 
   // Persist channel volumes + push BGM/SFX levels to the audio engine. (Voice
-  // is applied to the narration <audio> directly via the NarrationAudio prop.)
+  // is applied to narration + dialogue via the SpeechAudio `volume` prop.)
   useEffect(() => {
     if (!hydrated) return;
     const ls = window.localStorage;
@@ -1256,9 +1256,10 @@ export function StoryPlayer({
       )}
 
       {hydrated && displayedSpeaker && !pendingEncounter && (
-        <NarrationAudio
+        <SpeechAudio
           text={displayedNarration}
-          character={displayedSpeaker}
+          voiceId={displayedSpeaker.voice}
+          voiceSpeed={displayedSpeaker.voiceSpeed}
           volume={voiceVolume}
           playKey={narrationKey}
         />
@@ -1288,6 +1289,7 @@ export function StoryPlayer({
           sceneSpeaker={currentScene.speaker}
           sceneNarration={displayedNarration}
           hero={state.hero}
+          voiceVolume={voiceVolume}
           companions={state.companions}
           extraDialogueCharacters={currentScene.dialogueCharacters ?? []}
           characters={characters}
@@ -1341,7 +1343,7 @@ export function StoryPlayer({
             key={`${pendingEncounter.id}#${encounterQueueLen}#${encounterRetryNonce}`}
             encounter={pendingEncounter}
             storyId={story.id}
-            age={ageFromRange(story.ageRange)}
+            age={state.hero.age}
             companions={state.companions}
             companionMoods={state.companionMoods ?? {}}
             partyHp={state.partyHp ?? { hero: DEFAULT_MAX_HP.hero }}

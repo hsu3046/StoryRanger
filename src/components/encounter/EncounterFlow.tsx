@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
 import type {
@@ -15,6 +15,7 @@ import type { EncounterDef } from "@/types/encounter";
 import type { BattleState } from "@/lib/battle-engine";
 import { encounterIntroLine } from "@/lib/encounter-lines";
 import { assetUrl } from "@/lib/asset-paths";
+import { getAudio, SFX } from "@/lib/audio-engine";
 
 import { BattleScreen } from "../battle/BattleScreen";
 import { EncounterCaption } from "./EncounterCaption";
@@ -66,7 +67,7 @@ interface Props {
   onRetry?: () => void;
   /** Open the parent's Settings modal — surfaced inside battle. */
   onOpenSettings?: () => void;
-  /** Target age (story midpoint) — forwarded to BattleScreen for challenge
+  /** Player's age (from onboarding) — forwarded to BattleScreen for challenge
    *  difficulty tiering. */
   age: number;
 }
@@ -231,6 +232,17 @@ function EncounterAlertSplash({
 }) {
   const primary = monsterIds[0];
   const primaryName = primary ? MONSTERS[primary]?.name ?? primary : null;
+
+  // "ENCOUNTER!" sting — fires once as the alert splash appears. The ref guards
+  // against React StrictMode's double-invoked mount effect (dev) playing it
+  // twice; the splash remounts per encounter so the ref resets each time.
+  const stingPlayed = useRef(false);
+  useEffect(() => {
+    if (stingPlayed.current) return;
+    stingPlayed.current = true;
+    getAudio().playSfx(SFX.ENCOUNTER);
+  }, []);
+
   return (
     <div className="absolute inset-0 overflow-hidden">
       {/* Layer 1 — red alert burst. Quick fade-in then ease out. */}

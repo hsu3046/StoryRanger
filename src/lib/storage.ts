@@ -52,6 +52,9 @@ export function loadState(
     // Backfill hero for saves created before the personalization feature.
     if (!parsed.hero) {
       parsed.hero = { ...DEFAULT_HERO };
+    } else if (typeof parsed.hero.age !== "number") {
+      // Saves predating the onboarding age step — default to the mid tier.
+      parsed.hero.age = DEFAULT_HERO.age;
     }
     if (!parsed.partyHp) parsed.partyHp = { hero: 3 };
     if (!parsed.partyMaxHp) parsed.partyMaxHp = { hero: 3 };

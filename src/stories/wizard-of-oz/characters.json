@@ -3,7 +3,7 @@
     {
       "id": "narrator",
       "name": "Narrator",
-      "voice": "nova",
+      "voice": "21m00Tcm4TlvDq8ikWAM",
       "voiceSpeed": 1,
       "color": "#5a4128",
       "size": "medium"
@@ -12,7 +12,7 @@
       "id": "dorothy",
       "name": "Hero",
       "isHero": true,
-      "voice": "shimmer",
+      "voice": "EXAVITQu4vr4xnSDxMaL",
       "voiceSpeed": 1.05,
       "color": "#a8487f",
       "size": "medium"
@@ -20,7 +20,7 @@
     {
       "id": "scarecrow",
       "name": "Scarecrow",
-      "voice": "alloy",
+      "voice": "ErXwobaYiN019PkySvjV",
       "voiceSpeed": 1.1,
       "color": "#c9a23a",
       "size": "medium",
@@ -47,7 +47,7 @@
     {
       "id": "tinman",
       "name": "Tin Man",
-      "voice": "echo",
+      "voice": "pNInz6obpgDQGcFmaJgB",
       "voiceSpeed": 0.95,
       "color": "#6b8aa0",
       "size": "medium",
@@ -74,7 +74,7 @@
     {
       "id": "lion",
       "name": "Cowardly Lion",
-      "voice": "onyx",
+      "voice": "VR6AewLTigWG4xSOukaG",
       "voiceSpeed": 0.95,
       "color": "#b8651b",
       "size": "large",
@@ -100,7 +100,7 @@
     {
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
-      "voice": "fable",
+      "voice": "AZnzlk1XvdvUeBnXmlld",
       "voiceSpeed": 0.9,
       "color": "#4a2a4a",
       "size": "medium",
@@ -124,7 +124,7 @@
     {
       "id": "glinda",
       "name": "Glinda the Good Witch",
-      "voice": "nova",
+      "voice": "MF3mGyEYCl7XYWbV9V6O",
       "voiceSpeed": 1,
       "color": "#d27ab0",
       "size": "medium",
@@ -150,7 +150,7 @@
     {
       "id": "wizard",
       "name": "Wizard of Oz",
-      "voice": "echo",
+      "voice": "TxGEqnHWrfWFTfGW9XjX",
       "voiceSpeed": 0.95,
       "color": "#7a5a3a",
       "size": "large",
@@ -175,7 +175,7 @@
     {
       "id": "aunt-em",
       "name": "Aunt Em",
-      "voice": "shimmer",
+      "voice": "21m00Tcm4TlvDq8ikWAM",
       "voiceSpeed": 0.95,
       "color": "#8a6d3b",
       "size": "medium",
@@ -200,7 +200,7 @@
     {
       "id": "toto",
       "name": "Toto",
-      "voice": "fable",
+      "voice": "yoZ06aMxZJJ28mfd3POQ",
       "voiceSpeed": 1.1,
       "color": "#3d2817",
       "size": "tiny",
@@ -223,7 +223,7 @@
     {
       "id": "character-1",
       "name": "King of the Field Mice",
-      "voice": "alloy",
+      "voice": "21m00Tcm4TlvDq8ikWAM",
       "voiceSpeed": 1,
       "color": "#777777",
       "size": "tiny",

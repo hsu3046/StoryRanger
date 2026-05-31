@@ -49,6 +49,8 @@ export const SFX = {
   VICTORY: "victory",
   /** Battle lost — short defeat stinger. */
   DEFEAT: "defeat",
+  /** Encounter alert splash — "ENCOUNTER!" sting. */
+  ENCOUNTER: "encounter",
 } as const;
 
 /**
@@ -75,8 +77,9 @@ class AudioEngine {
   private currentBgmKey: string | null = null;
   private muted = false;
   /** Per-channel volumes (0–1), seeded from the historic mix defaults. The
-   *  Settings sliders adjust these live (narration/voice is a separate <audio>
-   *  element handled in NarrationAudio, not routed through Howler). */
+   *  Settings sliders adjust these live. Voice (narration + dialogue) runs on
+   *  its own Howl in SpeechAudio — separate Web Audio source, so its level is
+   *  set via SpeechAudio's `volume` prop, not these engine channels. */
   private bgmVolume = BGM_VOLUME;
   private sfxVolume = SFX_VOLUME;
   /** Howl → scheduled stop() timeout. Cleared on cancel. */

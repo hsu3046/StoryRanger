@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import {
   SpeakerIdSchema,
   SpriteSizeSchema,
@@ -42,7 +43,8 @@ export const CharacterSchema = z.object({
    *  "dorothy" speaker id.) */
   isHero: z.boolean().optional(),
   voice: TtsVoiceSchema,
-  voiceSpeed: z.number().min(0.25).max(4.0),
+  // ElevenLabs speed range (see clampSpeed) — out-of-range values 422.
+  voiceSpeed: z.number().min(SPEED_MIN).max(SPEED_MAX),
   color: z.string(), // hex
   /** Display size on the stage — drives the SpriteLayer height the same
    *  way as monsters. Lion / Wizard typically read as "large", Toto is

@@ -204,62 +204,6 @@ export function StoryBasicEditor({ storyId, initialStory, coverOptions }: Props)
           </div>
 
           <div className="grid grid-cols-2 gap-5">
-            <Field
-              label="Age range"
-              hint="Leave the second box blank for a single target age"
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={99}
-                  value={story.ageRange[0]}
-                  onChange={(e) =>
-                    update((s) => {
-                      const from = Number(e.target.value);
-                      // Keep it a single age unless the range is already
-                      // widened; never let max fall below min.
-                      const single = s.ageRange[1] <= s.ageRange[0];
-                      return {
-                        ...s,
-                        ageRange: [
-                          from,
-                          single ? from : Math.max(from, s.ageRange[1]),
-                        ],
-                      };
-                    })
-                  }
-                  className={`${inputCls} max-w-[5rem] tabular-nums`}
-                />
-                <span className="text-sm text-ink-soft">–</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={99}
-                  // Blank while it's a single age; a number once widened.
-                  value={
-                    story.ageRange[1] > story.ageRange[0]
-                      ? story.ageRange[1]
-                      : ""
-                  }
-                  placeholder={String(story.ageRange[0])}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    update((s) => {
-                      const to = Number(raw);
-                      // Empty / not-greater-than-min → collapse to a single age.
-                      if (raw === "" || !Number.isFinite(to) || to <= s.ageRange[0]) {
-                        return { ...s, ageRange: [s.ageRange[0], s.ageRange[0]] };
-                      }
-                      return { ...s, ageRange: [s.ageRange[0], to] };
-                    });
-                  }}
-                  className={`${inputCls} max-w-[5rem] tabular-nums`}
-                />
-                <span className="text-sm text-ink-soft">years</span>
-              </div>
-            </Field>
-
             <Field label="Estimated minutes">
               <input
                 type="number"

@@ -14,6 +14,7 @@ import type {
 } from "@/types/story";
 import { canTalkTo } from "@/lib/dialogue-personas";
 import { assetUrl } from "@/lib/asset-paths";
+import { SpeechAudio } from "../audio/SpeechAudio";
 import { DialogueBubble } from "./DialogueBubble";
 import { DialogueChoiceCards } from "./DialogueChoiceCards";
 
@@ -23,6 +24,9 @@ interface Props {
   sceneSpeaker: SpeakerId;
   sceneNarration: string;
   hero: Hero;
+  /** Voice volume (0–1) — character replies are spoken via ElevenLabs TTS on
+   *  this channel, same as scene narration. */
+  voiceVolume: number;
   companions: CompanionId[];
   /** Extra dialogue-able characters declared on the current Scene —
    *  added to the rail on top of companions + scene speaker. */
@@ -86,6 +90,7 @@ export function SceneDialogueLayer({
   sceneSpeaker,
   sceneNarration,
   hero,
+  voiceVolume,
   companions,
   extraDialogueCharacters,
   characters,
@@ -113,6 +118,9 @@ export function SceneDialogueLayer({
     itemGift?: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  // Bumps each time a reply lands → re-keys SpeechAudio so the same character
+  // speaking again (even with identical text) replays the voice line.
+  const [speakNonce, setSpeakNonce] = useState(0);
   // Choices are held back until the reply has finished streaming PLUS a short
   // beat — otherwise the buttons pop in over a half-typed bubble.
   const [choicesReady, setChoicesReady] = useState(false);
@@ -285,6 +293,7 @@ export function SceneDialogueLayer({
         suggestions: data.suggestions ?? [],
         itemGift: data.itemGift,
       });
+      setSpeakNonce((n) => n + 1);
       onApplyTurn(characterId, data, opts.isFirstTurn ? "" : heroText);
       if (data.endsConversation) {
         clearEndTimer();
@@ -419,6 +428,20 @@ export function SceneDialogueLayer({
           );
         })}
       </div>
+
+      {/* Speak the character's reply via ElevenLabs (Web Audio, mixes with
+          BGM). No R2 cache — dialogue is LLM-generated fresh each turn. The
+          nonce-keyed playKey replays even when the same line recurs. */}
+      {active && latestReply?.reply && characterMap[active]?.voice && (
+        <SpeechAudio
+          text={latestReply.reply}
+          voiceId={characterMap[active].voice}
+          voiceSpeed={characterMap[active].voiceSpeed}
+          volume={voiceVolume}
+          playKey={`${active}:${speakNonce}`}
+          cache={false}
+        />
+      )}
 
       {/* Active dialogue bubble — always rail-positioned (right of the
           tapped portrait). */}
