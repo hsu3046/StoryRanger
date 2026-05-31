@@ -55,7 +55,7 @@ import { SettingsModal } from "./SettingsModal";
 import { MedalToast } from "../medals/MedalToast";
 import { ItemToast } from "./ItemToast";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
-import { NarrationAudio } from "../audio/NarrationAudio";
+import { SpeechAudio } from "../audio/SpeechAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
 import { EncounterFlow, type EncounterResult } from "../encounter/EncounterFlow";
 import { canTalkTo, trimDialogueHistory } from "@/lib/dialogue-personas";
@@ -407,7 +407,7 @@ export function StoryPlayer({
   }, [story, slot, previewMode]);
 
   // Persist channel volumes + push BGM/SFX levels to the audio engine. (Voice
-  // is applied to the narration <audio> directly via the NarrationAudio prop.)
+  // is applied to narration + dialogue via the SpeechAudio `volume` prop.)
   useEffect(() => {
     if (!hydrated) return;
     const ls = window.localStorage;
@@ -1256,9 +1256,10 @@ export function StoryPlayer({
       )}
 
       {hydrated && displayedSpeaker && !pendingEncounter && (
-        <NarrationAudio
+        <SpeechAudio
           text={displayedNarration}
-          character={displayedSpeaker}
+          voiceId={displayedSpeaker.voice}
+          voiceSpeed={displayedSpeaker.voiceSpeed}
           volume={voiceVolume}
           playKey={narrationKey}
         />
@@ -1288,6 +1289,7 @@ export function StoryPlayer({
           sceneSpeaker={currentScene.speaker}
           sceneNarration={displayedNarration}
           hero={state.hero}
+          voiceVolume={voiceVolume}
           companions={state.companions}
           extraDialogueCharacters={currentScene.dialogueCharacters ?? []}
           characters={characters}

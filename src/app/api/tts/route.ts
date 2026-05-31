@@ -11,6 +11,10 @@ const RequestSchema = z.object({
   text: z.string().min(1).max(2000),
   voiceId: z.string().min(1),
   voiceSpeed: z.number().min(0.25).max(4.0).default(1.0),
+  /** Cache the result in R2? Narration is deterministic → cache (default).
+   *  Character dialogue is LLM-generated fresh each turn → `false`, so we
+   *  don't pollute the bucket with one-shot objects that never hit again. */
+  cache: z.boolean().default(true),
 });
 
 /**
@@ -43,7 +47,9 @@ export async function POST(req: Request) {
     );
 
     // Populate the R2 cache (best-effort — never fail the request over it).
-    if (hasR2()) {
+    // Skipped for non-cacheable (dialogue) lines so the bucket isn't littered
+    // with one-shot objects.
+    if (body.cache && hasR2()) {
       const key = await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed);
       r2Put(key, buffer, "audio/mpeg").catch((e) =>
         console.warn("[tts] R2 cache write failed:", String(e)),
@@ -54,7 +60,11 @@ export async function POST(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        // Deterministic narration is immutable-cacheable; unique dialogue lines
+        // must not be stored (they'd never be requested again).
+        "Cache-Control": body.cache
+          ? "public, max-age=31536000, immutable"
+          : "no-store",
       },
     });
   } catch (err) {
