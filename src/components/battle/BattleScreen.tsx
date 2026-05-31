@@ -307,15 +307,24 @@ export function BattleScreen({
     state.monsters,
   ]);
 
+  // Per-attack SFX: an attack landing (hit/crit) vs. missing (target dodges).
   const lastLog = state.log[state.log.length - 1];
   useEffect(() => {
     if (!lastLog) return;
     if (lastLog.tone === "hit" || lastLog.tone === "crit") {
-      getAudio().playSfx(SFX.PAGE_TURN);
-    } else if (lastLog.tone === "victory") {
-      getAudio().playSfx(SFX.MEDAL);
+      getAudio().playSfx(SFX.ATTACK);
+    } else if (lastLog.tone === "miss") {
+      getAudio().playSfx(SFX.DODGE);
     }
   }, [lastLog?.text, lastLog?.tone, lastLog]);
+
+  // Battle-end stinger — fire once when the battle reaches a terminal phase.
+  // Driven by `phase` (not the log tone): the "defeat" tone also marks a single
+  // party member falling, whereas phase only flips to "defeat" on a full wipe.
+  useEffect(() => {
+    if (state.phase === "victory") getAudio().playSfx(SFX.VICTORY);
+    else if (state.phase === "defeat") getAudio().playSfx(SFX.DEFEAT);
+  }, [state.phase]);
 
   const heroPartyIds: (SpeakerId | CompanionId)[] = useMemo(
     () => [heroId, ...state.companions],
@@ -831,6 +840,7 @@ function BattleBag({
                       <button
                         type="button"
                         disabled={!enabled}
+                        data-sfx="ruby-click"
                         onClick={() => {
                           onUse(id);
                           setOpen(false);

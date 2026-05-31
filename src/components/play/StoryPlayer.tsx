@@ -380,6 +380,25 @@ export function StoryPlayer({
     getAudio().setMuted(muted);
   }, [muted, hydrated]);
 
+  // Global click SFX — every <button> in the game plays the generic click
+  // sound, so the whole UI feels responsive without wiring each handler.
+  // A button may override via `data-sfx`: any key plays that sound instead,
+  // and "none" stays silent (used where the action has its own cue). HTML
+  // `disabled` buttons emit no click event, so they're naturally skipped.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+        "button",
+      );
+      if (!el) return;
+      const override = el.dataset.sfx;
+      if (override === "none") return;
+      getAudio().playSfx(override || SFX.CHOICE);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   useEffect(() => {
     // Preview mode is ephemeral — never write to localStorage so closing
     // and re-opening the modal always starts fresh at the chosen scene.
@@ -493,6 +512,13 @@ export function StoryPlayer({
   }, []);
 
   const currentScene: Scene = story.scenes[state.currentSceneId];
+  // Conditional branches (require an item / companion) only appear once their
+  // gate is met. Shared by the bottom choice row AND the in-dialogue reply
+  // cards so a gated branch can't be taken while chatting either.
+  const visibleBranches = useMemo(
+    () => (currentScene.branches ?? []).filter((b) => isBranchVisible(b, state)),
+    [currentScene, state],
+  );
   const heroId = useMemo(() => resolveHeroId(characters), [characters]);
   const characterMap = useMemo(() => {
     const map: Record<string, (typeof characters.characters)[number]> = {};
@@ -556,7 +582,8 @@ export function StoryPlayer({
     // auto-open the previous scene's character over the destination scene.
     setAskRequest(null);
     const audio = getAudio();
-    audio.playSfx(SFX.PAGE_TURN);
+    // The choice button's click already plays the generic click SFX (global
+    // delegated listener below). Here we only add the event-specific cue.
     if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
 
     const prevSceneId = state.currentSceneId;
@@ -1044,11 +1071,7 @@ export function StoryPlayer({
             );
           }
 
-          // Conditional branches (require an item / companion) only appear once
-          // their gate is met against the current play state.
-          const branches = currentScene.branches.filter((b) =>
-            isBranchVisible(b, state),
-          );
+          const branches = visibleBranches;
           // Asks render as additional choices in the SAME left-right row as
           // the branches (not a separate stack above) — to the player an
           // "ask" is just another choice. Hidden during an encounter, matching
@@ -1188,7 +1211,7 @@ export function StoryPlayer({
           hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
           heroMemory={state.heroMemory ?? []}
           journeyNote={journeyNote}
-          branches={currentScene.branches}
+          branches={visibleBranches}
           onTakeBranch={handleChoose}
           history={(id) => state.dialogueHistory?.[id] ?? []}
           askRequest={askRequest}

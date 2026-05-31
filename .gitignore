@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# raw/source audio kept aside locally — not shipped. The runtime only needs
+# the resolved files directly under public/audio/sfx/ (any extension).
+/public/audio/sfx/misc/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

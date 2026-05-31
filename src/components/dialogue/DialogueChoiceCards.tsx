@@ -108,6 +108,7 @@ export function DialogueChoiceCards({
               onClick={submitTyped}
               disabled={loading || !text.trim()}
               aria-label="Send"
+              data-sfx="free-input-send"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-accent-deep text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               <PaperPlaneTilt size={16} weight="fill" />

@@ -291,8 +291,46 @@ fairy-tale palette. Loopable seamless. No vocals.
 
 ---
 
-> **드롭 경로**: `public/stories/<story-id>/audio/bgm/{battle, victory, farewell, puzzle, night-rest, sneak}.mp3`
+## ⚡ 전투 결과 stinger 2개 — 아주 짧은 one-shot (루프 X)
+
+전투가 끝나는 순간 1회만 울리는 **짧은 결과 음악** (≈ 3–4초). 위 12곡과 달리 **루프하지 않고**, 인트로 없이 곧바로 정점에서 시작해 한 번에 맺습니다. **BGM이 아니라 one-shot SFX**로 재생됩니다 (전투가 `victory`/`defeat` phase에 도달하는 순간 `playSfx`). 따라서 드롭 경로는 `public/audio/sfx/`이고, SFX 볼륨(0.7)으로 또렷하게 들립니다 — **풀밴드보다 가볍고 또렷한** 편성으로.
+
+### 13. `victory.mp3` — 전투 승리 (짧은 팡파레)
+
+**Style**:
+```
+Very short triumphant victory fanfare for a children's storybook game —
+about 3 to 4 seconds, one-shot, NO loop. A bright rising bugle/horn flourish
+lands on a big major chord, sealed by a sparkling glockenspiel/celesta
+arpeggio and a single soft cymbal swell and timpani roll. Joyful, warm,
+"you did it!" — like a fairy-tale level-clear jingle. Starts immediately at
+full energy (no intro), resolves cleanly on a sustained major chord with a
+gentle decay tail. Fully orchestral fairy-tale palette. No vocals.
+```
+
+**Mood reference**: *젤다* 보물 발견 점프 cue, *마리오* 스테이지 클리어, 짧은 동화풍 승리 징글.
+
+### 14. `defeat.mp3` — 전투 패배 (짧고 부드러운 낙담)
+
+**Style**:
+```
+Very short gentle "oh no" defeat sting for a children's storybook game —
+about 3 to 4 seconds, one-shot, NO loop. A soft descending woodwind/oboe
+phrase sags into a mellow minor chord, with a low pizzicato "boing" and a
+single muted French-horn fall. Disappointed but kind and never harsh or
+scary — a "let's try again" feeling, comforting for young kids. Starts
+immediately, settles on a soft minor chord with a short decay tail. Fully
+orchestral fairy-tale palette, light and small. No vocals.
+```
+
+**Mood reference**: 동화풍 "아쉽다~" cue, *Animal Crossing* 실패 jingle, 부드러운 단조 하강.
+
+---
+
+> **드롭 경로 (BGM 12곡)**: `public/stories/<story-id>/audio/bgm/{battle, victory, farewell, puzzle, night-rest, sneak}.mp3`
 > 코드 변경 불필요 — admin BGM 드롭다운이 폴더를 스캔해 자동 노출. 후처리(-18 LUFS, fade)는 기존 6곡과 동일.
+>
+> **드롭 경로 (결과 stinger 2개)**: `public/audio/sfx/{victory, defeat}.mp3` — **SFX 폴더**(공통, 루프 아님). 엔진이 `mp3 → ogg → wav → m4a` 순으로 자동 매칭하므로 확장자는 무엇이든 가능. 전투 종료 시 코드가 이미 `SFX.VICTORY`/`SFX.DEFEAT`로 재생하므로 파일만 떨구면 됨.
 
 ---
 
