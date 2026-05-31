@@ -295,6 +295,11 @@ export interface PlayState {
   /** Active overlay state (puzzle / outcome / encounter). Persisted so a
    *  refresh resumes on the exact same overlay rather than skipping past. */
   interaction?: InteractionState;
+  /** Scene reward staged at branch-pick, shown as a toast once the player
+   *  LANDS on the destination scene (after any outcome/encounter overlay). The
+   *  reward items are already in `inventory`; this is just the pending toast.
+   *  Persisted so a refresh mid-overlay still surfaces it on arrival. */
+  pendingRewardToast?: { sceneId: string; items: string[] };
   /** ISO timestamp of last update. */
   updatedAt: string;
 }
