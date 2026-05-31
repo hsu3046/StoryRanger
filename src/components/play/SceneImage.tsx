@@ -1,7 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
+
+import { assetUrl } from "@/lib/asset-paths";
 
 interface Props {
   src: string;
@@ -16,12 +17,13 @@ function getCandidates(src: string): string[] {
 }
 
 /**
- * Full-bleed cinemascope background image powered by `next/image`.
+ * Full-bleed cinemascope background image.
  *
  * - Tries multiple file extensions if the canonical one is missing.
- * - `next/image` auto-generates srcSet, serves AVIF/WebP, and lazy-loads
- *   off-screen images. `priority` is on so the first scene is preloaded
- *   for a fast LCP.
+ * - Plain `<img>` (not `next/image`) so the resolved URL is served DIRECTLY
+ *   from the asset origin (`assetUrl` → R2/CDN) without routing through
+ *   Vercel's image optimizer — keeping CDN egress free. Assets are already
+ *   pre-optimized to webp. `eager` + high fetch priority for a fast LCP.
  * - `object-cover` center-crops any aspect-ratio mismatch.
  * - Falls back to a warm parchment placeholder if every extension 404s.
  */
@@ -45,14 +47,14 @@ export function SceneImage({ src, alt }: Props) {
   }
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element -- served directly from the asset CDN (no next/image proxy); extension fallback via onError
+    <img
       key={candidates[candidateIdx]}
-      src={candidates[candidateIdx]}
+      src={assetUrl(candidates[candidateIdx])}
       alt={alt}
-      fill
-      priority
-      sizes="100vw"
-      quality={82}
+      loading="eager"
+      fetchPriority="high"
+      draggable={false}
       onError={() => {
         if (candidateIdx + 1 < candidates.length) {
           setCandidateIdx(candidateIdx + 1);
@@ -60,7 +62,7 @@ export function SceneImage({ src, alt }: Props) {
           setAllFailed(true);
         }
       }}
-      className="object-cover object-center"
+      className="absolute inset-0 h-full w-full object-cover object-center"
     />
   );
 }

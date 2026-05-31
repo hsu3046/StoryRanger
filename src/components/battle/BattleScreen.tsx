@@ -21,6 +21,7 @@ import {
 } from "@/lib/battle-engine";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { encounterOutroLine } from "@/lib/encounter-lines";
+import { assetUrl } from "@/lib/asset-paths";
 import { MONSTERS } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
@@ -698,7 +699,7 @@ function PartyHpRow({
                 <span
                   className="block h-8 w-8 overflow-hidden rounded-full"
                   style={{
-                    backgroundImage: `url(${imageBase}.webp)`,
+                    backgroundImage: `url(${assetUrl(`${imageBase}.webp`)})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center top",
                   }}

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { assetUrl } from "@/lib/asset-paths";
+
 // Try common extension variants (lowercase + uppercase) so admin keeps
 // rendering whichever file is actually on disk.
 const EXTS = [
@@ -146,7 +148,7 @@ export function AssetThumb({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element -- extension fallback chain
         <img
-          src={list[idx]}
+          src={assetUrl(list[idx])}
           alt={alt}
           draggable={false}
           style={{ objectPosition: position }}

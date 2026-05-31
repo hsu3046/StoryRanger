@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 
 import type { CompanionId, SpeakerId } from "@/types/story";
-import { commonAssetPath } from "@/lib/asset-paths";
+import { assetUrl, commonAssetPath } from "@/lib/asset-paths";
 
 export type StagePosition =
   | "far-left"
@@ -156,15 +155,15 @@ function BackgroundLayer({ base, alt }: { base: string; alt: string }) {
   }
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element -- served directly from the asset CDN (no next/image proxy); extension fallback via onError
+    <img
       key={candidates[idx]}
-      src={candidates[idx]}
+      src={assetUrl(candidates[idx])}
       alt={alt}
-      fill
-      priority
-      sizes="100vw"
-      quality={82}
-      className="object-cover object-center"
+      loading="eager"
+      fetchPriority="high"
+      draggable={false}
+      className="absolute inset-0 h-full w-full object-cover object-center"
       onError={() => {
         if (idx + 1 < candidates.length) setIdx(idx + 1);
         else setFailed(true);
@@ -346,7 +345,7 @@ function SpriteLayer({
       <motion.img
         key={candidates[idx]}
         ref={measureOnAttach}
-        src={candidates[idx]}
+        src={assetUrl(candidates[idx])}
         alt={layer.alt ?? ""}
         draggable={false}
         animate={innerAnimate}

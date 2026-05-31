@@ -13,6 +13,7 @@ import type {
   SpeakerId,
 } from "@/types/story";
 import { canTalkTo } from "@/lib/dialogue-personas";
+import { assetUrl } from "@/lib/asset-paths";
 import { DialogueBubble } from "./DialogueBubble";
 import { DialogueChoiceCards } from "./DialogueChoiceCards";
 
@@ -505,7 +506,7 @@ function PortraitImg({
   return (
     // eslint-disable-next-line @next/next/no-img-element -- extension fallback
     <img
-      src={list[idx]}
+      src={assetUrl(list[idx])}
       alt={alt}
       draggable={false}
       className="block h-full w-full object-cover"

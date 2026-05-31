@@ -23,3 +23,25 @@ export function commonAssetPath(path: string): string | null {
   const common = path.replace(/^\/stories\/[^/]+\//, "/");
   return common !== path ? common : null;
 }
+
+/**
+ * Base origin for serving static media (images + audio). Empty string = serve
+ * same-origin from `public/` (the dev/default). Set
+ * `NEXT_PUBLIC_ASSET_BASE_URL` to a CDN origin — e.g. a Cloudflare R2 bucket's
+ * `https://<id>.r2.dev` (dev) or a custom domain (prod) — to serve media from
+ * there instead. `public/` stays the source of truth; the bucket is a mirror.
+ */
+export const ASSET_BASE_URL = (
+  process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? ""
+).replace(/\/+$/, "");
+
+/**
+ * Prefix a root-relative asset path (`/stories/...`, `/audio/...`,
+ * `/backgrounds/...`) with the configured asset base. Already-absolute URLs
+ * (`http(s):`, `data:`, `blob:`) and non-rooted strings pass through unchanged,
+ * so it's safe to wrap every `src` indiscriminately.
+ */
+export function assetUrl(path: string): string {
+  if (!ASSET_BASE_URL || !path.startsWith("/")) return path;
+  return ASSET_BASE_URL + path;
+}

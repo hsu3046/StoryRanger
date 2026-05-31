@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, X } from "@phosphor-icons/react";
 
+import { assetUrl } from "@/lib/asset-paths";
+
 interface HeartsProps {
   lives: number;
   maxLives: number;
@@ -127,7 +129,7 @@ function Portrait({ base, alt }: { base: string; alt: string }) {
     <span className="block h-8 w-8 overflow-hidden rounded-full">
       {/* eslint-disable-next-line @next/next/no-img-element -- extension fallback */}
       <img
-        src={list[idx]}
+        src={assetUrl(list[idx])}
         alt={alt}
         draggable={false}
         className="block h-full w-full object-contain p-[10%]"

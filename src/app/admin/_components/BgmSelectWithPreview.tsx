@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CaretDown, Pause, Play } from "@phosphor-icons/react";
 
+import { assetUrl } from "@/lib/asset-paths";
 import { inputCls } from "./form";
 
 /**
@@ -63,7 +64,7 @@ export function BgmSelectWithPreview({
       return;
     }
     stopPreview();
-    const audio = new Audio(`/stories/${storyId}/audio/bgm/${key}.mp3`);
+    const audio = new Audio(assetUrl(`/stories/${storyId}/audio/bgm/${key}.mp3`));
     audio.volume = 0.4;
     audio.onended = () => setPlayingKey(null);
     audioRef.current = audio;

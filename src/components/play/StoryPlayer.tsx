@@ -33,6 +33,7 @@ import {
   takeBranch,
 } from "@/lib/story-engine";
 import { checkMedals } from "@/lib/medals-engine";
+import { assetUrl } from "@/lib/asset-paths";
 import { ChallengeGate } from "../challenge/ChallengeGate";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
@@ -1484,7 +1485,7 @@ function AskAvatar({
   return (
     // eslint-disable-next-line @next/next/no-img-element -- extension fallback
     <img
-      src={list[idx]}
+      src={assetUrl(list[idx])}
       alt={alt}
       draggable={false}
       aria-hidden

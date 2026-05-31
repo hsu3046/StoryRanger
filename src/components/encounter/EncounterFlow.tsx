@@ -14,6 +14,7 @@ import type {
 import type { EncounterDef } from "@/types/encounter";
 import type { BattleState } from "@/lib/battle-engine";
 import { encounterIntroLine } from "@/lib/encounter-lines";
+import { assetUrl } from "@/lib/asset-paths";
 
 import { BattleScreen } from "../battle/BattleScreen";
 import { EncounterCaption } from "./EncounterCaption";
@@ -275,7 +276,9 @@ function EncounterAlertSplash({
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- ext fallback */}
           <img
-            src={`${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`}
+            src={assetUrl(
+              `${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`,
+            )}
             onError={(e) => {
               const el = e.currentTarget;
               if (!el.src.endsWith(".png")) el.src = el.src.replace(".webp", ".png");

@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 
 import type { Hero, HeroGender, PlayState } from "@/types/story";
+import { assetUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { newPlayState } from "@/lib/story-engine";
 import { wizardOfOz } from "@/stories/wizard-of-oz";
@@ -348,15 +348,15 @@ function CoverImage({ base, title }: { base: string; title: string }) {
   }
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element -- served directly from the asset CDN (no next/image proxy); extension fallback via onError
+    <img
       key={candidates[idx]}
-      src={candidates[idx]}
+      src={assetUrl(candidates[idx])}
       alt={title}
-      fill
-      priority
-      sizes="100vw"
-      quality={85}
-      className="object-cover object-center"
+      loading="eager"
+      fetchPriority="high"
+      draggable={false}
+      className="absolute inset-0 h-full w-full object-cover object-center"
       onError={() => {
         if (idx + 1 < candidates.length) setIdx(idx + 1);
         else setFailed(true);

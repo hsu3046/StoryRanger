@@ -2,6 +2,8 @@
 
 import { Howl, Howler } from "howler";
 
+import { assetUrl } from "./asset-paths";
+
 /**
  * Lightweight audio engine on top of Howler.js.
  *
@@ -241,7 +243,7 @@ class AudioEngine {
       : `/audio/bgm/${key}.${BGM_EXTS[i]}`;
     try {
       const howl = new Howl({
-        src: [url],
+        src: [assetUrl(url)],
         loop: true,
         volume: this.bgmVolume,
         // Web Audio mode (html5:false) plays reliably after Howler's global
@@ -297,7 +299,7 @@ class AudioEngine {
     }
     try {
       const howl = new Howl({
-        src: [`/audio/sfx/${key}.${SFX_EXTS[i]}`],
+        src: [assetUrl(`/audio/sfx/${key}.${SFX_EXTS[i]}`)],
         volume: this.sfxVolume,
         pool: 4,
         onload: () => {
