@@ -15,7 +15,7 @@
       "image": "/stories/wizard-of-oz/scenes/01-kansas-farm",
       "bgm": "kansas-calm",
       "speaker": "narrator",
-      "narration": "The sky over the prairie turns a strange, sickly green. Aunt Em calls from the cellar door, '{{name}}! The cyclone — get down here!' But Toto is somewhere in the long grass, barking and barking.",
+      "narration": "The sky over the prairie turns a strange, sickly green. Aunt Em calls from the cellar door, \"Dear! The cyclone — get down here!\" But Toto is somewhere in the long grass, barking and barking.",
       "branches": [
         {
           "id": "rescue_toto",
