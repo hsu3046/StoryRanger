@@ -681,8 +681,3 @@ function pick<T>(arr: readonly T[]): T | undefined {
   if (arr.length === 0) return undefined;
   return arr[Math.floor(Math.random() * arr.length)];
 }
-
-/** Resolve a story's age range to the single target age used for tiering. */
-export function ageFromRange(range: readonly [number, number]): number {
-  return Math.round((range[0] + range[1]) / 2);
-}

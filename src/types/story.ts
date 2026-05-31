@@ -35,6 +35,9 @@ export type HeroGender = "girl" | "boy";
 export interface Hero {
   name: string;
   gender: HeroGender;
+  /** Player's age (years), entered at onboarding. Drives educational-challenge
+   *  difficulty — see `planForAge` (clamped to 4–12). NOT a story property. */
+  age: number;
 }
 
 export interface Branch {
@@ -60,7 +63,7 @@ export interface Branch {
   };
   /** Optional educational-challenge gate. When `enabled`, an age-appropriate
    *  math problem (auto-picked, or the forced `category`) must be solved before
-   *  the branch is taken. Difficulty derives from the story's age range. */
+   *  the branch is taken. Difficulty derives from the player's age. */
   challenge?: {
     enabled: true;
     category: "auto" | ChallengeCategory;
@@ -109,7 +112,6 @@ export interface Story {
   /** Optional tagline displayed under the title on the home carousel. */
   subtitle?: string;
   language: string;
-  ageRange: [number, number];
   estimatedMinutes: number;
   coverImage: string;
   startScene: string;
@@ -215,7 +217,7 @@ export type PartyHp = Partial<Record<AttackerId, number>>;
  *
  *  - "challenge"— branch picked, educational-challenge gate open. Engine state
  *                 still at sourceSceneId. The concrete problem is re-generated
- *                 from the story's age range, keyed on attemptKey (retry re-rolls).
+ *                 from the player's age, keyed on attemptKey (retry re-rolls).
  *  - "outcome"  — branch resolved, engine state at destination already.
  *                 Just the outgoing-scene pause with the branch outcome text;
  *                 rewards surface as toasts on the destination scene, and

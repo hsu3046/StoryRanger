@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, Minus, Plus } from "@phosphor-icons/react";
 
 import type { Hero, HeroGender, PlayState } from "@/types/story";
 import { assetUrl } from "@/lib/asset-paths";
@@ -12,6 +12,11 @@ import { newPlayState } from "@/lib/story-engine";
 import { wizardOfOz } from "@/stories/wizard-of-oz";
 
 const NAME_MAX = 20;
+// Player-age bounds. The educational-challenge generator tiers difficulty over
+// ages 4–12 (`planForAge` clamps to this), so the picker matches that range.
+const AGE_MIN = 4;
+const AGE_MAX = 12;
+const AGE_DEFAULT = 8;
 
 export interface StoryCardMeta {
   id: string;
@@ -39,6 +44,7 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   const [showNewHero, setShowNewHero] = useState(false);
   const [name, setName] = useState("");
   const [gender, setGender] = useState<HeroGender>("girl");
+  const [age, setAge] = useState(AGE_DEFAULT);
   /** Non-null while the "dive into the page" transition runs — holds the
    *  play route to push to once the screen has darkened. */
   const [diveTo, setDiveTo] = useState<string | null>(null);
@@ -81,7 +87,7 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
     e.preventDefault();
     const cleaned = name.trim().slice(0, NAME_MAX);
     if (!cleaned) return;
-    startNew({ name: cleaned, gender });
+    startNew({ name: cleaned, gender, age });
   }
 
   return (
@@ -283,6 +289,32 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
                 </div>
               </div>
 
+              <div className="flex w-full flex-col gap-1.5 text-left">
+                <p className="font-handwritten text-lg text-accent-deep">
+                  How old are you?
+                </p>
+                {/* Stepper — drives challenge difficulty (player age, not the
+                    story). Tap-friendly for kids; no keyboard, so no iOS zoom. */}
+                <div className="flex items-center justify-center gap-5 rounded-button bg-paper-deep/40 py-2.5 ring-1 ring-ink-soft/10">
+                  <StepButton
+                    dir="down"
+                    disabled={age <= AGE_MIN}
+                    onClick={() => setAge((a) => Math.max(AGE_MIN, a - 1))}
+                  />
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="min-w-[1.6ch] text-center text-4xl font-semibold tabular-nums text-ink">
+                      {age}
+                    </span>
+                    <span className="text-sm text-ink-soft">years old</span>
+                  </span>
+                  <StepButton
+                    dir="up"
+                    disabled={age >= AGE_MAX}
+                    onClick={() => setAge((a) => Math.min(AGE_MAX, a + 1))}
+                  />
+                </div>
+              </div>
+
               <div className="mt-1 flex w-full gap-2">
                 <button
                   type="button"
@@ -388,6 +420,32 @@ function CarouselArrow({
         <CaretLeft size={28} weight="bold" />
       ) : (
         <CaretRight size={28} weight="bold" />
+      )}
+    </button>
+  );
+}
+
+function StepButton({
+  dir,
+  disabled,
+  onClick,
+}: {
+  dir: "up" | "down";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === "down" ? "Younger" : "Older"}
+      className="flex h-11 w-11 items-center justify-center rounded-full bg-paper text-ink ring-1 ring-ink-soft/15 shadow-button transition-all hover:bg-paper hover:-translate-y-px active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
+    >
+      {dir === "down" ? (
+        <Minus size={20} weight="bold" />
+      ) : (
+        <Plus size={20} weight="bold" />
       )}
     </button>
   );

@@ -62,6 +62,7 @@ export function formatNarration(text: string, hero: Hero): string {
 export const DEFAULT_HERO: Hero = {
   name: "Hero",
   gender: "girl",
+  age: 8,
 };
 
 /**

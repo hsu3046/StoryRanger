@@ -63,7 +63,7 @@ import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
 import { prettyItem } from "@/data/items";
 import { isBranchVisible } from "@/lib/branch-conditions";
-import { ageFromRange, generateChallenge } from "@/lib/education";
+import { generateChallenge } from "@/lib/education";
 import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
@@ -208,14 +208,14 @@ export function StoryPlayer({
     if (!branch?.challenge?.enabled) return null;
     // A fresh problem per attempt AND per solved-step (the memo re-runs when
     // `interaction` changes — attemptKey on retry, solved on advance). Difficulty
-    // = story age tier. `count` is how many must be solved to pass the gate.
+    // = the player's age tier. `count` is how many must be solved to pass the gate.
     const challenge = generateChallenge({
-      age: ageFromRange(story.ageRange),
+      age: state.hero.age,
       category: branch.challenge.category,
     });
     const total = Math.max(1, branch.challenge.count ?? 1);
     return { branch, challenge, attemptKey: i.attemptKey, solved: i.solved, total };
-  }, [state.interaction, story.scenes, story.ageRange]);
+  }, [state.interaction, story.scenes, state.hero.age]);
 
   const pendingOutcome = useMemo(() => {
     const i = state.interaction;
@@ -1341,7 +1341,7 @@ export function StoryPlayer({
             key={`${pendingEncounter.id}#${encounterQueueLen}#${encounterRetryNonce}`}
             encounter={pendingEncounter}
             storyId={story.id}
-            age={ageFromRange(story.ageRange)}
+            age={state.hero.age}
             companions={state.companions}
             companionMoods={state.companionMoods ?? {}}
             partyHp={state.partyHp ?? { hero: DEFAULT_MAX_HP.hero }}

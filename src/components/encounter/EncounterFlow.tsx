@@ -67,7 +67,7 @@ interface Props {
   onRetry?: () => void;
   /** Open the parent's Settings modal — surfaced inside battle. */
   onOpenSettings?: () => void;
-  /** Target age (story midpoint) — forwarded to BattleScreen for challenge
+  /** Player's age (from onboarding) — forwarded to BattleScreen for challenge
    *  difficulty tiering. */
   age: number;
 }

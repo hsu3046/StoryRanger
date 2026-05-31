@@ -3,10 +3,6 @@
   "title": "The Wonderful Wizard of Oz",
   "subtitle": "A girl, a road of yellow brick, and three unlikely friends.",
   "language": "en",
-  "ageRange": [
-    9,
-    9
-  ],
   "estimatedMinutes": 20,
   "coverImage": "/stories/wizard-of-oz/cover",
   "startScene": "s01_kansas",
