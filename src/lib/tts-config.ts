@@ -20,9 +20,18 @@ export const TTS_VOICE_SETTINGS = {
   use_speaker_boost: true,
 } as const;
 
-/** ElevenLabs allows 0.25–4.0; clamp the authored speed into range. */
+/**
+ * ElevenLabs `voice_settings.speed` accepts **0.7–1.2** (1.0 = normal); a value
+ * outside this range makes the API return 422 and the line silently fails. This
+ * is the single source of truth for the authored-speed bounds — the schema,
+ * admin field, and request validation all key off it.
+ */
+export const SPEED_MIN = 0.7;
+export const SPEED_MAX = 1.2;
+
+/** Clamp the authored speed into ElevenLabs' supported range. */
 export function clampSpeed(speed: number): number {
-  return Math.max(0.25, Math.min(4, speed));
+  return Math.max(SPEED_MIN, Math.min(SPEED_MAX, speed));
 }
 
 /**

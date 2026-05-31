@@ -13,6 +13,7 @@ import {
   type ItemDefT,
 } from "@/data/schemas";
 import type { SpeakerId } from "@/types/story";
+import { SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import { saveCharactersAction } from "../_actions/saveJson";
 import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { AssetThumb } from "./AssetThumb";
@@ -567,17 +568,21 @@ function CharacterForm({
         </p>
       </Field>
 
-      <Field label="Voice speed (0.25 – 4.0)">
+      <Field label={`Voice speed (${SPEED_MIN} – ${SPEED_MAX})`}>
         <input
           type="number"
           step={0.05}
-          min={0.25}
-          max={4.0}
+          min={SPEED_MIN}
+          max={SPEED_MAX}
           value={character.voiceSpeed}
           onChange={(e) => {
             const n = Number(e.target.value);
+            // Clamp to ElevenLabs' supported range — out-of-range 422s the line.
             if (Number.isFinite(n))
-              onChange((c) => ({ ...c, voiceSpeed: n }));
+              onChange((c) => ({
+                ...c,
+                voiceSpeed: Math.max(SPEED_MIN, Math.min(SPEED_MAX, n)),
+              }));
           }}
           className={inputCls}
         />

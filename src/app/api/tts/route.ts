@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 
 import { hasElevenLabsKey, synthesizeSpeech } from "@/lib/elevenlabs";
-import { ttsObjectKey } from "@/lib/tts-config";
+import { ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import { hasR2, r2Put } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -10,7 +10,9 @@ export const runtime = "nodejs";
 const RequestSchema = z.object({
   text: z.string().min(1).max(2000),
   voiceId: z.string().min(1),
-  voiceSpeed: z.number().min(0.25).max(4.0).default(1.0),
+  // ElevenLabs speed range; out-of-range or missing falls back to normal (1.0)
+  // rather than 400-ing the whole request (synthesizeSpeech also clamps).
+  voiceSpeed: z.number().min(SPEED_MIN).max(SPEED_MAX).catch(1.0),
   /** Cache the result in R2? Narration is deterministic → cache (default).
    *  Character dialogue is LLM-generated fresh each turn → `false`, so we
    *  don't pollute the bucket with one-shot objects that never hit again. */
@@ -48,12 +50,23 @@ export async function POST(req: Request) {
 
     // Populate the R2 cache (best-effort — never fail the request over it).
     // Skipped for non-cacheable (dialogue) lines so the bucket isn't littered
-    // with one-shot objects.
+    // with one-shot objects. Scheduled with `after()` so the upload runs once
+    // the response is sent BUT the invocation is kept alive until it settles —
+    // a bare fire-and-forget Promise can be frozen/killed in serverless, which
+    // would leave the cache permanently empty (every miss re-hits ElevenLabs).
     if (body.cache && hasR2()) {
-      const key = await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed);
-      r2Put(key, buffer, "audio/mpeg").catch((e) =>
-        console.warn("[tts] R2 cache write failed:", String(e)),
-      );
+      after(async () => {
+        try {
+          const key = await ttsObjectKey(
+            body.text,
+            body.voiceId,
+            body.voiceSpeed,
+          );
+          await r2Put(key, buffer, "audio/mpeg");
+        } catch (e) {
+          console.warn("[tts] R2 cache write failed:", String(e));
+        }
+      });
     }
 
     return new NextResponse(new Uint8Array(buffer), {
