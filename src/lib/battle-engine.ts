@@ -275,9 +275,8 @@ export function applyItemEffect(
 }
 
 /**
-/**
  * Resolve the math puzzle.
- *  - correct + ≤5s   → critical (2 hits)
+ *  - correct + ≤3s   → critical (2 hits)
  *  - correct         → normal (1 hit)
  *  - streak ≥ 3      → +1 extra hit on next correct
  *  - wrong / timeout → miss (0 hits)
