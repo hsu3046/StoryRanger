@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Backpack, GearSix, Sword, X as XIcon } from "@phosphor-icons/react";
 
 import {
@@ -14,6 +14,7 @@ import {
   resolvePuzzleAttack,
   setupBattle,
   stepCompanionTurn,
+  timerFrozen,
   type AttackerId,
   type BattleState,
   type HeroAction,
@@ -592,10 +593,21 @@ export function BattleScreen({
 
       {/* Math puzzle overlay — attack OR defend */}
       <AnimatePresence>
+        {activePuzzle && timerFrozen(state, activePuzzle.mode) && (
+          <motion.div
+            key="time-frozen"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none fixed left-1/2 top-6 z-[61] -translate-x-1/2 rounded-pill bg-ink/80 px-4 py-1.5 text-sm font-semibold text-paper backdrop-blur"
+          >
+            ⏸️ Time stopped — no limit!
+          </motion.div>
+        )}
         {activePuzzle && activeChallenge && activePuzzle.mode === "attack" && (
           <EducationalChallenge
             mode="attack"
-            withTimer
+            withTimer={!timerFrozen(state, "attack")}
             challenge={activeChallenge}
             targetName={activePuzzle.monster.name}
             attackerLabel={attackerName(state.activeAttacker)}
@@ -613,7 +625,7 @@ export function BattleScreen({
         {activePuzzle && activeChallenge && activePuzzle.mode === "defend" && (
           <EducationalChallenge
             mode="defend"
-            withTimer
+            withTimer={!timerFrozen(state, "defend")}
             challenge={activeChallenge}
             targetName={activePuzzle.monster.name}
             streak={0}

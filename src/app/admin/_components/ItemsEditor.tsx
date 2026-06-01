@@ -19,11 +19,16 @@ import { Field, StyledSelect, inputCls } from "./form";
 
 /** Effect kinds offered in the editor. Add a kind here + a default + a
  *  field block below when a new effect ships. */
-const EFFECT_KINDS = ["heal", "event"] as const satisfies readonly ItemEffectKind[];
+const EFFECT_KINDS = [
+  "heal",
+  "event",
+  "stop-time",
+] as const satisfies readonly ItemEffectKind[];
 
 const EFFECT_KIND_LABEL: Record<ItemEffectKind, string> = {
   heal: "Restore HP",
   event: "Event",
+  "stop-time": "Stop time",
 };
 
 /** Default-shaped effect when switching the kind dropdown. */
@@ -33,6 +38,8 @@ function defaultEffect(kind: ItemEffectKind): ItemEffectT {
       return { kind: "heal", amount: 1 };
     case "event":
       return { kind: "event" };
+    case "stop-time":
+      return { kind: "stop-time", scope: "one-attack" };
   }
 }
 
@@ -396,6 +403,32 @@ function ItemForm({
             className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`}
           />
         </Field>
+        {/* Stop-time scope — shown only for stop-time items. */}
+        {item.effect.kind === "stop-time" && (
+          <Field label="Stop-time scope">
+            <StyledSelect
+              value={item.effect.scope}
+              onChange={(e) =>
+                onChange((it) =>
+                  it.effect.kind === "stop-time"
+                    ? {
+                        ...it,
+                        effect: {
+                          kind: "stop-time",
+                          scope: e.target.value as
+                            | "one-attack"
+                            | "whole-battle",
+                        },
+                      }
+                    : it,
+                )
+              }
+            >
+              <option value="one-attack">One attack</option>
+              <option value="whole-battle">Whole battle</option>
+            </StyledSelect>
+          </Field>
+        )}
       </div>
       <Field label="Description">
         <textarea

@@ -29,6 +29,15 @@ export const EFFECT_META: Record<ItemEffectKind, EffectMeta> = {
     label: () => "Event",
     contexts: [],
   },
+  "stop-time": {
+    label: (e) =>
+      e.kind === "stop-time"
+        ? e.scope === "whole-battle"
+          ? "Stop time (whole battle)"
+          : "Stop time (1 attack)"
+        : "Stop time",
+    contexts: ["battle"],
+  },
   // [+EXT] hint: { label: () => "Hint", contexts: ["puzzle"] },
   // [+EXT] "extra-time": { label: (e) => `+${e.seconds}s`, contexts: ["puzzle"] },
   // [+EXT] "skip-monster": { label: () => "Skip monster", contexts: ["battle"] },

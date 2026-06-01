@@ -93,6 +93,12 @@ export interface BattleState {
   /** Item ids spent during this battle. Removed from PlayState.inventory
    *  (one occurrence each) when the encounter resolves. */
   itemsConsumed: string[];
+  /** Answer-timer freeze from a "stop-time" item. undefined = none.
+   *  "whole-battle" = timer off for every remaining attack + defend.
+   *  number = that many upcoming ATTACK puzzles have the timer off (decrements
+   *  as each attack resolves; a one-attack item sets 1). Crit is suppressed
+   *  while an attack is frozen. */
+  timeFreeze?: "whole-battle" | number;
 }
 
 export type HeroAction =
@@ -235,9 +241,26 @@ export function canUseItem(state: BattleState, item: ItemDefT): boolean {
         state.partyLives[state.activeAttacker] <
         state.partyMaxLives[state.activeAttacker]
       );
+    case "stop-time":
+      // No stacking — pointless to re-freeze while a freeze is already active.
+      return state.timeFreeze === undefined;
     default:
       return false;
   }
+}
+
+/**
+ * Whether the answer timer is currently frozen for a puzzle of `mode`. A
+ * one-attack freeze (numeric counter) covers ATTACK puzzles only; a
+ * whole-battle freeze covers both attack and defend. Shared by the BattleScreen
+ * timer gate and the crit-suppression in resolvePuzzleAttack.
+ */
+export function timerFrozen(
+  state: BattleState,
+  mode: "attack" | "defend",
+): boolean {
+  if (state.timeFreeze === "whole-battle") return true;
+  return mode === "attack" && typeof state.timeFreeze === "number" && state.timeFreeze > 0;
 }
 
 /**
@@ -265,6 +288,24 @@ export function applyItemEffect(
         log: [
           ...state.log,
           { text: `Used ${item.name} — healed to ${healed}/${max}.`, tone: "neutral" },
+        ],
+      };
+    }
+    case "stop-time": {
+      return {
+        ...state,
+        timeFreeze: effect.scope === "whole-battle" ? "whole-battle" : 1,
+        itemsConsumed: [...state.itemsConsumed, itemId],
+        log: [
+          ...state.log,
+          {
+            text: `Used ${item.name} — time stops! No time limit${
+              effect.scope === "whole-battle"
+                ? " this battle"
+                : " on your next attack"
+            }.`,
+            tone: "neutral",
+          },
         ],
       };
     }
@@ -305,10 +346,17 @@ export function resolvePuzzleAttack(
   let monsters = state.monsters;
   let streak = state.streak;
   const attackerLabel = attackerName(state.activeAttacker);
+  // A one-attack freeze is spent by this attack (win or lose); whole-battle
+  // persists. Crit is suppressed while frozen (no time pressure → no bonus).
+  const wasFrozen = timerFrozen(state, "attack");
+  const nextFreeze =
+    wasFrozen && typeof state.timeFreeze === "number"
+      ? state.timeFreeze - 1 || undefined
+      : state.timeFreeze;
 
   if (outcome.correct) {
     streak += 1;
-    const isCrit = outcome.durationMs <= 3000;
+    const isCrit = !wasFrozen && outcome.durationMs <= 3000;
     let hitsDone = 1 + (isCrit ? 1 : 0) + (streak >= 3 ? 1 : 0);
     hitsDone = Math.max(1, Math.min(hitsDone, target.hitsRemaining));
 
@@ -360,6 +408,7 @@ export function resolvePuzzleAttack(
       phase: "victory",
       pendingTargetIdx: undefined,
       streak,
+      timeFreeze: nextFreeze,
     };
   }
 
@@ -371,6 +420,7 @@ export function resolvePuzzleAttack(
     companionIdxThisRound: 0,
     pendingTargetIdx: undefined,
     streak,
+    timeFreeze: nextFreeze,
   };
 }
 
