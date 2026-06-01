@@ -35,6 +35,19 @@ export const viewport: Viewport = {
   themeColor: "#7c4a1e",
 };
 
+/** Origin of the asset CDN (R2 custom domain / r2.dev), or null when serving
+ *  from local public/. Used to warm the connection before the first image. */
+function assetOrigin(): string | null {
+  const base = process.env.NEXT_PUBLIC_ASSET_BASE_URL;
+  if (!base) return null;
+  try {
+    return new URL(base).origin;
+  } catch {
+    return null;
+  }
+}
+const ASSET_ORIGIN = assetOrigin();
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -52,6 +65,16 @@ export default function RootLayout({
           frame instead of flashing a cream margin. Page-level surfaces
           set their own bg-paper where needed. */}
       <body className="min-h-full flex flex-col bg-ink text-ink font-storybook">
+        {/* Warm the asset-CDN connection before the first image/audio request
+            (skipped in local dev, where assets are same-origin). Two links so
+            both the plain <img> connection and the CORS audio/fetch connection
+            are primed. React hoists rel=preconnect into <head>. */}
+        {ASSET_ORIGIN && (
+          <>
+            <link rel="preconnect" href={ASSET_ORIGIN} />
+            <link rel="preconnect" href={ASSET_ORIGIN} crossOrigin="anonymous" />
+          </>
+        )}
         {children}
       </body>
     </html>

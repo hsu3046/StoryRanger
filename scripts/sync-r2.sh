@@ -46,11 +46,19 @@ export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
 echo "Syncing ./public → s3://${R2_BUCKET} (R2)…"
+# --cache-control: assets are effectively immutable (a changed image is a new
+#   file), so cache hard — lets the browser + Cloudflare CDN skip revalidation
+#   (r2.dev/origin TTFB is ~1s, so revalidating every load is what made images
+#   feel slow). --exclude jpeg/jpg: the big originals stay LOCAL only; the app
+#   requests .webp first, so only webp/png ship to the bucket.
 aws s3 sync ./public "s3://${R2_BUCKET}" \
   --endpoint-url "$ENDPOINT" \
   --no-progress \
+  --cache-control "public, max-age=31536000, immutable" \
   --exclude "audio/sfx/misc/*" \
   --exclude "*.DS_Store" \
+  --exclude "*.jpeg" \
+  --exclude "*.jpg" \
   "$@"
 
 echo "Done. Asset base for the app: NEXT_PUBLIC_ASSET_BASE_URL=<your bucket's public URL>"
