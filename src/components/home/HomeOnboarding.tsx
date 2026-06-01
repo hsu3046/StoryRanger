@@ -8,9 +8,11 @@ import { CaretLeft, CaretRight, Minus, Plus } from "@phosphor-icons/react";
 import type { Hero, HeroGender, PlayState } from "@/types/story";
 import { assetUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
+import { reviewCount } from "@/lib/review-store";
 import { newPlayState } from "@/lib/story-engine";
 import { wizardOfOz } from "@/stories/wizard-of-oz";
 import { SecretGate } from "./SecretGate";
+import { ReviewSession } from "@/components/review/ReviewSession";
 
 const NAME_MAX = 20;
 /** Once the magic-door code is entered correctly, this device stays unlocked. */
@@ -66,17 +68,24 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
    *  clearState + saveState is deferred to unlock (commitNewGame), so backing
    *  out of the gate never clobbers an existing save. */
   const [pendingNewHero, setPendingNewHero] = useState<Hero | null>(null);
+  /** Per-story count of wrong questions queued for review (home button). */
+  const [reviewMap, setReviewMap] = useState<Record<string, number>>({});
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
     setSavedMap(
       Object.fromEntries(STORIES.map((s) => [s.id, loadState(s.id)])),
     );
+    setReviewMap(
+      Object.fromEntries(STORIES.map((s) => [s.id, reviewCount(s.id)])),
+    );
     setHydrated(true);
   }, []);
 
   const active = STORIES[activeIdx];
   const saved = savedMap[active.id] ?? null;
+  const reviewN = reviewMap[active.id] ?? 0;
   const hasPrev = activeIdx > 0;
   const hasNext = activeIdx < STORIES.length - 1;
 
@@ -226,6 +235,26 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
                 </span>
                 <span className="font-handwritten text-2xl text-accent-deep/70 transition-transform group-hover:translate-x-0.5">
                   →
+                </span>
+              </button>
+            )}
+
+            {reviewN > 0 && (
+              <button
+                type="button"
+                onClick={() => setReviewOpen(true)}
+                className="group inline-flex min-h-14 w-full items-center justify-between gap-3 rounded-button bg-paper/85 px-5 text-left text-base text-ink ring-1 ring-ink-soft/10 shadow-card backdrop-blur transition-all hover:bg-paper hover:-translate-y-px active:translate-y-0"
+              >
+                <span className="flex flex-col">
+                  <span className="font-handwritten text-base text-accent-deep">
+                    Check Your Answers
+                  </span>
+                  <span className="text-base font-medium">
+                    {reviewN} to practice
+                  </span>
+                </span>
+                <span className="font-handwritten text-2xl text-accent-deep/70 transition-transform group-hover:translate-x-0.5">
+                  ✎
                 </span>
               </button>
             )}
@@ -403,6 +432,21 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
               // Backed out — no write happened, existing save is intact.
               setGateHref(null);
               setPendingNewHero(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* "Check Your Answers" — flashcard review of this story's wrong answers.
+          On close, re-read the live count so the button updates (hides at 0). */}
+      <AnimatePresence>
+        {reviewOpen && (
+          <ReviewSession
+            storyId={active.id}
+            storyTitle={active.title}
+            onClose={() => {
+              setReviewOpen(false);
+              setReviewMap((m) => ({ ...m, [active.id]: reviewCount(active.id) }));
             }}
           />
         )}
