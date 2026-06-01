@@ -80,6 +80,9 @@ interface Props {
   victoryItems?: string[];
   /** Player's age (from onboarding) — drives challenge difficulty tier. */
   age: number;
+  /** When set, called with a missed challenge so the home "Check Your Answers"
+   *  review can collect it. Undefined in admin preview / demo (no recording). */
+  recordWrongChallenge?: (challenge: Challenge) => void;
 }
 
 const HERO_POSITIONS: Record<number, StagePosition[]> = {
@@ -103,6 +106,7 @@ export function BattleScreen({
   inventory = [],
   victoryItems,
   age,
+  recordWrongChallenge,
 }: Props) {
   const [state, setState] = useState<BattleState>(
     () => initialState ?? setupBattle(setup),
@@ -597,6 +601,8 @@ export function BattleScreen({
             attackerLabel={attackerName(state.activeAttacker)}
             streak={state.streak}
             onSolved={(correct, durationMs) => {
+              if (!correct && activeChallenge)
+                recordWrongChallenge?.(activeChallenge);
               triggerAttackerLunge(state.activeAttacker);
               setState((s) =>
                 resolvePuzzleAttack(s, { correct, durationMs }),
@@ -612,6 +618,8 @@ export function BattleScreen({
             targetName={activePuzzle.monster.name}
             streak={0}
             onSolved={(correct, durationMs) => {
+              if (!correct && activeChallenge)
+                recordWrongChallenge?.(activeChallenge);
               if (correct) {
                 // Successful defense — sprite weaves side-to-side. The
                 // damage-taken blink is wired separately via the hero

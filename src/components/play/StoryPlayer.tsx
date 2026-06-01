@@ -63,7 +63,8 @@ import { buildEncounterQueue } from "@/lib/encounter-engine";
 import { getEncounter } from "@/data/encounters";
 import { prettyItem } from "@/data/items";
 import { isBranchVisible } from "@/lib/branch-conditions";
-import { generateChallenge } from "@/lib/education";
+import { generateChallenge, type Challenge } from "@/lib/education";
+import { recordWrong } from "@/lib/review-store";
 import type { EncounterDef } from "@/types/encounter";
 
 /** Upper bound on the global hero-memory log kept in PlayState. */
@@ -713,6 +714,19 @@ export function StoryPlayer({
       );
       return;
     }
+    // Save the missed question for the home "Check Your Answers" study tool
+    // (live play only — never the admin preview or the demo slot). Only the
+    // FIRST miss per gate step (attemptKey === 0) is recorded: the gate can't
+    // be failed out of and re-rolls a fresh problem on every retry, so without
+    // this a stubborn gate would flood the review list with its variations.
+    if (!previewMode && slot === "play" && pendingChallenge.attemptKey === 0) {
+      recordWrong(
+        story.id,
+        pendingChallenge.challenge,
+        "gate",
+        new Date().toISOString(),
+      );
+    }
     // Wrong answer → always retry until solved: bump attemptKey to re-roll a
     // fresh problem (the gate can't be failed out of).
     setState((s) =>
@@ -1344,6 +1358,12 @@ export function StoryPlayer({
             encounter={pendingEncounter}
             storyId={story.id}
             age={state.hero.age}
+            recordWrongChallenge={
+              !previewMode && slot === "play"
+                ? (c: Challenge) =>
+                    recordWrong(story.id, c, "battle", new Date().toISOString())
+                : undefined
+            }
             companions={state.companions}
             companionMoods={state.companionMoods ?? {}}
             partyHp={state.partyHp ?? { hero: DEFAULT_MAX_HP.hero }}

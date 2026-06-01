@@ -13,6 +13,7 @@ import type {
 } from "@/types/story";
 import type { EncounterDef } from "@/types/encounter";
 import type { BattleState } from "@/lib/battle-engine";
+import type { Challenge } from "@/lib/education";
 import { encounterIntroLine } from "@/lib/encounter-lines";
 import { assetUrl } from "@/lib/asset-paths";
 import { getAudio, SFX } from "@/lib/audio-engine";
@@ -70,6 +71,9 @@ interface Props {
   /** Player's age (from onboarding) — forwarded to BattleScreen for challenge
    *  difficulty tiering. */
   age: number;
+  /** When set, called with a missed challenge so the home "Check Your Answers"
+   *  review can collect it. Undefined in admin preview / demo (no recording). */
+  recordWrongChallenge?: (challenge: Challenge) => void;
 }
 
 type Phase = "intro" | "alert" | "body";
@@ -105,6 +109,7 @@ export function EncounterFlow({
   onRetry,
   onOpenSettings,
   age,
+  recordWrongChallenge,
 }: Props) {
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
@@ -154,6 +159,7 @@ export function EncounterFlow({
       <BattleScreen
         storyId={storyId}
         age={age}
+        recordWrongChallenge={recordWrongChallenge}
         characterImageBase={(id) => characterImageBase(id, "battle")}
         heroId={heroId}
         characters={characters}
