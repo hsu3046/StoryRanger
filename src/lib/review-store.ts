@@ -45,14 +45,22 @@ interface ReviewFile {
 }
 
 /**
- * Dedup identity: the question AS THE PLAYER SAW IT — category + prompt + the
- * rendered choices. (correctIndex is derived from `choices`, so two rolls with
- * identical prompt+choices are the same question.) Joins with non-printing
- * separators (US / RS) so a literal character inside a prompt/choice can never
- * forge a key boundary.
+ * Dedup identity: the question AS THE PLAYER SAW IT. category + prompt +
+ * choices alone is NOT enough — visual challenges (e.g. "What shape is this?")
+ * reuse the same prompt and choice set, with the VISUAL and the correct answer
+ * being what actually differ (a triangle vs a square card). So the key also
+ * folds in `correctIndex` and the serialized `visual`. Joined with non-printing
+ * separators (US / RS) so a literal character inside a field can't forge a key
+ * boundary.
  */
 export function reviewKeyOf(c: Challenge): string {
-  return [c.category, c.prompt, c.choices.join("␞")].join("␟");
+  return [
+    c.category,
+    c.prompt,
+    c.choices.join("␞"),
+    String(c.correctIndex),
+    c.visual ? JSON.stringify(c.visual) : "",
+  ].join("␟");
 }
 
 /** A stored item is usable only if its challenge can actually be replayed —
