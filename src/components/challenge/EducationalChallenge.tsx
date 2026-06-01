@@ -12,6 +12,10 @@ interface Props {
   challenge: Challenge;
   /** Fired after the player picks (or times out) AND the feedback flash plays. */
   onSolved: (correct: boolean, durationMs: number) => void;
+  /** Fired the INSTANT an answer is locked in (before the feedback flash +
+   *  before `onSolved`). Lets a parent block "close" during the commit window
+   *  so it can't read stale state mid-answer. Optional — battle/gate omit it. */
+  onAnswered?: () => void;
   /** "gate" = branch gate (no timer/monster). "attack"/"defend" = battle. */
   mode?: "attack" | "defend" | "gate";
   /** Battle uses a 10s countdown; the gate does not. */
@@ -38,6 +42,7 @@ const FEEDBACK_MS = 850;
 export function EducationalChallenge({
   challenge,
   onSolved,
+  onAnswered,
   mode = "gate",
   withTimer = false,
   targetName,
@@ -66,6 +71,7 @@ export function EducationalChallenge({
   function resolve(correct: boolean, picked: number, ms: number) {
     if (resolvedRef.current) return;
     resolvedRef.current = true;
+    onAnswered?.(); // synchronous — before the feedback flash commits the result
     if (intervalRef.current) clearInterval(intervalRef.current);
     setPickedIdx(picked);
     setResult(correct);

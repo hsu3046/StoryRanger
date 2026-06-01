@@ -40,6 +40,10 @@ export function ReviewSession({ storyId, storyTitle, onClose }: Props) {
   const [masteredKeys, setMasteredKeys] = useState<Set<string>>(new Set());
   /** Brief between-card cue: "mastered" (⭐) or "kept" (let's revisit). */
   const [flash, setFlash] = useState<"mastered" | "kept" | null>(null);
+  /** True from the instant the current card is answered until it advances —
+   *  blocks the close button so finish() can't read a stale count while the
+   *  answer is mid-commit (EducationalChallenge delays onSolved by FEEDBACK_MS). */
+  const [committing, setCommitting] = useState(false);
   /** Pending advance timer — cleared on unmount so it never fires into a gone
    *  component (e.g. the player closes mid-cue). */
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +65,7 @@ export function ReviewSession({ storyId, storyTitle, onClose }: Props) {
     setFlash(correct ? "mastered" : "kept");
     const advance = () => {
       setFlash(null);
+      setCommitting(false);
       const next = idx + 1;
       if (next >= queue.length) setPhase("results");
       else setIdx(next);
@@ -86,12 +91,14 @@ export function ReviewSession({ storyId, storyTitle, onClose }: Props) {
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="fixed inset-0 z-[55] flex items-center justify-center overflow-y-auto bg-ink/85 px-4 py-8 backdrop-blur-sm"
     >
-      {/* Close (X) — bail out anytime; counts as the current progress. */}
+      {/* Close (X) — bail out anytime; counts as the current progress. Disabled
+          while an answer is committing so finish() can't read a stale count. */}
       <button
         type="button"
         onClick={finish}
+        disabled={committing}
         aria-label="Close"
-        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/80 backdrop-blur transition hover:bg-paper/25 active:scale-95"
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/80 backdrop-blur transition hover:bg-paper/25 active:scale-95 disabled:pointer-events-none disabled:opacity-30"
       >
         ✕
       </button>
@@ -142,6 +149,7 @@ export function ReviewSession({ storyId, storyTitle, onClose }: Props) {
               withTimer={false}
               placement="inline"
               progress={{ current: idx + 1, total: queue.length }}
+              onAnswered={() => setCommitting(true)}
               onSolved={(correct) => handleSolved(correct)}
             />
           </div>
