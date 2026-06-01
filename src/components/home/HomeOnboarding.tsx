@@ -10,8 +10,19 @@ import { assetUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { newPlayState } from "@/lib/story-engine";
 import { wizardOfOz } from "@/stories/wizard-of-oz";
+import { SecretGate } from "./SecretGate";
 
 const NAME_MAX = 20;
+/** Once the magic-door code is entered correctly, this device stays unlocked. */
+const UNLOCK_KEY = "storyranger:unlocked";
+
+function isUnlocked(): boolean {
+  try {
+    return window.localStorage.getItem(UNLOCK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 // Player-age bounds. The educational-challenge generator tiers difficulty over
 // ages 4–12 (`planForAge` clamps to this), so the picker matches that range.
 const AGE_MIN = 4;
@@ -48,6 +59,9 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   /** Non-null while the "dive into the page" transition runs — holds the
    *  play route to push to once the screen has darkened. */
   const [diveTo, setDiveTo] = useState<string | null>(null);
+  /** Non-null while the secret-code gate is open — holds the play route to
+   *  enter once the magic door is unlocked. */
+  const [gateHref, setGateHref] = useState<string | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
@@ -76,11 +90,19 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
     setDiveTo(href);
   }
 
+  /** Entry chokepoint for both "new adventure" and "continue": gate behind the
+   *  secret code (once per device), then run the dive into the story. */
+  function enterStory(href: string) {
+    setShowNewHero(false);
+    if (isUnlocked()) beginDive(href);
+    else setGateHref(href);
+  }
+
   function startNew(hero: Hero) {
     if (!story) return;
     clearState(active.id);
     saveState(newPlayState(story, hero));
-    beginDive(`/play/${active.id}`);
+    enterStory(`/play/${active.id}`);
   }
 
   function handleSubmit(e: FormEvent) {
@@ -171,7 +193,7 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
             {saved && (
               <button
                 type="button"
-                onClick={() => beginDive(`/play/${active.id}`)}
+                onClick={() => enterStory(`/play/${active.id}`)}
                 className="group inline-flex min-h-14 w-full items-center justify-between gap-3 rounded-button bg-paper/85 px-5 text-left text-base text-ink ring-1 ring-ink-soft/10 shadow-card backdrop-blur transition-all hover:bg-paper hover:-translate-y-px active:translate-y-0"
               >
                 <span className="flex flex-col">
@@ -333,6 +355,26 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
               </div>
             </motion.form>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Secret-code gate — the magic door before entering a story. Unlocks
+          once per device, then hands off to the dive transition below. */}
+      <AnimatePresence>
+        {gateHref && (
+          <SecretGate
+            onUnlock={() => {
+              try {
+                window.localStorage.setItem(UNLOCK_KEY, "1");
+              } catch {
+                /* private mode — fall through, just enter this once */
+              }
+              const href = gateHref;
+              setGateHref(null);
+              if (href) beginDive(href);
+            }}
+            onCancel={() => setGateHref(null)}
+          />
         )}
       </AnimatePresence>
 
