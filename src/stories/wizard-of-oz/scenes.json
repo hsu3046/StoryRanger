@@ -183,7 +183,7 @@
     },
     "s07_forest_edge": {
       "image": "/stories/wizard-of-oz/scenes/07-forest-edge",
-      "bgm": "witch-castle",
+      "bgm": "puzzle",
       "speaker": "narrator",
       "narration": "The trees grow taller and darker. A great roar shakes the leaves. A huge lion leaps onto the road, his eyes wide and yellow — claws out, teeth bared. But look closely: his big paws are trembling, and his tail curls behind him like a frightened puppy.",
       "branches": [
@@ -361,7 +361,7 @@
     },
     "s15_west_journey": {
       "image": "/stories/wizard-of-oz/scenes/15-west-journey",
-      "bgm": "tornado",
+      "bgm": "battle_2",
       "speaker": "narrator",
       "narration": "You travel west, past hills the color of slate. The sky turns gray. A flock of winged monkeys descends on great leathery wings, and carries you to the Witch's castle.",
       "branches": [
@@ -392,7 +392,7 @@
     },
     "s17_witch_melts": {
       "image": "/stories/wizard-of-oz/scenes/17-witch-melts",
-      "bgm": "yellow-road",
+      "bgm": "sneak_1",
       "speaker": "narrator",
       "narration": "The Wicked Witch shrieks. 'I am melting! Melting!' And before your eyes she is gone — only a pile of black cloth and a tall pointed hat. The castle servants cheer. You are free.",
       "branches": [
@@ -405,7 +405,7 @@
     },
     "s18_unmasked": {
       "image": "/stories/wizard-of-oz/scenes/18-wizard-unmasked",
-      "bgm": "emerald-city",
+      "bgm": "sneak_2",
       "speaker": "narrator",
       "narration": "Behind the great green throne, Toto pulls back a curtain — and there stands a small, kind old man pulling levers. 'I am no great wizard,' he sighs. 'Only a man from a place called Omaha. But I will help you all the same.'",
       "branches": [
@@ -418,7 +418,7 @@
     },
     "s19_balloon_launch": {
       "image": "/stories/wizard-of-oz/scenes/19-balloon-launch",
-      "bgm": "munchkinland",
+      "bgm": "night-reste",
       "speaker": "narrator",
       "narration": "A great green balloon rises in the square. The Wizard waves. But just as you step toward it, Toto leaps after a stray kitten — and the ropes snap free. The balloon drifts up into the sky without you.",
       "branches": [
@@ -441,7 +441,7 @@
     },
     "s20_glinda": {
       "image": "/stories/wizard-of-oz/scenes/20-glinda-south",
-      "bgm": "emerald-city",
+      "bgm": "farewell_3",
       "speaker": "glinda",
       "narration": "Glinda smiles softly. 'My dear — you have had the power all along. The silver shoes on your feet can carry you home. Click the heels three times, and speak your wish.'",
       "branches": [
@@ -454,7 +454,7 @@
     },
     "s20a_farewell": {
       "image": "/stories/wizard-of-oz/scenes/20a-farewell",
-      "bgm": "emerald-city",
+      "bgm": "farewell_3",
       "speaker": "narrator",
       "narration": "The Scarecrow's straw arms wrap you up first — he is going back to rule the Emerald City. The Tin Man's metal cheek glistens with one careful tear. The Lion presses his great mane against your shoulder, brave at last. None of you wants to be the first to say it.",
       "branches": [
@@ -482,7 +482,7 @@
     },
     "s21_home": {
       "image": "/stories/wizard-of-oz/scenes/21-kansas-return",
-      "bgm": "emerald-city",
+      "bgm": "farewell_3",
       "speaker": "narrator",
       "narration": "The wind rushes. The colors blur. And then — Aunt Em is hugging you tight on the porch of the gray Kansas farmhouse. Toto barks at your feet. 'My darling,' Aunt Em whispers. 'Where on earth did you come from?'",
       "branches": [],
@@ -632,7 +632,7 @@
     },
     "mouse-queen-rescue": {
       "image": "/stories/wizard-of-oz/scenes/09a-mouse-queen-rescue",
-      "bgm": "kansas-calm",
+      "bgm": "sneak_2",
       "speaker": "narrator",
       "narration": "The tiny Mouse King bowed his head in thanks. \"Thank you so much! That cat has always wanted to catch me. In return, take my crown — show it to any mouse, and they will help you anytime!\"",
       "branches": [
@@ -671,7 +671,7 @@
     },
     "monkey-ambush": {
       "image": "/stories/wizard-of-oz/scenes/15a-monkey-ambush",
-      "bgm": "tornado",
+      "bgm": "battle_2",
       "speaker": "narrator",
       "narration": "(Write the narration for this new scene.)",
       "branches": [
@@ -684,7 +684,7 @@
     },
     "wizard-gifts": {
       "image": "/stories/wizard-of-oz/scenes/18a-wizard-gifts",
-      "bgm": "kansas-calm",
+      "bgm": "night-reste",
       "speaker": "narrator",
       "narration": "(Write the narration for this new scene.)",
       "branches": [
@@ -710,7 +710,7 @@
     },
     "09b-mouse-king-chase": {
       "image": "/stories/wizard-of-oz/scenes/09b-mouse-king-chase.jpeg",
-      "bgm": "tornado",
+      "bgm": "puzzle_2",
       "speaker": "narrator",
       "narration": "A strange sound caught their eye — far away, a tiny mouse wearing a crown was running from a cat!",
       "branches": [
@@ -730,7 +730,7 @@
     },
     "09b-dark-forest-jump": {
       "image": "/stories/wizard-of-oz/scenes/09b-dark-forest-jump.jpeg",
-      "bgm": "yellow-road",
+      "bgm": "victory_2",
       "speaker": "narrator",
       "narration": "With a deep breath, the Lion carried each of them across the cliff — one by one — and leaped with all his might. He said he needed the Wizard to give him courage. But watching him now, he already looked pretty brave.",
       "branches": [
@@ -783,7 +783,7 @@
     },
     "20b-farewell-magic": {
       "image": "/stories/wizard-of-oz/scenes/20b-farewell-magic.jpeg",
-      "bgm": "emerald-city",
+      "bgm": "farewell_3",
       "speaker": "narrator",
       "narration": "(Write the narration for this new scene.)",
       "branches": [
@@ -809,7 +809,7 @@
     },
     "07a-crying-lion": {
       "image": "/stories/wizard-of-oz/scenes/07a-crying-lion",
-      "bgm": "witch-castle",
+      "bgm": "puzzle",
       "speaker": "narrator",
       "narration": "I am the King of the Forest — but I am afraid of everything. Thunder, shadows, even a little mouse! The other animals laugh at me. That is why I must find the Wizard of Oz. Maybe he can give me the one thing I need — bravery.",
       "branches": [
@@ -842,7 +842,7 @@
     },
     "14b-wizard-faces-open": {
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
-      "bgm": "yellow-road",
+      "bgm": "tornado",
       "speaker": "narrator",
       "narration": "(Write the narration for this new scene.)",
       "branches": [
@@ -954,7 +954,7 @@
     },
     "02c-tornado-after": {
       "image": "/stories/wizard-of-oz/scenes/02c-tornado-after.jpeg",
-      "bgm": "munchkinland",
+      "bgm": "kansas-calm",
       "speaker": "narrator",
       "narration": "The cyclone finally fell silent, and a warm, golden light spilled through the window. You slowly opened the window to find a land of brilliant flowers and sparkling brooks.",
       "branches": [
