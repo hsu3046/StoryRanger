@@ -1461,7 +1461,10 @@ function SceneInspector({
           // when the catalog also defines a "narrator" character (avoid a
           // duplicate option key).
           options={[
-            { value: "narrator", label: "narrator" },
+            // value stays the "narrator" SpeakerId (used across scenes.json /
+            // SceneNode / the player); only the display label is capitalized to
+            // match the character names (Hero, Scarecrow, …).
+            { value: "narrator", label: "Narrator" },
             ...characters
               .filter((c) => c.id !== "narrator")
               .map((c) => ({ value: c.id, label: c.name })),
