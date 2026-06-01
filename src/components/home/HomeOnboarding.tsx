@@ -62,6 +62,10 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   /** Non-null while the secret-code gate is open — holds the play route to
    *  enter once the magic door is unlocked. */
   const [gateHref, setGateHref] = useState<string | null>(null);
+  /** Hero awaiting the gate for a NEW adventure. The destructive
+   *  clearState + saveState is deferred to unlock (commitNewGame), so backing
+   *  out of the gate never clobbers an existing save. */
+  const [pendingNewHero, setPendingNewHero] = useState<Hero | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
@@ -98,11 +102,27 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
     else setGateHref(href);
   }
 
-  function startNew(hero: Hero) {
+  /** Write the fresh save + dive. Called ONLY after the gate is unlocked (or
+   *  immediately when already unlocked) — never before, so a cancelled gate
+   *  can't wipe existing progress. */
+  function commitNewGame(hero: Hero, href: string) {
     if (!story) return;
     clearState(active.id);
     saveState(newPlayState(story, hero));
-    enterStory(`/play/${active.id}`);
+    beginDive(href);
+  }
+
+  function startNew(hero: Hero) {
+    if (!story) return;
+    setShowNewHero(false);
+    const href = `/play/${active.id}`;
+    if (isUnlocked()) {
+      commitNewGame(hero, href);
+    } else {
+      // Defer the destructive write until the gate unlocks (see commitNewGame).
+      setPendingNewHero(hero);
+      setGateHref(href);
+    }
   }
 
   function handleSubmit(e: FormEvent) {
@@ -370,10 +390,20 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
                 /* private mode — fall through, just enter this once */
               }
               const href = gateHref;
+              const hero = pendingNewHero;
               setGateHref(null);
-              if (href) beginDive(href);
+              setPendingNewHero(null);
+              if (!href) return;
+              // New adventure: write the fresh save NOW (deferred from the form
+              // submit); continue: just dive. Either way, only after unlock.
+              if (hero) commitNewGame(hero, href);
+              else beginDive(href);
             }}
-            onCancel={() => setGateHref(null)}
+            onCancel={() => {
+              // Backed out — no write happened, existing save is intact.
+              setGateHref(null);
+              setPendingNewHero(null);
+            }}
           />
         )}
       </AnimatePresence>
