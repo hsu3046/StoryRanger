@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import confetti from "canvas-confetti";
 
 import { getAudio, SFX } from "@/lib/audio-engine";
 
@@ -10,6 +11,35 @@ import { getAudio, SFX } from "@/lib/audio-engine";
 const CODE = "0824";
 // Two rows of five: 1–5 then 6–0. Backspace is rendered separately below.
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+
+/** The golden star burst — a pop out of the door plus a softer second wave.
+ *  Fires synchronously (confetti is statically imported) so it lands the
+ *  instant the door opens, not after the next screen. */
+function burst() {
+  const colors = ["#ffe08a", "#ffd166", "#fff4c8", "#ffb703", "#ffffff"];
+  confetti({
+    particleCount: 90,
+    spread: 110,
+    startVelocity: 48,
+    origin: { x: 0.5, y: 0.32 },
+    colors,
+    shapes: ["star"],
+    scalar: 1.15,
+    ticks: 220,
+  });
+  setTimeout(
+    () =>
+      confetti({
+        particleCount: 70,
+        spread: 140,
+        startVelocity: 35,
+        origin: { x: 0.5, y: 0.4 },
+        colors,
+        ticks: 260,
+      }),
+    220,
+  );
+}
 
 interface Props {
   /** Fired after the door-open celebration when the code is correct. */
@@ -29,13 +59,28 @@ export function SecretGate({ onUnlock, onCancel }: Props) {
   const [wrong, setWrong] = useState(false);
   const [opening, setOpening] = useState(false);
   const locked = opening || wrong; // freeze input during the open/wiggle beat
+  /** Pending unlock→dive timer. Cleared on unmount so the gate can never
+   *  navigate after it's gone (it can't be cancelled mid-open anyway — Back is
+   *  disabled while `opening` — but this is the belt to that suspenders). */
+  const unlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // On unmount (the dive begins): clear in-flight confetti so it never bleeds
+  // onto the story screen, and drop the pending unlock timer.
+  useEffect(
+    () => () => {
+      confetti.reset();
+      if (unlockTimer.current) clearTimeout(unlockTimer.current);
+    },
+    [],
+  );
 
   function submit(code: string) {
     if (code === CODE) {
       setOpening(true);
       getAudio().playSfx(SFX.MEDAL);
-      // Let the door swing open before handing off to the dive transition.
-      setTimeout(onUnlock, 1100);
+      burst();
+      // Let the door swing open + the burst land before the dive transition.
+      unlockTimer.current = setTimeout(onUnlock, 1300);
     } else {
       setWrong(true);
       setTimeout(() => {
@@ -68,7 +113,8 @@ export function SecretGate({ onUnlock, onCancel }: Props) {
       <button
         type="button"
         onClick={onCancel}
-        className="absolute left-4 top-4 rounded-pill bg-paper/15 px-4 py-2 text-sm font-medium text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95"
+        disabled={opening}
+        className="absolute left-4 top-4 rounded-pill bg-paper/15 px-4 py-2 text-sm font-medium text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95 disabled:pointer-events-none disabled:opacity-0"
       >
         ← Back
       </button>
