@@ -47,12 +47,15 @@ export const BranchSchema = z.object({
   id: z.string(),
   label: z.string(),
   next: z.string(),
-  /** Companion who JOINS the party when this branch is taken (dedup — a
-   *  no-op if already in the party). */
-  addsCompanion: CompanionIdSchema.optional(),
-  /** Companion who LEAVES the party when this branch is taken (parting
-   *  moment). Their mood + HP are kept, so re-joining later restores them. */
-  removesCompanion: CompanionIdSchema.optional(),
+  /** Companions who JOIN the party when this branch is taken (dedup — each a
+   *  no-op if already in the party). Multiple may join on one branch.
+   *  (The pre-v5 singular `addsCompanion` is dropped by Zod on the next admin
+   *  save; bundled content is migrated to this array form.) */
+  addsCompanions: z.array(CompanionIdSchema).optional(),
+  /** Companions who LEAVE the party when this branch is taken (parting
+   *  moment). Multiple may leave on one branch. Their mood + HP are kept, so
+   *  re-joining later restores them. */
+  removesCompanions: z.array(CompanionIdSchema).optional(),
   /** Optional visibility gate — the branch only appears as a choice when the
    *  condition is met (e.g. holds an item, has a companion). */
   condition: BranchConditionSchema.optional(),

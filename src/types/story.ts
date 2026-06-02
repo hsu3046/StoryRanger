@@ -47,11 +47,12 @@ export interface Branch {
   label: string;
   /** Next scene to transition to when picked. */
   next: string;
-  /** Optional companion gained (added to party; no-op if already present). */
-  addsCompanion?: CompanionId;
-  /** Optional companion who leaves the party here (parting moment). Mood + HP
-   *  are kept so a later re-join restores them. */
-  removesCompanion?: CompanionId;
+  /** Companions gained here (added to party; each a no-op if already present).
+   *  Multiple can join on one branch. */
+  addsCompanions?: CompanionId[];
+  /** Companions who leave the party here (parting moment). Multiple can leave
+   *  on one branch. Mood + HP are kept so a later re-join restores them. */
+  removesCompanions?: CompanionId[];
   /** Optional visibility gate. The branch only appears as a choice when the
    *  condition is met. Every present clause must hold (AND); each clause
    *  requires ALL of its ids. Evaluated against PlayState at render time. */

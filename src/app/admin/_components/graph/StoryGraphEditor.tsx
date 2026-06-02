@@ -95,7 +95,7 @@ function dialoguePortraitBase(
 /**
  * Companions in the party when the player ARRIVES at each scene — i.e. who has
  * joined (minus who has left) on a path from the start scene to that scene.
- * Computed as a graph fixpoint over branch `addsCompanion` / `removesCompanion`.
+ * Computed as a graph fixpoint over branch `addsCompanions` / `removesCompanions`.
  *
  * Branching makes membership path-dependent, so this is the UNION across paths
  * ("possibly in the party here"). The branch editor uses it to show inherited
@@ -121,8 +121,8 @@ function companionsArrivingByScene(
       for (const b of scene.branches) {
         if (!scenes[b.next]) continue; // orphan target
         const leaving = new Set(here);
-        if (b.addsCompanion) leaving.add(b.addsCompanion);
-        if (b.removesCompanion) leaving.delete(b.removesCompanion);
+        for (const id of b.addsCompanions ?? []) leaving.add(id);
+        for (const id of b.removesCompanions ?? []) leaving.delete(id);
         if (!arriving[b.next]) {
           arriving[b.next] = new Set();
           changed = true; // newly reachable → needs another pass
@@ -468,18 +468,16 @@ function StoryGraphEditorInner({
           parallelCount: arr.length,
           encounters: encInfo ?? [],
           storyId,
-          companionDialogueBase: b.addsCompanion
-            ? dialogueBaseById[b.addsCompanion]
-            : undefined,
-          companionSpriteBase: b.addsCompanion
-            ? spriteBaseById[b.addsCompanion]
-            : undefined,
-          leavingCompanionDialogueBase: b.removesCompanion
-            ? dialogueBaseById[b.removesCompanion]
-            : undefined,
-          leavingCompanionSpriteBase: b.removesCompanion
-            ? spriteBaseById[b.removesCompanion]
-            : undefined,
+          joiningCompanions: (b.addsCompanions ?? []).map((id) => ({
+            id,
+            dialogueBase: dialogueBaseById[id],
+            spriteBase: spriteBaseById[id],
+          })),
+          leavingCompanions: (b.removesCompanions ?? []).map((id) => ({
+            id,
+            dialogueBase: dialogueBaseById[id],
+            spriteBase: spriteBaseById[id],
+          })),
           offset: edgeOffsets[edgeId],
           onOffsetChange: setEdgeOffset,
         };
@@ -2046,8 +2044,8 @@ function BranchInspector({
             // prior branch)? That decides whether clicking parts them (leave)
             // or recruits them (join).
             const inParty = inheritedCompanions.includes(c.id);
-            const joins = branch.addsCompanion === c.id; // recruited HERE
-            const leaves = branch.removesCompanion === c.id; // parts HERE
+            const joins = (branch.addsCompanions ?? []).includes(c.id); // recruited HERE
+            const leaves = (branch.removesCompanions ?? []).includes(c.id); // parts HERE
             // Display state (priority): leaves > joined(inherited) > joins.
             const state: "leaves" | "joined" | "joins" | "none" = leaves
               ? "leaves"
@@ -2062,27 +2060,29 @@ function BranchInspector({
                 key={c.id}
                 type="button"
                 // In-party companion → toggle Leave. Otherwise → toggle Join.
-                // Clearing the opposite op keeps the data unambiguous.
+                // Each op is a set so multiple companions can join/leave on the
+                // same branch; clearing the opposite op keeps data unambiguous.
                 onClick={() =>
-                  onChange((b) =>
-                    inParty
-                      ? {
-                          ...b,
-                          removesCompanion: leaves ? undefined : c.id,
-                          addsCompanion:
-                            b.addsCompanion === c.id
-                              ? undefined
-                              : b.addsCompanion,
-                        }
-                      : {
-                          ...b,
-                          addsCompanion: joins ? undefined : c.id,
-                          removesCompanion:
-                            b.removesCompanion === c.id
-                              ? undefined
-                              : b.removesCompanion,
-                        },
-                  )
+                  onChange((b) => {
+                    const addSet = new Set(b.addsCompanions ?? []);
+                    const removeSet = new Set(b.removesCompanions ?? []);
+                    if (inParty) {
+                      if (leaves) removeSet.delete(c.id);
+                      else removeSet.add(c.id);
+                      addSet.delete(c.id);
+                    } else {
+                      if (joins) addSet.delete(c.id);
+                      else addSet.add(c.id);
+                      removeSet.delete(c.id);
+                    }
+                    return {
+                      ...b,
+                      addsCompanions: addSet.size ? [...addSet] : undefined,
+                      removesCompanions: removeSet.size
+                        ? [...removeSet]
+                        : undefined,
+                    };
+                  })
                 }
                 title={
                   state === "leaves"

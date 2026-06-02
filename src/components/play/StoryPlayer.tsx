@@ -628,7 +628,7 @@ export function StoryPlayer({
     const audio = getAudio();
     // The choice button's click already plays the generic click SFX (global
     // delegated listener below). Here we only add the event-specific cue.
-    if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
+    if (branch.addsCompanions?.length) audio.playSfx(SFX.COMPANION);
 
     const prevSceneId = state.currentSceneId;
 
