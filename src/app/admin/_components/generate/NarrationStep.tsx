@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import type { ConceptT, DraftMetaT } from "@/data/schemas";
+import type { ConceptT, DraftMetaT, StoryboardT } from "@/data/schemas";
 import type { CharactersFile, Story } from "@/types/story";
 import { saveDraftMetaAction, saveDraftScenesAction } from "../../_actions/generateDraft";
+import { slugify } from "../../_lib/slugify";
 import { inputClsSm } from "../form";
 import {
   advanceMeta,
@@ -24,9 +25,19 @@ interface Props {
   characters: CharactersFile;
   meta: DraftMetaT;
   initialScenes: Story;
+  /** The storyboard so each scene's narration is grounded in its beat's
+   *  synopsis + setting (scene keys = slugified beat ids). */
+  storyboard: StoryboardT | null;
 }
 
-export function NarrationStep({ draftId, concept, characters, meta, initialScenes }: Props) {
+export function NarrationStep({
+  draftId,
+  concept,
+  characters,
+  meta,
+  initialScenes,
+  storyboard,
+}: Props) {
   const router = useRouter();
   const [story, setStory] = useState<Story>(initialScenes);
   const storyRef = useRef<Story>(initialScenes);
@@ -37,6 +48,16 @@ export function NarrationStep({ draftId, concept, characters, meta, initialScene
 
   const sceneIds = useMemo(() => Object.keys(initialScenes.scenes), [initialScenes]);
   const nameOf = (id: string) => characters.characters.find((c) => c.id === id)?.name ?? id;
+
+  // Scene keys are slugified beat ids — index the storyboard the same way so we
+  // can feed each scene's beat synopsis + setting into narration generation.
+  const beatBySlug = useMemo(() => {
+    const m: Record<string, { synopsis: string; setting: string }> = {};
+    for (const b of storyboard?.beats ?? []) {
+      m[slugify(b.id)] = { synopsis: b.synopsis, setting: b.setting };
+    }
+    return m;
+  }, [storyboard]);
 
   // Pre-mark scenes that already have narration as done (resume).
   const initiallyDone = useMemo(
@@ -72,6 +93,11 @@ export function NarrationStep({ draftId, concept, characters, meta, initialScene
         }
       }
     }
+    const before = scene.narration ?? "";
+    const beat = beatBySlug[sceneId];
+    const authorRequest = beat
+      ? `Write THIS beat: ${beat.synopsis}${beat.setting ? ` (setting: ${beat.setting})` : ""}`
+      : undefined;
     const res = await postJson<{ narration: string }>("/api/scene-narration", {
       storyId: draftId,
       language: concept.language,
@@ -81,7 +107,11 @@ export function NarrationStep({ draftId, concept, characters, meta, initialScene
       speakerName: scene.speaker === "narrator" ? undefined : nameOf(scene.speaker),
       choices: scene.branches.map((b) => b.label).slice(0, 6),
       incoming: incoming.slice(0, 3),
+      authorRequest,
     });
+    // If the author edited this scene's text while the request was in flight,
+    // keep THEIR text rather than clobbering it with the generated prose.
+    if ((storyRef.current.scenes[sceneId].narration ?? "") !== before) return;
     applyNarration(sceneId, res.narration);
   }
 
@@ -151,8 +181,9 @@ export function NarrationStep({ draftId, concept, characters, meta, initialScene
               </div>
               <textarea
                 className={`${inputClsSm} min-h-14`}
-                value={scene.narration}
+                value={scene.narration ?? ""}
                 onChange={(e) => applyNarration(id, e.target.value)}
+                readOnly={st === "running"}
                 placeholder="(narration)"
               />
               {entries[id]?.error && (

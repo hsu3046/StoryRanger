@@ -66,12 +66,16 @@ export async function POST(req: Request) {
           name,
           visualDescription,
           hasReferences: refs.length > 0,
+          // The hero ref is a STYLE anchor only — never copy the hero's identity
+          // onto another character.
+          referenceMode: "style",
         })
       : characterSpritePrompt({
           concept,
           name,
           visualDescription,
           hasReferences: refs.length > 0,
+          referenceMode: "style",
         });
 
   try {

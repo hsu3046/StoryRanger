@@ -79,9 +79,14 @@ export async function validateStory(
   const itemIds = new Set((itemsFile?.items ?? []).map((i) => i.id));
   const monsterIds = new Set((monstersFile?.monsters ?? []).map((m) => m.id));
 
-  // ── 2. Hero uniqueness ─────────────────────────────────────────
+  // ── 2. Hero existence + uniqueness ─────────────────────────────
   const heroes = charsFile.characters.filter((c) => c.isHero);
-  if (heroes.length > 1) {
+  if (heroes.length === 0) {
+    errors.push({
+      where: "characters",
+      message: "no isHero character (the engine requires exactly one)",
+    });
+  } else if (heroes.length > 1) {
     errors.push({
       where: "characters",
       message: `more than one isHero character (${heroes.map((h) => h.id).join(", ")})`,
@@ -135,7 +140,15 @@ export async function validateStory(
         });
       }
     }
+    const seenBranch = new Set<string>();
     for (const b of scene.branches) {
+      if (seenBranch.has(b.id)) {
+        errors.push({
+          where: `scene:${sid}.branch:${b.id}`,
+          message: `duplicate branch id "${b.id}"`,
+        });
+      }
+      seenBranch.add(b.id);
       if (!sceneIds.has(b.next)) {
         errors.push({
           where: `scene:${sid}.branch:${b.id}.next`,
@@ -262,8 +275,10 @@ async function anyAssetExists(
 ): Promise<boolean> {
   void storyId;
   if (!webPath) return false;
-  const rel = webPath.replace(/^\//, "");
-  const base = path.resolve(process.cwd(), "public", rel);
+  // Constrain the probe to public/ — coverImage is an unbounded z.string().
+  const root = path.resolve(process.cwd(), "public");
+  const base = path.resolve(root, webPath.replace(/^\/+/, ""));
+  if (base !== root && !base.startsWith(root + path.sep)) return false;
   for (const ext of [".webp", ".png", ".jpeg", ".jpg"]) {
     try {
       await fs.access(base + ext);

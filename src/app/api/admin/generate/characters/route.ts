@@ -11,6 +11,7 @@ import {
   type GeneratedCharacterT,
 } from "@/data/schemas";
 import type { Character } from "@/types/story";
+import { slugify } from "@/app/admin/_lib/slugify";
 
 export const runtime = "nodejs";
 
@@ -69,8 +70,10 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
   const usedIds = new Set<string>();
 
   for (const g of generated) {
-    // Force a single hero with the conventional id "hero".
-    let id = g.id;
+    // Force a single hero with the conventional id "hero". Otherwise normalise
+    // the LLM id to a NAME_RE-safe slug so it can be used as an image filename
+    // (characters/<id>, dialogue/<id>) and a scene speaker reference.
+    let id = slugify(g.id) || g.id;
     let isHero = false;
     if (g.role === "hero" && !heroAssigned) {
       id = "hero";

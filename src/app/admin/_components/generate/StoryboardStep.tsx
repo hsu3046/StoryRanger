@@ -27,8 +27,11 @@ function lint(sb: StoryboardT): { errors: string[]; warnings: string[] } {
   const idSet = new Set(ids);
   if (!idSet.has(sb.startSceneId)) errors.push(`startSceneId "${sb.startSceneId}" is not a beat`);
   for (const beat of sb.beats) {
+    const seenBranch = new Set<string>();
     for (const br of beat.branches) {
       if (!idSet.has(br.next)) errors.push(`${beat.id} → "${br.label}" points to missing beat "${br.next}"`);
+      if (seenBranch.has(br.id)) errors.push(`${beat.id} has duplicate branch id "${br.id}"`);
+      seenBranch.add(br.id);
     }
     if (!beat.isEnding && beat.branches.length === 0) warnings.push(`${beat.id} is a dead end`);
   }
@@ -215,14 +218,18 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: Pr
                 <button
                   type="button"
                   className="self-start text-xs text-accent-deep"
-                  onClick={() =>
+                  onClick={() => {
+                    const used = new Set(beat.branches.map((b) => b.id));
+                    let n = beat.branches.length + 1;
+                    let id = `b${n}`;
+                    while (used.has(id)) id = `b${++n}`;
                     patchBeat(idx, {
                       branches: [
                         ...beat.branches,
-                        { id: `b${beat.branches.length + 1}`, label: "New choice", next: beatIds[0] ?? beat.id, outcomeHint: "" },
+                        { id, label: "New choice", next: beatIds[0] ?? beat.id, outcomeHint: "" },
                       ],
-                    })
-                  }
+                    });
+                  }}
                 >
                   + add choice
                 </button>

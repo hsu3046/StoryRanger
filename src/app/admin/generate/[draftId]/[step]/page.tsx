@@ -115,6 +115,7 @@ export default async function WizardStepPage({
     const concept = await readConcept(draftId);
     const characters = await readDraftCharacters(draftId);
     const scenes = await readDraftScenes(draftId);
+    const storyboard = await readStoryboard(draftId);
     if (!concept) redirect(`${base}/concept`);
     if (!characters) redirect(`${base}/characters`);
     if (!scenes) redirect(`${base}/scenes`);
@@ -125,6 +126,7 @@ export default async function WizardStepPage({
         characters={characters}
         meta={meta}
         initialScenes={scenes}
+        storyboard={storyboard}
       />
     );
   } else if (stage === "images") {

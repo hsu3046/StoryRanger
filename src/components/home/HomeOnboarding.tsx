@@ -10,7 +10,7 @@ import { assetUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { reviewCount } from "@/lib/review-store";
 import { newPlayState } from "@/lib/story-engine";
-import { wizardOfOz } from "@/stories/wizard-of-oz";
+import { getStory } from "@/lib/stories";
 import { SecretGate } from "./SecretGate";
 import { ReviewSession } from "@/components/review/ReviewSession";
 
@@ -90,9 +90,10 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   const hasNext = activeIdx < STORIES.length - 1;
 
   const story = useMemo(() => {
-    // Real Story object lookup. Today only wizardOfOz is wired; extending
-    // the catalog requires importing the new Story here.
-    return active.id === wizardOfOz.id ? wizardOfOz : null;
+    // Resolve the real Story from the shared registry (same barrel that powers
+    // listStoryIds() on this page + the /play route) so EVERY registered story
+    // — including ones made by the admin AI generator — is launchable.
+    return getStory(active.id)?.story ?? null;
   }, [active.id]);
 
   /** Kick off the slow "pulled into the page" transition, then route. The

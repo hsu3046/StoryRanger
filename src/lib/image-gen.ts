@@ -92,7 +92,20 @@ export async function generateImage(opts: GenerateImageOpts): Promise<Buffer> {
   const cand = response.candidates?.[0];
   const finish = cand?.finishReason as string | undefined;
   const block = response.promptFeedback?.blockReason as string | undefined;
-  if (block || finish === "SAFETY" || finish === "PROHIBITED_CONTENT") {
+  // All policy/safety stop reasons (incl. image-specific ones) route to the
+  // single softened-prompt retry in generateImageResilient rather than the
+  // pointless 3× identical-prompt backoff.
+  const REFUSALS = new Set([
+    "SAFETY",
+    "PROHIBITED_CONTENT",
+    "BLOCKLIST",
+    "RECITATION",
+    "SPII",
+    "IMAGE_SAFETY",
+    "IMAGE_PROHIBITED_CONTENT",
+    "IMAGE_RECITATION",
+  ]);
+  if (block || (finish && REFUSALS.has(finish))) {
     throw new ImageSafetyError(
       `[image-gen] blocked (finishReason=${finish}, blockReason=${block})`,
     );

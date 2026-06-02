@@ -22,6 +22,18 @@ export function styleBibleText(b: ArtBible): string {
 const REFERENCE_INSTRUCTION =
   "Use the attached image(s) as character reference. Each referenced character must look EXACTLY like their attached portrait — same face, hair, outfit, colours, and proportions. Treat the attachments as the canonical character design.";
 
+/** For anchoring a NEW character's art to the book's illustrator hand WITHOUT
+ *  copying the referenced character's identity. */
+const STYLE_ANCHOR_INSTRUCTION =
+  "Use the attached image ONLY as a STYLE reference — match its illustrator hand, line quality, rendering, palette, and figure-to-frame proportions. Do NOT copy the depicted character; draw the NEW character described below as a clearly distinct individual with their own face, hair, outfit, and colours.";
+
+export type ReferenceMode = "identity" | "style";
+
+function referenceLine(hasReferences: boolean, mode: ReferenceMode): string | null {
+  if (!hasReferences) return null;
+  return mode === "style" ? STYLE_ANCHOR_INSTRUCTION : REFERENCE_INSTRUCTION;
+}
+
 export function coverPrompt(concept: ConceptT): string {
   return [
     `Children's picture-book COVER illustration, full-bleed, cinematic, 16:9.`,
@@ -64,6 +76,9 @@ export function characterSpritePrompt(args: {
   name: string;
   visualDescription: string;
   hasReferences: boolean;
+  /** "style" anchors to the book's hand without copying the referenced
+   *  character; "identity" (default) requires an exact match. */
+  referenceMode?: ReferenceMode;
 }): string {
   const parts = [
     `Full-body character sprite for a children's picture book — 3/4 front view, standing, friendly, centered, feet near the bottom of the frame, the WHOLE body inside the frame.`,
@@ -71,7 +86,8 @@ export function characterSpritePrompt(args: {
     styleBibleText(args.concept.artStyleBible),
     `CHARACTER: ${args.name}. ${args.visualDescription}`,
   ];
-  if (args.hasReferences) parts.push(REFERENCE_INSTRUCTION);
+  const ref = referenceLine(args.hasReferences, args.referenceMode ?? "identity");
+  if (ref) parts.push(ref);
   parts.push(`No text, no border, no extra characters.`);
   return parts.join(" ");
 }
@@ -81,6 +97,7 @@ export function characterPortraitPrompt(args: {
   name: string;
   visualDescription: string;
   hasReferences: boolean;
+  referenceMode?: ReferenceMode;
 }): string {
   const parts = [
     `Head-and-shoulders PORTRAIT of a children's picture-book character, facing forward, warm friendly expression, centered.`,
@@ -88,7 +105,8 @@ export function characterPortraitPrompt(args: {
     styleBibleText(args.concept.artStyleBible),
     `CHARACTER: ${args.name}. ${args.visualDescription}`,
   ];
-  if (args.hasReferences) parts.push(REFERENCE_INSTRUCTION);
+  const ref = referenceLine(args.hasReferences, args.referenceMode ?? "identity");
+  if (ref) parts.push(ref);
   parts.push(`No text, no border.`);
   return parts.join(" ");
 }

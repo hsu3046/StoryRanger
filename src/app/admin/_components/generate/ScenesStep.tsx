@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ConceptT, DraftMetaT, StoryboardT } from "@/data/schemas";
 import type { Scene, Story } from "@/types/story";
 import { saveDraftMetaAction, saveDraftScenesAction } from "../../_actions/generateDraft";
+import { slugify } from "../../_lib/slugify";
 import { advanceMeta, Card, ErrorNote, PrimaryButton } from "./shared";
 
 interface Props {
@@ -25,21 +26,43 @@ export function ScenesStep({ draftId, concept, storyboard, meta, initialScenes }
   const [, start] = useTransition();
 
   function assemble(): Story {
+    // Beat ids become scene-record keys AND image filenames, so normalise them
+    // to a slug that satisfies the image-save NAME_RE. Build one raw→slug map
+    // first (deduping collisions) so scene keys, image paths, branch.next, and
+    // startScene all resolve to the SAME slug.
+    const idMap = new Map<string, string>();
+    const used = new Set<string>();
+    storyboard.beats.forEach((beat, i) => {
+      let slug = slugify(beat.id) || `scene-${i + 1}`;
+      while (used.has(slug)) slug = `${slug}-2`;
+      used.add(slug);
+      idMap.set(beat.id, slug);
+    });
+    const resolve = (id: string): string => idMap.get(id) ?? slugify(id);
+
+    // Preserve any narration / bgm / reward already authored for a beat that
+    // still exists (re-assemble must NOT wipe prose). Index prior scenes by the
+    // SAME slug so they line up across re-assembles.
+    const prev = story?.scenes ?? {};
+
     const scenes: Record<string, Scene> = {};
     for (const beat of storyboard.beats) {
-      scenes[beat.id] = {
-        image: `/stories/${draftId}/scenes/${beat.id}`,
-        bgm: "",
-        speaker: beat.speaker || "narrator",
-        narration: "",
+      const key = resolve(beat.id);
+      const old = prev[key];
+      scenes[key] = {
+        image: old?.image || `/stories/${draftId}/scenes/${key}`,
+        bgm: old?.bgm ?? "",
+        speaker: beat.speaker ? slugify(beat.speaker) || "narrator" : "narrator",
+        narration: old?.narration ?? "",
+        ...(old?.reward ? { reward: old.reward } : {}),
         branches: beat.branches.map((b) => ({
           id: b.id,
           label: b.label,
-          next: b.next,
+          next: resolve(b.next),
           ...(b.outcomeHint.trim() ? { outcome: b.outcomeHint.trim() } : {}),
         })),
         ...(beat.isEnding
-          ? { ending: { id: beat.id, label: beat.endingLabel || "The End" } }
+          ? { ending: { id: key, label: beat.endingLabel || "The End" } }
           : {}),
       };
     }
@@ -50,7 +73,7 @@ export function ScenesStep({ draftId, concept, storyboard, meta, initialScenes }
       language: concept.language,
       estimatedMinutes: concept.estimatedMinutes,
       coverImage: `/stories/${draftId}/cover`,
-      startScene: storyboard.startSceneId,
+      startScene: resolve(storyboard.startSceneId),
       scenes,
     };
   }

@@ -20,7 +20,10 @@ export function ensureDev(): void {
 }
 
 // Safe id / filename character sets. Reject `..`, slashes, NUL, etc.
-export const STORY_ID_RE = /^[a-z0-9_-]+$/i;
+// storyId is LOWERCASE-only (slugify already lowercases) so a case variant
+// can't dodge a guard like the wizard-of-oz delete protection, nor collide
+// foo/Foo on a case-insensitive filesystem.
+export const STORY_ID_RE = /^[a-z0-9_-]+$/;
 export const FILENAME_RE = /^[a-z0-9_.-]+$/i;
 
 /**

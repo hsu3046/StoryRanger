@@ -344,7 +344,7 @@ export async function deleteDraftAction(
     if (!STORY_ID_RE.test(storyId)) {
       return { ok: false, error: `Invalid storyId: ${storyId}` };
     }
-    if (storyId === "wizard-of-oz") {
+    if (storyId.toLowerCase() === "wizard-of-oz") {
       return { ok: false, error: "Refusing to delete the bundled story." };
     }
     await fs.rm(storyDir(storyId), { recursive: true, force: true });

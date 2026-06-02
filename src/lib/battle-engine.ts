@@ -183,9 +183,23 @@ export function setupBattle(args: SetupArgs): BattleState {
   const firstActive =
     partyOrder.find((a) => !args.fallenAttackers.includes(a)) ?? "hero";
 
+  // Guard against a zero-monster battle (e.g. an encounter referencing a
+  // monster id absent from THIS story's catalog — every id was dropped above).
+  // Without this the player would be trapped on an unwinnable hero-choose with
+  // no attack targets and no exit. Start in a terminal victory so the
+  // TerminalPanel's Continue button fires onComplete and exits cleanly.
+  if (monsters.length === 0 && args.monsterIds.length > 0) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[battle] all monsterIds dropped for story "${args.storyId}" — not in its monster catalog:`,
+        args.monsterIds,
+      );
+    }
+  }
+
   return {
     storyId: args.storyId,
-    phase: "hero-choose",
+    phase: monsters.length === 0 ? "victory" : "hero-choose",
     round: 1,
     heroLives: partyLives[firstActive],
     maxLives: partyMaxLives[firstActive],
