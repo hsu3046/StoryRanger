@@ -231,7 +231,7 @@ export function ItemsEditor({
                 <tr>
                   <th className="px-3 py-2 w-10"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-28">Effect</th>
+                  <th className="px-3 py-2 w-44">Effect</th>
                   <th className="px-3 py-2">Description</th>
                 </tr>
               </thead>
@@ -252,7 +252,7 @@ export function ItemsEditor({
                     <td className="px-3 py-2 text-2xl">{it.icon ?? "🎁"}</td>
                     <td className="px-3 py-2 text-ink">{it.name}</td>
                     <td className="px-3 py-2">
-                      <span className="rounded-pill bg-emerald/15 px-2 py-0.5 text-xs text-emerald">
+                      <span className="inline-block whitespace-nowrap rounded-pill bg-emerald/15 px-2 py-0.5 text-xs text-emerald">
                         {effectLabel(it.effect)}
                       </span>
                     </td>
