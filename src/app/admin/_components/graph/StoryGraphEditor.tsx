@@ -2587,8 +2587,11 @@ function SceneNarrationEditor({
 
 /** Challenge category options for the branch-gate picker. `auto` lets the
  *  generator pick an age-appropriate category at runtime (the default). */
-const CHALLENGE_CATEGORIES: { value: "auto" | ChallengeCategory; label: string }[] = [
-  { value: "auto", label: "Auto (Mixed)" },
+const CHALLENGE_CATEGORIES: {
+  value: "auto" | "english" | ChallengeCategory;
+  label: string;
+}[] = [
+  { value: "auto", label: "Auto (Mixed math)" },
   { value: "counting", label: "Counting" },
   { value: "shape", label: "Shapes" },
   { value: "compare", label: "Compare" },
@@ -2612,6 +2615,21 @@ const CHALLENGE_CATEGORIES: { value: "auto" | ChallengeCategory; label: string }
   { value: "algebra", label: "Algebra" },
   { value: "speed", label: "Speed" },
   { value: "word", label: "Word / thinking" },
+  // English literacy (offline word-bank). Author-gated — never in battles.
+  // Ordered easiest → hardest (phonics → orthography → vocabulary).
+  { value: "english", label: "English (mixed)" },
+  { value: "vocab-picture", label: "English · Picture word" },
+  { value: "first-letter", label: "English · First letter" },
+  { value: "rhyme", label: "English · Rhyme" },
+  { value: "syllables", label: "English · Syllables" },
+  { value: "missing-letter", label: "English · Missing letter" },
+  { value: "spelling", label: "English · Spelling" },
+  { value: "plural", label: "English · Plural" },
+  { value: "compound", label: "English · Compound word" },
+  { value: "homophone", label: "English · Homophone" },
+  { value: "opposite", label: "English · Opposite" },
+  { value: "synonym", label: "English · Synonym" },
+  { value: "analogy", label: "English · Analogy" },
 ];
 
 function BranchChallengeCard({
@@ -2674,6 +2692,7 @@ function BranchChallengeCard({
                             ...b.challenge,
                             category: e.target.value as
                               | "auto"
+                              | "english"
                               | ChallengeCategory,
                           },
                         }

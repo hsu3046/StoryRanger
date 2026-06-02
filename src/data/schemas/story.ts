@@ -39,7 +39,9 @@ export const BranchConditionSchema = z.object({
  *  defaults to "auto" (pick an age-appropriate one) — authors rarely set it. */
 export const BranchChallengeSchema = z.object({
   enabled: z.literal(true),
-  category: z.union([z.literal("auto"), ChallengeCategorySchema]).default("auto"),
+  category: z
+    .union([z.literal("auto"), z.literal("english"), ChallengeCategorySchema])
+    .default("auto"),
   /** How many problems the player must solve (in sequence) to pass the gate.
    *  Default 1. A wrong answer always re-rolls a fresh problem — the gate
    *  retries until solved (there is no skip / fail-out). */

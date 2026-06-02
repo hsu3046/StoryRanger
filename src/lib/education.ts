@@ -15,6 +15,17 @@
 
 import type { z } from "zod";
 import type { ChallengeCategorySchema } from "@/data/schemas/primitives";
+import {
+  WORD_BANK,
+  ANTONYMS,
+  SYNONYMS,
+  RHYME_GROUPS,
+  IRREGULAR_PLURALS,
+  COMPOUND_WORDS,
+  HOMOPHONES,
+  type WordEntry,
+  type WordPair,
+} from "@/data/english-bank";
 
 export type ChallengeCategory = z.infer<typeof ChallengeCategorySchema>;
 
@@ -72,6 +83,40 @@ export function categoriesForAge(age: number): ChallengeCategory[] {
   return planForAge(age).categories;
 }
 
+// ─────────────────────────────────────────────────────────────
+// English literacy — a SEPARATE age plan following a Khan-Academy-style
+// literacy ladder: phonological awareness + phonics for the young (rhyme,
+// first-letter/beginning-sounds, syllables, picture words), then orthography
+// (CVC → vowel-team spelling, missing-letter), then meaning/vocabulary for
+// older (opposites → synonyms with rarer words). English is author-gated only:
+// it is deliberately kept OUT of AGE_PLAN above so battles + math "auto" stay
+// math. The "english" meta value (mirrors "auto") samples this plan.
+// ─────────────────────────────────────────────────────────────
+const ENGLISH_AGE_PLAN: Record<number, ChallengeCategory[]> = {
+  // Pre-K / K — phonological awareness + letter sounds + picture words
+  4: ["vocab-picture", "first-letter", "rhyme"],
+  5: ["vocab-picture", "first-letter", "rhyme", "syllables"],
+  // G1 / G2 — phonics → spelling + word-building (plural, compound)
+  6: ["first-letter", "rhyme", "missing-letter", "plural"],
+  7: ["missing-letter", "spelling", "compound", "plural"],
+  // G3 / G4 — spelling + meaning + sound (homophone) + relationships (analogy)
+  8: ["spelling", "opposite", "compound", "homophone"],
+  9: ["opposite", "synonym", "homophone", "analogy"],
+  // G5–G7 — vocabulary, word relationships, and spelling-aware homophones.
+  // (Picture-based "spelling" is an early-literacy format, so it stays ≤ G3 —
+  // upper grades get tier-2 homophones like their/there instead.)
+  10: ["synonym", "opposite", "analogy", "homophone"],
+  11: ["synonym", "opposite", "analogy", "homophone"],
+  12: ["synonym", "opposite", "analogy", "homophone"],
+};
+
+/** Age-appropriate English drills (the "english" meta pool). Used by the admin
+ *  preview so English shows per age, and to resolve category "english". */
+export function englishCategoriesForAge(age: number): ChallengeCategory[] {
+  const a = Math.max(4, Math.min(12, Math.round(age)));
+  return ENGLISH_AGE_PLAN[a];
+}
+
 export function ageBandLabel(age: number): string {
   const a = Math.max(4, Math.min(12, Math.round(age)));
   if (a <= 5) return `Age ${a} · pre-school · counting & shapes`;
@@ -93,13 +138,17 @@ export function ageBandLabel(age: number): string {
 
 export function generateChallenge(opts: {
   age: number;
-  category?: ChallengeCategory | "auto";
+  category?: ChallengeCategory | "auto" | "english";
 }): Challenge {
   const { age, categories } = planForAge(opts.age);
+  // "auto" → an age-appropriate MATH topic (battles + default branches).
+  // "english" → an age-appropriate ENGLISH drill (author-gated branches only).
   const category =
     !opts.category || opts.category === "auto"
       ? pick(categories) ?? "add"
-      : opts.category;
+      : opts.category === "english"
+        ? pick(englishCategoriesForAge(age)) ?? "vocab-picture"
+        : opts.category;
 
   switch (category) {
     case "counting": return makeCounting(age);
@@ -125,6 +174,19 @@ export function generateChallenge(opts: {
     case "algebra": return makeAlgebra();
     case "speed": return makeSpeed();
     case "word": return makeWord(age);
+    // English literacy
+    case "vocab-picture": return makeVocabPicture(age);
+    case "first-letter": return makeFirstLetter(age);
+    case "rhyme": return makeRhyme();
+    case "syllables": return makeSyllables(age);
+    case "missing-letter": return makeMissingLetter(age);
+    case "spelling": return makeSpelling(age);
+    case "plural": return makePlural(age);
+    case "compound": return makeCompound(age);
+    case "homophone": return makeHomophone(age);
+    case "opposite": return makeOpposite(age);
+    case "synonym": return makeSynonym(age);
+    case "analogy": return makeAnalogy(age);
   }
 }
 
@@ -649,6 +711,347 @@ function numericChallenge(category: ChallengeCategory, prompt: string, answer: n
   }
   const choices = shuffle([answer, ...distractors]).map(String);
   return { category, prompt, choices, correctIndex: choices.indexOf(String(answer)) };
+}
+
+// ─────────────────────────────────────────────────────────────
+// English literacy (offline word-bank). Author-gated only.
+// ─────────────────────────────────────────────────────────────
+
+const VOWELS = "aeiou";
+const CONSONANTS = "bcdfghjklmnpqrstvwxyz";
+const REAL_WORDS = new Set(WORD_BANK.map((w) => w.word));
+
+/** Build a 4-choice string problem with the three correctness invariants:
+ *  no duplicate choices (Set), correct never duplicated as a distractor, and
+ *  correctIndex computed AFTER the shuffle. `distractor()` returns a candidate
+ *  (or undefined to skip); the `t < 400` cap matches numericChallenge. */
+function stringChallenge(
+  category: ChallengeCategory,
+  prompt: string,
+  correct: string,
+  distractor: () => string | undefined,
+  visual?: ChallengeVisual,
+): Challenge {
+  const opts = new Set<string>([correct]);
+  for (let t = 0; opts.size < 4 && t < 400; t++) {
+    const d = distractor();
+    if (d && d !== correct) opts.add(d);
+  }
+  const choices = shuffle([...opts]);
+  return { category, prompt, choices, correctIndex: choices.indexOf(correct), visual };
+}
+
+/** Word-tier band per age — a NARROW, climbing window so word difficulty rises
+ *  every year (not in 3 big buckets). [lo, hi] inclusive over tiers 1–4. */
+function wordTierBand(age: number): [number, number] {
+  const a = Math.max(4, Math.min(12, Math.round(age)));
+  const bands: Record<number, [number, number]> = {
+    4: [1, 1], 5: [1, 1], 6: [1, 2], 7: [2, 2], 8: [2, 3],
+    9: [3, 3], 10: [3, 4], 11: [4, 4], 12: [4, 4],
+  };
+  return bands[a];
+}
+
+/** Words at this age's tier band (falls back a tier if a sub-pool is empty). */
+function englishWordsForAge(age: number): WordEntry[] {
+  const [lo, hi] = wordTierBand(age);
+  const inBand = WORD_BANK.filter((w) => w.tier >= lo && w.tier <= hi);
+  return inBand.length >= 4 ? inBand : WORD_BANK.filter((w) => w.tier <= hi);
+}
+
+/** Vocab-pair tier WINDOW per age — a moving band (not cumulative) so older
+ *  ages get the HARDER pairs, not still-easy ones. `start` = the age the skill
+ *  begins; before that, clamp to the youngest band. */
+function pairTierBand(age: number, start: number): [1 | 2 | 3, 1 | 2 | 3] {
+  const step = Math.max(0, Math.min(8, Math.round(age) - start));
+  const bands: [1 | 2 | 3, 1 | 2 | 3][] = [
+    [1, 1], [1, 2], [2, 2], [2, 3], [3, 3], [3, 3], [3, 3], [3, 3], [3, 3],
+  ];
+  return bands[step];
+}
+
+function pairsInBand(pairs: WordPair[], [lo, hi]: [number, number]): WordPair[] {
+  const inBand = pairs.filter((p) => p.tier >= lo && p.tier <= hi);
+  return inBand.length >= 2 ? inBand : pairs.filter((p) => p.tier <= hi);
+}
+
+/** Antonym pairs at this age's vocabulary tier (opposites begin ~age 6). */
+function antonymsForAge(age: number): WordPair[] {
+  return pairsInBand(ANTONYMS, pairTierBand(age, 6));
+}
+
+/** Synonym pairs at this age's vocabulary tier (synonyms begin ~age 8). */
+function synonymsForAge(age: number): WordPair[] {
+  return pairsInBand(SYNONYMS, pairTierBand(age, 8));
+}
+
+function makeVocabPicture(age: number): Challenge {
+  const pool = englishWordsForAge(age);
+  const e = pick(pool) ?? WORD_BANK[0];
+  return stringChallenge(
+    "vocab-picture",
+    "What is this?",
+    e.word,
+    () => pick(pool)?.word,
+    { kind: "glyphs", glyphs: [e.emoji], layout: "single" },
+  );
+}
+
+function makeFirstLetter(age: number): Challenge {
+  const pool = englishWordsForAge(age);
+  const e = pick(pool) ?? WORD_BANK[0];
+  // Younger / coin-flip: "which letter does this picture start with?"
+  if (age <= 6 || Math.random() < 0.5) {
+    const correct = e.word[0].toUpperCase();
+    return stringChallenge(
+      "first-letter",
+      "Which letter does this start with?",
+      correct,
+      () => {
+        const c = CONSONANTS.concat(VOWELS)[randInt(0, 25)]?.toUpperCase();
+        return c && c !== correct ? c : undefined;
+      },
+      { kind: "glyphs", glyphs: [e.emoji], layout: "single" },
+    );
+  }
+  // Older: "which WORD starts with «L»?" — distractors start with another letter.
+  const L = e.word[0].toUpperCase();
+  return stringChallenge(
+    "first-letter",
+    `Which word starts with "${L}"?`,
+    e.word,
+    () => {
+      const w = pick(pool)?.word;
+      return w && w[0].toUpperCase() !== L ? w : undefined;
+    },
+  );
+}
+
+function makeRhyme(): Challenge {
+  const group = pick(RHYME_GROUPS.filter((g) => g.length >= 2)) ?? RHYME_GROUPS[0];
+  const [promptWord, correct] = shuffle(group);
+  // Distractors come from OTHER groups → guaranteed non-rhymes.
+  const others = RHYME_GROUPS.filter((g) => g !== group).flat();
+  return stringChallenge(
+    "rhyme",
+    `Which word rhymes with "${promptWord}"?`,
+    correct,
+    () => pick(others),
+  );
+}
+
+function makeOpposite(age: number): Challenge {
+  const pool = antonymsForAge(age);
+  const p = pick(pool) ?? pool[0];
+  const [a, b] = Math.random() < 0.5 ? [p.a, p.b] : [p.b, p.a];
+  // Distractors = other antonym words at the same tier (real words, not THE
+  // opposite of `a`), excluding this pair.
+  const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => w !== a && w !== b);
+  return stringChallenge(
+    "opposite",
+    `What is the opposite of "${a}"?`,
+    b,
+    () => pick(others),
+  );
+}
+
+function makeSynonym(age: number): Challenge {
+  const pool = synonymsForAge(age);
+  const p = pick(pool) ?? pool[0];
+  const [a, b] = Math.random() < 0.5 ? [p.a, p.b] : [p.b, p.a];
+  // Distractors = words from OTHER synonym pairs (real words that don't mean
+  // the same as `a`), excluding this pair's two words.
+  const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => w !== a && w !== b);
+  return stringChallenge(
+    "synonym",
+    `Which word means the same as "${a}"?`,
+    b,
+    () => pick(others),
+  );
+}
+
+function makeSyllables(age: number): Challenge {
+  // Phonological awareness — "clap the beats". Young ages stay ≤3 syllables.
+  const maxSyll = age <= 6 ? 3 : 4;
+  const pool = WORD_BANK.filter((w) => w.syll <= maxSyll);
+  const e = pick(pool) ?? WORD_BANK[0];
+  const correct = String(e.syll);
+  return stringChallenge(
+    "syllables",
+    `How many syllables (beats) in "${e.word}"?`,
+    correct,
+    () => {
+      const n = randInt(1, 4);
+      return n === e.syll ? undefined : String(n);
+    },
+    { kind: "glyphs", glyphs: [e.emoji], layout: "single" },
+  );
+}
+
+/** Apply one random mutation to a real word → a plausible misspelling. */
+function mangle(word: string): string | undefined {
+  const a = word.split("");
+  const kind = randInt(0, 3);
+  if (kind === 0 && a.length >= 2) {
+    const i = randInt(0, a.length - 2); // swap two adjacent letters
+    [a[i], a[i + 1]] = [a[i + 1], a[i]];
+  } else if (kind === 1) {
+    const i = randInt(0, a.length - 1); // double a letter
+    a.splice(i, 0, a[i]);
+  } else if (kind === 2) {
+    const vi = a.findIndex((c) => VOWELS.includes(c)); // drop a vowel
+    if (vi === -1) return undefined;
+    a.splice(vi, 1);
+  } else {
+    const vi = a.findIndex((c) => VOWELS.includes(c)); // swap a vowel
+    if (vi === -1) return undefined;
+    let nv = a[vi];
+    for (let t = 0; nv === a[vi] && t < 10; t++) nv = VOWELS[randInt(0, 4)];
+    a[vi] = nv;
+  }
+  const out = a.join("");
+  return out === word ? undefined : out;
+}
+
+function makeSpelling(age: number): Challenge {
+  const pool = englishWordsForAge(age);
+  const e = pick(pool) ?? WORD_BANK[0];
+  // The emoji anchors the answer (pick the spelling that matches the picture),
+  // so even a real-word mangle is an unambiguous wrong choice for THIS picture.
+  return stringChallenge(
+    "spelling",
+    "Which spelling is correct?",
+    e.word,
+    () => {
+      const m = mangle(e.word);
+      return m && !REAL_WORDS.has(m) ? m : undefined;
+    },
+    { kind: "glyphs", glyphs: [e.emoji], layout: "single" },
+  );
+}
+
+function makeMissingLetter(age: number): Challenge {
+  const maxLen = age <= 6 ? 4 : 7;
+  const pool = englishWordsForAge(age).filter(
+    (w) => w.word.length >= 3 && w.word.length <= maxLen,
+  );
+  const e = pick(pool.length ? pool : englishWordsForAge(age)) ?? WORD_BANK[0];
+  const word = e.word;
+  const i = randInt(0, word.length - 1);
+  const correct = word[i];
+  const blanked = word
+    .split("")
+    .map((c, idx) => (idx === i ? "_" : c))
+    .join(" ");
+  const isVowel = VOWELS.includes(correct);
+  return stringChallenge(
+    "missing-letter",
+    `Fill the missing letter:  ${blanked}`,
+    correct,
+    () => {
+      const c = isVowel ? VOWELS[randInt(0, 4)] : CONSONANTS[randInt(0, 20)];
+      return c !== correct ? c : undefined;
+    },
+    { kind: "glyphs", glyphs: [e.emoji], layout: "single" },
+  );
+}
+
+/** Word relationships (Khan G5-7). Two pairs of the SAME relation (both
+ *  antonym or both synonym); the child completes the second pair. */
+function makeAnalogy(age: number): Challenge {
+  const useSyn = Math.random() < 0.5;
+  const pool = useSyn ? synonymsForAge(age) : antonymsForAge(age);
+  if (pool.length < 2) return makeOpposite(age); // safety fallback
+  const [p1, p2] = shuffle(pool);
+  const others = pool
+    .flatMap((q) => [q.a, q.b])
+    .filter((w) => w !== p1.a && w !== p1.b && w !== p2.a && w !== p2.b);
+  return stringChallenge(
+    "analogy",
+    `${p1.a} → ${p1.b},  so  ${p2.a} → ___?`,
+    p2.b,
+    () => pick(others),
+  );
+}
+
+/** Apply the regular English pluralization rules. */
+function regularPlural(w: string): string {
+  if (/(s|x|z|ch|sh)$/.test(w)) return `${w}es`;
+  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
+  if (/fe?$/.test(w)) return w.replace(/fe?$/, "ves");
+  return `${w}s`;
+}
+
+/** Plausible-wrong plural forms (the Set in stringChallenge dedups). */
+function pluralDistractorSource(
+  singular: string,
+  correct: string,
+): () => string | undefined {
+  const cands = [
+    `${singular}s`,
+    `${singular}es`,
+    singular,
+    `${singular}en`,
+    regularPlural(singular),
+  ].filter((w) => w !== correct);
+  return () => pick(cands);
+}
+
+function makePlural(age: number): Challenge {
+  // ~40% irregular (mouse→mice); else a regular plural from the age word pool.
+  if (Math.random() < 0.4) {
+    const e = pick(IRREGULAR_PLURALS) ?? IRREGULAR_PLURALS[0];
+    return stringChallenge(
+      "plural",
+      `One ${e.singular}, two ___?`,
+      e.plural,
+      pluralDistractorSource(e.singular, e.plural),
+    );
+  }
+  const e = pick(englishWordsForAge(age)) ?? WORD_BANK[0];
+  const correct = regularPlural(e.word);
+  return stringChallenge(
+    "plural",
+    `One ${e.word}, two ___?`,
+    correct,
+    pluralDistractorSource(e.word, correct),
+    { kind: "glyphs", glyphs: [e.emoji], layout: "single" },
+  );
+}
+
+function makeCompound(age: number): Challenge {
+  void age;
+  const e = pick(COMPOUND_WORDS) ?? COMPOUND_WORDS[0];
+  const others = COMPOUND_WORDS.filter((c) => c.whole !== e.whole).map(
+    (c) => c.whole,
+  );
+  return stringChallenge(
+    "compound",
+    `${e.a} + ${e.b} = ___?`,
+    e.whole,
+    () => pick(others),
+  );
+}
+
+/** Homophone groups at this age's tier: ≤G4 simple sounds, ≥G5 spelling-aware. */
+function homophonesForAge(age: number) {
+  const tier = age <= 9 ? 1 : 2;
+  const inBand = HOMOPHONES.filter((g) => g.tier === tier);
+  return inBand.length ? inBand : HOMOPHONES;
+}
+
+function makeHomophone(age: number): Challenge {
+  const pool = homophonesForAge(age);
+  const group = pick(pool.filter((g) => g.words.length >= 2)) ?? pool[0];
+  const [promptWord, correct] = shuffle(group.words);
+  // Distractors from OTHER groups → real words that DON'T sound like the prompt.
+  const others = HOMOPHONES.filter((g) => g !== group).flatMap((g) => g.words);
+  return stringChallenge(
+    "homophone",
+    `Which word sounds the same as "${promptWord}"?`,
+    correct,
+    () => pick(others),
+  );
 }
 
 function money(cents: number): string {
