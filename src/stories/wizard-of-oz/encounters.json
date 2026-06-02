@@ -218,25 +218,6 @@
       "rewards": {}
     },
     {
-      "id": "s05_scarecrow_2__branch_qk1d8-battle",
-      "trigger": {
-        "sceneId": "s05_scarecrow_2",
-        "branchId": "branch_qk1d8"
-      },
-      "intro": {
-        "bg": "forest-deep"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "wolf",
-          "wolf",
-          "wolf"
-        ]
-      },
-      "rewards": {}
-    },
-    {
       "id": "s05_scarecrow__branch_m12es-battle",
       "trigger": {
         "sceneId": "s05_scarecrow",
@@ -282,7 +263,7 @@
         "branchId": "branch_snljc"
       },
       "intro": {
-        "bg": "forest-clearing"
+        "bg": "forest-deep"
       },
       "body": {
         "kind": "battle",
@@ -320,7 +301,7 @@
         "branchId": "branch_ryj36"
       },
       "intro": {
-        "bg": "forest-clearing"
+        "bg": "forest-deep"
       },
       "body": {
         "kind": "battle",
