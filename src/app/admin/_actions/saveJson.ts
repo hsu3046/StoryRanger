@@ -1,9 +1,6 @@
 "use server";
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
-import type { ZodType } from "zod";
 
 import {
   CharactersFileSchema,
@@ -13,6 +10,13 @@ import {
   MonstersFileSchema,
   StorySchema,
 } from "@/data/schemas";
+import {
+  ensureDev,
+  errorMessage,
+  globalPath,
+  storyPath,
+  writeJson,
+} from "../_lib/contentFs";
 
 /**
  * Server actions for content writes. ALL actions:
@@ -21,66 +25,10 @@ import {
  *  2. Validate the incoming payload with Zod before touching disk.
  *  3. Pretty-print JSON (2-space indent) so git diffs stay clean.
  *  4. Revalidate the admin route so the next page render sees the new data.
+ *
+ * The path-traversal guards + JSON writer live in `../_lib/contentFs` so the
+ * generation draft actions share the exact same security-sensitive code.
  */
-
-function ensureDev(): void {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Admin writes are disabled in production builds.");
-  }
-}
-
-// Safe id / filename character sets. Reject `..`, slashes, NUL, etc.
-const STORY_ID_RE = /^[a-z0-9_-]+$/i;
-const FILENAME_RE = /^[a-z0-9_.-]+$/i;
-
-/**
- * Build the JSON destination path for a story file, with two safety nets:
- *  1. Strict regex on storyId + filename so traversal sequences are
- *     rejected before they ever reach `path.resolve`.
- *  2. After resolution, verify the resulting path stays under
- *     `<cwd>/src/stories/` — defense in depth against any encoding bypass.
- */
-function storyPath(storyId: string, filename: string): string {
-  if (!STORY_ID_RE.test(storyId)) {
-    throw new Error(`Invalid storyId: ${JSON.stringify(storyId)}`);
-  }
-  if (!FILENAME_RE.test(filename)) {
-    throw new Error(`Invalid filename: ${JSON.stringify(filename)}`);
-  }
-  const root = path.resolve(process.cwd(), "src", "stories");
-  const resolved = path.resolve(root, storyId, filename);
-  // Must stay strictly INSIDE the stories root.
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
-    throw new Error("Resolved path escapes stories root");
-  }
-  return resolved;
-}
-
-/**
- * Build a JSON destination path for a GLOBAL (cross-story) content file
- * under `<cwd>/src/data/global/`. Same traversal safety as `storyPath`.
- */
-function globalPath(filename: string): string {
-  if (!FILENAME_RE.test(filename)) {
-    throw new Error(`Invalid filename: ${JSON.stringify(filename)}`);
-  }
-  const root = path.resolve(process.cwd(), "src", "data", "global");
-  const resolved = path.resolve(root, filename);
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
-    throw new Error("Resolved path escapes global data root");
-  }
-  return resolved;
-}
-
-async function writeJson<T>(
-  schema: ZodType<T>,
-  filePath: string,
-  data: unknown,
-): Promise<void> {
-  const parsed = schema.parse(data);
-  const json = `${JSON.stringify(parsed, null, 2)}\n`;
-  await fs.writeFile(filePath, json, "utf-8");
-}
 
 export async function saveMonstersAction(
   storyId: string,
@@ -170,9 +118,4 @@ export async function saveScenesAction(
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
-}
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
 }

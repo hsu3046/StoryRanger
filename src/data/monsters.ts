@@ -1,13 +1,15 @@
 /**
- * Monster catalog — loaded from JSON via Zod-validated content layer.
- * Keeps existing API surface (`MONSTERS`, `getMonster`, `MonsterStats`,
- * `MonsterType`) intact so call sites don't need to change.
+ * Monster catalog — read per-story from the loaded story module.
+ *
+ * Previously a single hardcoded wizard-of-oz global (`MONSTERS`); now keyed by
+ * storyId via `getStory`, so each story has its own monster roster. Call sites
+ * pass the storyId they already have in scope.
  *
  * Image asset: /public/stories/<storyId>/monsters/<id>.{png|webp}
  */
 
-import monstersJson from "@/stories/wizard-of-oz/monsters.json";
-import { MonstersFileSchema, type MonsterStatsT } from "./schemas";
+import { getStory } from "@/lib/stories";
+import type { MonsterStatsT } from "./schemas";
 import type { SpriteSize } from "@/lib/sprite-size";
 
 export type MonsterType = "hostile" | "neutral" | "friendly";
@@ -25,17 +27,17 @@ export interface MonsterStats {
   image?: string;
 }
 
-// Validate on module load — fail fast with a clear error if JSON drifts.
-const parsed = MonstersFileSchema.parse(monstersJson);
-
-export const MONSTERS: Record<string, MonsterStats> = Object.fromEntries(
-  parsed.monsters.map((m: MonsterStatsT) => [m.id, m as MonsterStats]),
-);
-
-export function getMonster(id: string): MonsterStats | null {
-  return MONSTERS[id] ?? null;
+/** Lookup map (id → stats) for a story. Cheap to rebuild; the underlying
+ *  catalog is a small build-time-bundled array. */
+export function monstersFor(storyId: string): Record<string, MonsterStats> {
+  const list = (getStory(storyId)?.monsters.monsters ?? []) as MonsterStatsT[];
+  return Object.fromEntries(list.map((m) => [m.id, m as MonsterStats]));
 }
 
-export function listMonsters(): MonsterStats[] {
-  return parsed.monsters as MonsterStats[];
+export function getMonster(storyId: string, id: string): MonsterStats | null {
+  return monstersFor(storyId)[id] ?? null;
+}
+
+export function listMonsters(storyId: string): MonsterStats[] {
+  return (getStory(storyId)?.monsters.monsters ?? []) as MonsterStats[];
 }

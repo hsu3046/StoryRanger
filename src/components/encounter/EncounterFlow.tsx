@@ -20,7 +20,7 @@ import { getAudio, SFX } from "@/lib/audio-engine";
 
 import { BattleScreen } from "../battle/BattleScreen";
 import { EncounterCaption } from "./EncounterCaption";
-import { MONSTERS } from "@/data/monsters";
+import { monstersFor } from "@/data/monsters";
 
 export interface EncounterResult {
   encounterId: string;
@@ -126,7 +126,7 @@ export function EncounterFlow({
   const introLine = useMemo(() => {
     const seed = [...encounter.id].reduce((a, c) => a + c.charCodeAt(0), 0);
     const lead = monsterIds[0];
-    const name = lead ? (MONSTERS[lead]?.name ?? lead) : undefined;
+    const name = lead ? (monstersFor(storyId)[lead]?.name ?? lead) : undefined;
     return encounterIntroLine({ kind: "battle", name, seed });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- monsterIds[0] captured via id
   }, [encounter.id]);
@@ -170,6 +170,7 @@ export function EncounterFlow({
         onStateChange={onBattleStateChange}
         victoryItems={encounter.rewards.items ?? []}
         setup={{
+          storyId,
           bg: encounter.intro.bg,
           monsterIds: encounter.body.monsterIds,
           partyHp,
@@ -238,6 +239,7 @@ function EncounterAlertSplash({
   storyId: string;
 }) {
   const primary = monsterIds[0];
+  const catalog = monstersFor(storyId);
 
   // Group the pool by type (first-appearance order) so the roster chip shows
   // EVERY monster kind with its own count — e.g. "KALIDAH ×2 · WOLF". The old
@@ -247,7 +249,7 @@ function EncounterAlertSplash({
   for (const id of monsterIds) {
     const g = groups.find((x) => x.id === id);
     if (g) g.count += 1;
-    else groups.push({ id, name: MONSTERS[id]?.name ?? id, count: 1 });
+    else groups.push({ id, name: catalog[id]?.name ?? id, count: 1 });
   }
   const rosterLabel = groups
     .map((g) => (g.count > 1 ? `${g.name} ×${g.count}` : g.name))
@@ -309,7 +311,7 @@ function EncounterAlertSplash({
           {/* eslint-disable-next-line @next/next/no-img-element -- ext fallback */}
           <img
             src={assetUrl(
-              `${MONSTERS[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`,
+              `${catalog[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`,
             )}
             onError={(e) => {
               const el = e.currentTarget;

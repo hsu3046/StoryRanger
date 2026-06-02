@@ -12,11 +12,12 @@ import type { EncounterDef } from "@/types/encounter";
 import type { PlayState } from "@/types/story";
 
 export function buildEncounterQueue(
+  storyId: string,
   sceneId: string,
   branchId: string,
   state: PlayState,
 ): EncounterDef[] {
-  const candidates = findEncountersForBranch(sceneId, branchId);
+  const candidates = findEncountersForBranch(storyId, sceneId, branchId);
   const pool: EncounterDef[] = [];
 
   for (const e of candidates) {

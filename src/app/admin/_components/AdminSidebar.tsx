@@ -13,6 +13,7 @@ import {
   Medal,
   Package,
   Scroll,
+  Sparkle,
   SquaresFour,
   TreeStructure,
   UsersFour,
@@ -138,6 +139,11 @@ export function AdminSidebar({ stories }: Props) {
           Global
         </p>
         <SidebarLink href="/admin" label="Dashboard" icon={SquaresFour} />
+        <SidebarLink
+          href="/admin/generate"
+          label="Generate Story"
+          icon={Sparkle}
+        />
         <SidebarLink
           href="/admin/challenges"
           label="Challenges"

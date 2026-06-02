@@ -1,27 +1,29 @@
 /**
- * Item catalog — loaded from JSON via Zod-validated content layer.
- * Centralises all item definitions so monster.drops, encounter rewards,
- * and dialogue gifts all reference a known catalog rather than free
- * strings.
+ * Item catalog — read per-story from the loaded story module.
+ *
+ * Centralises item definitions so monster.drops, encounter rewards, and
+ * dialogue gifts all reference a known per-story catalog rather than free
+ * strings. Previously a single hardcoded wizard-of-oz global (`ITEMS`); now
+ * keyed by storyId via `getStory`. Call sites pass the storyId in scope.
  */
 
-import itemsJson from "@/stories/wizard-of-oz/items.json";
-import { ItemsFileSchema, type ItemDefT } from "./schemas";
+import { getStory } from "@/lib/stories";
+import type { ItemDefT } from "./schemas";
 
 export type ItemDef = ItemDefT;
 
-const parsed = ItemsFileSchema.parse(itemsJson);
-
-export const ITEMS: Record<string, ItemDef> = Object.fromEntries(
-  parsed.items.map((it: ItemDefT) => [it.id, it]),
-);
-
-export function getItem(id: string): ItemDef | null {
-  return ITEMS[id] ?? null;
+/** Lookup map (id → def) for a story. */
+export function itemsMapFor(storyId: string): Record<string, ItemDef> {
+  const list = getStory(storyId)?.items.items ?? [];
+  return Object.fromEntries(list.map((it) => [it.id, it]));
 }
 
-export function listItems(): ItemDef[] {
-  return parsed.items;
+export function getItem(storyId: string, id: string): ItemDef | null {
+  return itemsMapFor(storyId)[id] ?? null;
+}
+
+export function listItems(storyId: string): ItemDef[] {
+  return getStory(storyId)?.items.items ?? [];
 }
 
 /**
@@ -29,8 +31,8 @@ export function listItems(): ItemDef[] {
  * kebab-case id if the catalog doesn't know it (so legacy / LLM-generated
  * unknown ids still render gracefully).
  */
-export function prettyItem(id: string): string {
-  const known = ITEMS[id];
+export function prettyItem(storyId: string, id: string): string {
+  const known = itemsMapFor(storyId)[id];
   if (known) return known.name;
   return id
     .split("-")
@@ -38,6 +40,6 @@ export function prettyItem(id: string): string {
     .join(" ");
 }
 
-export function itemIcon(id: string): string {
-  return ITEMS[id]?.icon ?? "🎁";
+export function itemIcon(storyId: string, id: string): string {
+  return itemsMapFor(storyId)[id]?.icon ?? "🎁";
 }

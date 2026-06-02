@@ -19,7 +19,7 @@ import type {
   CompanionMoods,
   PartyHp,
 } from "@/types/story";
-import { MONSTERS, type MonsterStats } from "@/data/monsters";
+import { monstersFor, type MonsterStats } from "@/data/monsters";
 import { getItem } from "@/data/items";
 import type { ItemDefT } from "@/data/schemas";
 import { rollD20, type RollResult } from "./dice";
@@ -59,6 +59,9 @@ export interface BattleLogEntry {
 }
 
 export interface BattleState {
+  /** The story this battle belongs to — drives the per-story monster/item
+   *  catalog lookups (drops, item effects) from inside these pure functions. */
+  storyId: string;
   phase: BattlePhase;
   round: number;
   /**
@@ -116,6 +119,8 @@ export interface PuzzleOutcome {
 // ─────────────────────────────────────────────────────────────────
 
 export interface SetupArgs {
+  /** Story the battle belongs to — selects the per-story monster catalog. */
+  storyId: string;
   bg: string;
   monsterIds: string[];
   /** Cumulative HP carried over from PlayState. Missing key → use max. */
@@ -136,12 +141,13 @@ const MONSTER_SLOTS: StagePosition[][] = [
 ];
 
 export function setupBattle(args: SetupArgs): BattleState {
+  const catalog = monstersFor(args.storyId);
   const layout =
     MONSTER_SLOTS[Math.min(args.monsterIds.length, MONSTER_SLOTS.length - 1)];
 
   const monsters: BattleMonsterInstance[] = args.monsterIds
     .map((id, i) => {
-      const stats: MonsterStats | undefined = MONSTERS[id];
+      const stats: MonsterStats | undefined = catalog[id];
       if (!stats) return null;
       return {
         monsterId: id,
@@ -178,6 +184,7 @@ export function setupBattle(args: SetupArgs): BattleState {
     partyOrder.find((a) => !args.fallenAttackers.includes(a)) ?? "hero";
 
   return {
+    storyId: args.storyId,
     phase: "hero-choose",
     round: 1,
     heroLives: partyLives[firstActive],
@@ -272,7 +279,7 @@ export function applyItemEffect(
   state: BattleState,
   itemId: string,
 ): BattleState {
-  const item = getItem(itemId);
+  const item = getItem(state.storyId, itemId);
   if (!item || !canUseItem(state, item)) return state;
   const effect = item.effect;
   switch (effect.kind) {
@@ -396,8 +403,9 @@ export function resolvePuzzleAttack(
 
   const allDead = monsters.every((m) => m.defeated);
   if (allDead) {
+    const catalog = monstersFor(state.storyId);
     const rewards = monsters.flatMap((m) => {
-      const meta = MONSTERS[m.monsterId];
+      const meta = catalog[m.monsterId];
       return meta?.drops ?? [];
     });
     return {
@@ -480,8 +488,9 @@ export function stepCompanionTurn(state: BattleState): BattleState {
 
   const allDead = monsters.every((m) => m.defeated);
   if (allDead) {
+    const catalog = monstersFor(state.storyId);
     const rewards = monsters.flatMap((m) => {
-      const meta = MONSTERS[m.monsterId];
+      const meta = catalog[m.monsterId];
       return meta?.drops ?? [];
     });
     return {

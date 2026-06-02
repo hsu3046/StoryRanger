@@ -1,27 +1,28 @@
 /**
- * Encounter catalog — loaded from JSON via Zod-validated content layer.
- * v3.1: encounters belong to BRANCH traversals (not scene entries), so the
- * lookup helper now keys off (sceneId, branchId).
+ * Encounter catalog — read per-story from the loaded story module.
+ *
+ * Encounters belong to BRANCH traversals, so the lookup helper keys off
+ * (storyId, sceneId, branchId). Previously a single hardcoded wizard-of-oz
+ * global (`ENCOUNTERS`); now keyed by storyId via `getStory`.
  */
 
-import encountersJson from "@/stories/wizard-of-oz/encounters.json";
-import { EncountersFileSchema } from "./schemas";
+import { getStory } from "@/lib/stories";
 import type { EncounterDef } from "@/types/encounter";
 
-const parsed = EncountersFileSchema.parse(encountersJson);
-
-export const ENCOUNTERS: EncounterDef[] = parsed.encounters as EncounterDef[];
+export function encountersFor(storyId: string): EncounterDef[] {
+  return (getStory(storyId)?.encounters.encounters ?? []) as EncounterDef[];
+}
 
 export function findEncountersForBranch(
+  storyId: string,
   sceneId: string,
   branchId: string,
 ): EncounterDef[] {
-  return ENCOUNTERS.filter(
-    (e) =>
-      e.trigger.sceneId === sceneId && e.trigger.branchId === branchId,
+  return encountersFor(storyId).filter(
+    (e) => e.trigger.sceneId === sceneId && e.trigger.branchId === branchId,
   );
 }
 
-export function getEncounter(id: string): EncounterDef | null {
-  return ENCOUNTERS.find((e) => e.id === id) ?? null;
+export function getEncounter(storyId: string, id: string): EncounterDef | null {
+  return encountersFor(storyId).find((e) => e.id === id) ?? null;
 }
