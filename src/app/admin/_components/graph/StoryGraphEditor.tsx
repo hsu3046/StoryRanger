@@ -62,7 +62,7 @@ import {
   saveScenesAction,
 } from "../../_actions/saveJson";
 import { isTerminalScene } from "@/lib/story-engine";
-import type { ChallengeCategory } from "@/lib/education";
+import type { ChallengeSubject } from "@/lib/education";
 import { AssetThumb } from "../AssetThumb";
 
 /**
@@ -863,6 +863,7 @@ function StoryGraphEditorInner({
       },
       body: { kind: "battle", monsterIds: [] },
       rewards: {},
+      challengeType: "mixed",
     };
     setEncounters((prev) => [...prev, newEnc]);
   }
@@ -1747,6 +1748,25 @@ function EncounterCard({
             )}
           </MiniField>
 
+          <MiniField label="Question type">
+            <StyledSelect
+              compact
+              value={encounter.challengeType ?? "mixed"}
+              onChange={(e) =>
+                onChange((x) => ({
+                  ...x,
+                  challengeType: e.target.value as ChallengeSubject,
+                }))
+              }
+            >
+              {CHALLENGE_SUBJECTS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </StyledSelect>
+          </MiniField>
+
           <MiniField label="Monsters">
             <div className="flex max-h-48 flex-wrap gap-1 overflow-y-auto">
               {monsters.map((m) => {
@@ -2587,50 +2607,27 @@ function SceneNarrationEditor({
 
 /** Challenge category options for the branch-gate picker. `auto` lets the
  *  generator pick an age-appropriate category at runtime (the default). */
-const CHALLENGE_CATEGORIES: {
-  value: "auto" | "english" | ChallengeCategory;
-  label: string;
-}[] = [
-  { value: "auto", label: "Auto (Mixed math)" },
-  { value: "counting", label: "Counting" },
-  { value: "shape", label: "Shapes" },
-  { value: "compare", label: "Compare" },
-  { value: "odd-one-out", label: "Odd one out" },
-  { value: "pattern", label: "Number pattern" },
-  { value: "add", label: "Addition" },
-  { value: "sub", label: "Subtraction" },
-  { value: "multiply", label: "Multiplication" },
-  { value: "divide", label: "Division" },
-  { value: "missing", label: "Missing number" },
-  { value: "fraction", label: "Fractions" },
-  { value: "decimal", label: "Decimals" },
-  { value: "percentage", label: "Percentage" },
-  { value: "ratio", label: "Ratio" },
-  { value: "money", label: "Money" },
-  { value: "time", label: "Time" },
-  { value: "measure", label: "Area / perimeter / volume" },
-  { value: "geometry", label: "Geometry / angles" },
-  { value: "average", label: "Average" },
-  { value: "factors", label: "Factors & multiples" },
-  { value: "algebra", label: "Algebra" },
-  { value: "speed", label: "Speed" },
-  { value: "word", label: "Word / thinking" },
-  // English literacy (offline word-bank). Author-gated — never in battles.
-  // Ordered easiest → hardest (phonics → orthography → vocabulary).
-  { value: "english", label: "English (mixed)" },
-  { value: "vocab-picture", label: "English · Picture word" },
-  { value: "first-letter", label: "English · First letter" },
-  { value: "rhyme", label: "English · Rhyme" },
-  { value: "syllables", label: "English · Syllables" },
-  { value: "missing-letter", label: "English · Missing letter" },
-  { value: "spelling", label: "English · Spelling" },
-  { value: "plural", label: "English · Plural" },
-  { value: "compound", label: "English · Compound word" },
-  { value: "homophone", label: "English · Homophone" },
-  { value: "opposite", label: "English · Opposite" },
-  { value: "synonym", label: "English · Synonym" },
-  { value: "analogy", label: "English · Analogy" },
+/** Simple subject selector for challenge gates + battles. Per-subject detail
+ *  categories are intentionally NOT exposed here — the generator picks an
+ *  age-appropriate mix within the chosen subject. */
+const CHALLENGE_SUBJECTS: { value: ChallengeSubject; label: string }[] = [
+  { value: "mixed", label: "Mixed (Math + English + Logic)" },
+  { value: "math", label: "Math" },
+  { value: "english", label: "English" },
+  { value: "logic", label: "Logic / Coding" },
 ];
+
+/** Coerce a stored challenge subject to one of the options ("auto" is the
+ *  legacy alias for Math). */
+function asSubject(v: string): ChallengeSubject {
+  return v === "english"
+    ? "english"
+    : v === "logic"
+      ? "logic"
+      : v === "mixed"
+        ? "mixed"
+        : "math";
+}
 
 function BranchChallengeCard({
   branch,
@@ -2682,7 +2679,7 @@ function BranchChallengeCard({
               <span className="text-ink-soft">Type:</span>
               <StyledSelect
                 className="flex-1"
-                value={challenge.category}
+                value={asSubject(challenge.category)}
                 onChange={(e) =>
                   onChange((b) =>
                     b.challenge?.enabled
@@ -2690,17 +2687,14 @@ function BranchChallengeCard({
                           ...b,
                           challenge: {
                             ...b.challenge,
-                            category: e.target.value as
-                              | "auto"
-                              | "english"
-                              | ChallengeCategory,
+                            category: e.target.value as ChallengeSubject,
                           },
                         }
                       : b,
                   )
                 }
               >
-                {CHALLENGE_CATEGORIES.map((c) => (
+                {CHALLENGE_SUBJECTS.map((c) => (
                   <option key={c.value} value={c.value}>
                     {c.label}
                   </option>

@@ -26,6 +26,14 @@ import {
   type WordEntry,
   type WordPair,
 } from "@/data/english-bank";
+import {
+  STEP_SEQUENCES,
+  CONDITIONAL_RULES,
+  COMMAND_LANE,
+  LOOP_GLYPHS,
+  BOOLEAN_TOKENS,
+  DIRECTIONS,
+} from "@/data/logic-bank";
 
 export type ChallengeCategory = z.infer<typeof ChallengeCategorySchema>;
 
@@ -117,6 +125,30 @@ export function englishCategoriesForAge(age: number): ChallengeCategory[] {
   return ENGLISH_AGE_PLAN[a];
 }
 
+// ─────────────────────────────────────────────────────────────
+// Logic / computational thinking — pseudo-programming + algorithm basics.
+// Ladder: concrete control-flow for the young (sequence → run commands →
+// loops) → branching + execution-tracing → abstract logic (debug, boolean
+// gates) for older. All NON-numeric (no arithmetic) → distinct from Math.
+// ─────────────────────────────────────────────────────────────
+const LOGIC_AGE_PLAN: Record<number, ChallengeCategory[]> = {
+  4: ["sequence", "commands"],
+  5: ["sequence", "commands", "loop"],
+  6: ["sequence", "commands", "loop", "conditional"],
+  7: ["commands", "loop", "conditional", "trace"],
+  8: ["loop", "conditional", "trace", "debug"],
+  9: ["conditional", "trace", "debug", "boolean"],
+  10: ["trace", "debug", "boolean", "conditional"],
+  11: ["debug", "boolean", "conditional", "trace"],
+  12: ["boolean", "debug", "conditional", "trace"],
+};
+
+/** Age-appropriate logic/coding drills (the "logic" meta pool). */
+export function logicCategoriesForAge(age: number): ChallengeCategory[] {
+  const a = Math.max(4, Math.min(12, Math.round(age)));
+  return LOGIC_AGE_PLAN[a];
+}
+
 export function ageBandLabel(age: number): string {
   const a = Math.max(4, Math.min(12, Math.round(age)));
   if (a <= 5) return `Age ${a} · pre-school · counting & shapes`;
@@ -136,19 +168,34 @@ export function ageBandLabel(age: number): string {
 // Public API
 // ─────────────────────────────────────────────────────────────
 
+/** Author-facing subject selector for branch / battle challenges. */
+export type ChallengeSubject = "mixed" | "math" | "english" | "logic";
+
 export function generateChallenge(opts: {
   age: number;
-  category?: ChallengeCategory | "auto" | "english";
+  category?: ChallengeCategory | "auto" | ChallengeSubject;
 }): Challenge {
   const { age, categories } = planForAge(opts.age);
-  // "auto" → an age-appropriate MATH topic (battles + default branches).
-  // "english" → an age-appropriate ENGLISH drill (author-gated branches only).
+  // Subject metas (age-appropriate pools):
+  //   "math"/"auto" → math · "english" → English · "logic" → logic/coding ·
+  //   "mixed" → all three. A concrete ChallengeCategory is used as-is.
+  const c = opts.category;
+  // Missing category resolves to "mixed" to match the schema default — the
+  // runtime story is a raw cast (no Zod), so the default isn't applied there.
   const category =
-    !opts.category || opts.category === "auto"
-      ? pick(categories) ?? "add"
-      : opts.category === "english"
+    !c || c === "mixed"
+      ? pick([
+          ...categories,
+          ...englishCategoriesForAge(age),
+          ...logicCategoriesForAge(age),
+        ]) ?? "add"
+      : c === "english"
         ? pick(englishCategoriesForAge(age)) ?? "vocab-picture"
-        : opts.category;
+        : c === "logic"
+          ? pick(logicCategoriesForAge(age)) ?? "sequence"
+          : c === "auto" || c === "math"
+            ? pick(categories) ?? "add"
+            : c;
 
   switch (category) {
     case "counting": return makeCounting(age);
@@ -187,6 +234,14 @@ export function generateChallenge(opts: {
     case "opposite": return makeOpposite(age);
     case "synonym": return makeSynonym(age);
     case "analogy": return makeAnalogy(age);
+    // Logic / computational thinking
+    case "sequence": return makeSequence();
+    case "commands": return makeCommands(age);
+    case "loop": return makeLoop(age);
+    case "conditional": return makeConditional();
+    case "trace": return makeTrace(age);
+    case "debug": return makeDebug(age);
+    case "boolean": return makeBoolean(age);
   }
 }
 
@@ -1052,6 +1107,165 @@ function makeHomophone(age: number): Challenge {
     correct,
     () => pick(others),
   );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Logic / computational thinking generators (pseudo-programming +
+// algorithm basics). All NON-numeric — solved by tracing / ordering /
+// branching / deducing, never by arithmetic.
+// ─────────────────────────────────────────────────────────────
+
+/** Up-to-4 choices drawn from a fixed pool, always including `correct`. */
+function fixedChoices(
+  pool: string[],
+  correct: string,
+): { choices: string[]; correctIndex: number } {
+  const opts = new Set<string>([correct]);
+  for (const p of shuffle(pool)) {
+    if (opts.size >= 4) break;
+    opts.add(p);
+  }
+  const choices = shuffle([...opts]);
+  return { choices, correctIndex: choices.indexOf(correct) };
+}
+
+/** Sequence — an algorithm is ordered steps ("which step is first / next?"). */
+function makeSequence(): Challenge {
+  const t = pick(STEP_SEQUENCES) ?? STEP_SEQUENCES[0];
+  if (Math.random() < 0.5) {
+    return {
+      category: "sequence",
+      prompt: `To ${t.task}, which step comes FIRST?`,
+      ...fixedChoices(t.steps, t.steps[0]),
+    };
+  }
+  const i = randInt(0, t.steps.length - 2);
+  // Exclude the step named in the prompt from the distractor pool so it isn't
+  // offered as a choice.
+  const pool = t.steps.filter((_, j) => j !== i);
+  return {
+    category: "sequence",
+    prompt: `To ${t.task}: what comes right AFTER "${t.steps[i]}"?`,
+    ...fixedChoices(pool, t.steps[i + 1]),
+  };
+}
+
+/** Commands — run a 1-D instruction list; where does the robot land? */
+function makeCommands(age: number): Challenge {
+  const lane = COMMAND_LANE;
+  const allowBack = age >= 8;
+  const n = randInt(2, age <= 7 ? 3 : 4);
+  let pos = 0;
+  const moves: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const back = allowBack && pos > 0 && Math.random() < 0.3;
+    moves.push(back ? "⬅️" : "➡️");
+    pos = clamp(pos + (back ? -1 : 1), 0, lane.length - 1);
+  }
+  return {
+    category: "commands",
+    prompt: `Lane:  ${lane.join("  ")}\n🤖 starts at ${lane[0]} and runs:  ${moves.join("  ")}\nWhich square does it land on?`,
+    ...fixedChoices(lane, lane[pos]),
+  };
+}
+
+/** Loop — expand a repeat (iteration). */
+function makeLoop(age: number): Challenge {
+  const g = pick(LOOP_GLYPHS) ?? "⬆️";
+  const n = randInt(2, age <= 6 ? 3 : 4);
+  const correct = g.repeat(n);
+  return stringChallenge(
+    "loop",
+    `What does "repeat ${g} ${n} times" make?`,
+    correct,
+    () => {
+      const useOther = Math.random() < 0.5;
+      const glyph = useOther ? pick(LOOP_GLYPHS) ?? g : g;
+      const cand = glyph.repeat(randInt(2, 5));
+      return cand !== correct ? cand : undefined;
+    },
+  );
+}
+
+/** Conditional — if / else branching. */
+function makeConditional(): Challenge {
+  const r = pick(CONDITIONAL_RULES) ?? CONDITIONAL_RULES[0];
+  const condTrue = Math.random() < 0.5;
+  const others = CONDITIONAL_RULES.filter((x) => x !== r).flatMap((x) => [
+    x.then,
+    x.els,
+  ]);
+  return stringChallenge(
+    "conditional",
+    `Rule: IF ${r.cond} → "${r.then}", ELSE → "${r.els}".\n` +
+      `Now: ${condTrue ? `${r.cond} is TRUE.` : `it is NOT true that ${r.cond}.`} What do you do?`,
+    condTrue ? r.then : r.els,
+    () => (Math.random() < 0.5 ? (condTrue ? r.els : r.then) : pick(others)),
+  );
+}
+
+/** Trace — execute turns and predict the facing direction. */
+function makeTrace(age: number): Challenge {
+  const start = randInt(0, 3);
+  const n = randInt(1, age <= 7 ? 2 : 3);
+  const turns: string[] = [];
+  let pos = start;
+  for (let i = 0; i < n; i++) {
+    const right = Math.random() < 0.6;
+    turns.push(right ? "turn right" : "turn left");
+    pos = (pos + (right ? 1 : 3)) % 4;
+  }
+  const choices = shuffle([...DIRECTIONS]);
+  return {
+    category: "trace",
+    prompt: `You face ${DIRECTIONS[start]}. You ${turns.join(", then ")}. Which way do you face now?`,
+    choices,
+    correctIndex: choices.indexOf(DIRECTIONS[pos]),
+  };
+}
+
+/** Debug — every step should match, but one is wrong: which one? */
+function makeDebug(age: number): Challenge {
+  const n = age <= 8 ? 4 : 5;
+  const good = pick(["➡️", "⬆️"]) ?? "➡️";
+  const bad = good === "➡️" ? "⬅️" : "⬇️";
+  const bugPos = randInt(0, n - 1);
+  const seq = Array.from({ length: n }, (_, i) => (i === bugPos ? bad : good));
+  const ORD = ["First", "Second", "Third", "Fourth", "Fifth"];
+  return {
+    category: "debug",
+    prompt: `Every step should be ${good}, but one is wrong:\n${seq.join("  ")}\nWhich step is the bug?`,
+    choices: ORD.slice(0, n),
+    correctIndex: bugPos,
+  };
+}
+
+/** Boolean — AND / OR / NOT logic gates (answer Yes / No). */
+function makeBoolean(age: number): Challenge {
+  const [x, y] = shuffle(BOOLEAN_TOKENS);
+  const gate = pick(age <= 9 ? ["AND", "OR"] : ["AND", "OR", "NOT"]) ?? "AND";
+  let prompt: string;
+  let open: boolean;
+  if (gate === "NOT") {
+    const has = Math.random() < 0.5;
+    prompt = `The alarm rings if there is NOT a ${x}. You ${has ? "HAVE" : "do NOT have"} a ${x}. Does it ring?`;
+    open = !has;
+  } else {
+    const hasX = Math.random() < 0.5;
+    const hasY = Math.random() < 0.5;
+    const have =
+      [hasX ? x : null, hasY ? y : null].filter(Boolean).join(" + ") ||
+      "nothing";
+    prompt = `The door opens if you have ${x} ${gate} ${y}. You have: ${have}. Does it open?`;
+    open = gate === "AND" ? hasX && hasY : hasX || hasY;
+  }
+  const choices = shuffle(["Yes", "No"]);
+  return {
+    category: "boolean",
+    prompt,
+    choices,
+    correctIndex: choices.indexOf(open ? "Yes" : "No"),
+  };
 }
 
 function money(cents: number): string {

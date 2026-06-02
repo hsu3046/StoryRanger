@@ -27,7 +27,11 @@ import { MONSTERS } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
 import { characterSize, sizeScale } from "@/lib/sprite-size";
-import { generateChallenge, type Challenge } from "@/lib/education";
+import {
+  generateChallenge,
+  type Challenge,
+  type ChallengeSubject,
+} from "@/lib/education";
 
 import { ComposedScene, type StagePosition } from "../scene/ComposedScene";
 import { HitsBar } from "./HpBar";
@@ -81,6 +85,9 @@ interface Props {
   victoryItems?: string[];
   /** Player's age (from onboarding) — drives challenge difficulty tier. */
   age: number;
+  /** Subject the battle problems are drawn from (mixed / math / english /
+   *  logic). "mixed" samples all three. Defaults to "mixed". */
+  challengeType?: ChallengeSubject;
   /** When set, called with a missed challenge so the home "Check Your Answers"
    *  review can collect it. Undefined in admin preview / demo (no recording). */
   recordWrongChallenge?: (challenge: Challenge) => void;
@@ -107,6 +114,7 @@ export function BattleScreen({
   inventory = [],
   victoryItems,
   age,
+  challengeType = "mixed",
   recordWrongChallenge,
 }: Props) {
   const [state, setState] = useState<BattleState>(
@@ -458,13 +466,14 @@ export function BattleScreen({
   // would re-roll on every re-render (animation state, etc.), regenerating
   // the problem mid-solve. Memoizing on the puzzle's identity keeps the
   // question stable until a new puzzle opens. Difficulty is age-driven; the
-  // category is auto-picked for the age tier.
+  // subject (mixed/math/english) comes from the encounter's challengeType.
   const activeChallenge = useMemo<Challenge | null>(() => {
     if (!activePuzzle) return null;
-    return generateChallenge({ age, category: "auto" });
+    return generateChallenge({ age, category: challengeType });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-roll only on puzzle identity change
   }, [
     age,
+    challengeType,
     activePuzzle?.mode,
     activePuzzle?.monster.monsterId,
     state.activeAttacker,

@@ -37,4 +37,7 @@ export interface EncounterDef {
   rewards: EncounterRewards;
   /** Optional monster sprites to show in intro even when monsterIds is empty. */
   displayMonsters?: string[];
+  /** Subject the in-battle problems are drawn from. Optional (raw content may
+   *  omit it) — defaults to "mixed" at the use site. */
+  challengeType?: "mixed" | "math" | "english" | "logic";
 }

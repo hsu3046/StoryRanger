@@ -8,6 +8,7 @@ import {
   ageBandLabel,
   categoriesForAge,
   englishCategoriesForAge,
+  logicCategoriesForAge,
   type Challenge,
   type ChallengeCategory,
 } from "@/lib/education";
@@ -17,7 +18,7 @@ import { ChallengeVisualView } from "@/components/challenge/ChallengeVisualView"
 /** Categories shown as columns. "auto" mirrors what the runtime picks for the
  *  age tier; the explicit ones force that category (numbers clamped to tier). */
 const CATEGORIES: {
-  value: "auto" | "english" | ChallengeCategory;
+  value: "auto" | "english" | "logic" | ChallengeCategory;
   label: string;
 }[] = [
   { value: "auto", label: "Auto (mixed math)" },
@@ -58,6 +59,15 @@ const CATEGORIES: {
   { value: "opposite", label: "English · Opposite" },
   { value: "synonym", label: "English · Synonym" },
   { value: "analogy", label: "English · Analogy" },
+  // Logic / computational thinking (pseudo-programming + algorithm basics).
+  { value: "logic", label: "Logic (mixed)" },
+  { value: "sequence", label: "Logic · Sequence" },
+  { value: "commands", label: "Logic · Commands" },
+  { value: "loop", label: "Logic · Loop" },
+  { value: "conditional", label: "Logic · If / else" },
+  { value: "trace", label: "Logic · Trace" },
+  { value: "debug", label: "Logic · Debug" },
+  { value: "boolean", label: "Logic · Boolean (AND/OR/NOT)" },
 ];
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
@@ -87,12 +97,16 @@ export function ChallengePreviewer() {
   // Only the categories this age actually produces (the auto pool) + an "auto"
   // mix card — so the sheet never shows level-inappropriate types (e.g. no
   // counting/shapes at age 12).
-  const ageCategories = useMemo<("auto" | "english" | ChallengeCategory)[]>(
+  const ageCategories = useMemo<
+    ("auto" | "english" | "logic" | ChallengeCategory)[]
+  >(
     () => [
       "auto",
       ...categoriesForAge(age),
       "english",
       ...englishCategoriesForAge(age),
+      "logic",
+      ...logicCategoriesForAge(age),
     ],
     [age],
   );

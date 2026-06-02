@@ -39,9 +39,21 @@ export const BranchConditionSchema = z.object({
  *  defaults to "auto" (pick an age-appropriate one) — authors rarely set it. */
 export const BranchChallengeSchema = z.object({
   enabled: z.literal(true),
+  /** Subject the gating problems are drawn from. The admin only offers the 4
+   *  subjects (mixed/math/english/logic); "auto" is the legacy alias for math.
+   *  A concrete ChallengeCategory is still ACCEPTED (not offered) so branches
+   *  authored by the old granular dropdown keep validating + playing. Default
+   *  "mixed". */
   category: z
-    .union([z.literal("auto"), z.literal("english"), ChallengeCategorySchema])
-    .default("auto"),
+    .union([
+      z.literal("mixed"),
+      z.literal("math"),
+      z.literal("english"),
+      z.literal("logic"),
+      z.literal("auto"),
+      ChallengeCategorySchema,
+    ])
+    .default("mixed"),
   /** How many problems the player must solve (in sequence) to pass the gate.
    *  Default 1. A wrong answer always re-rolls a fresh problem — the gate
    *  retries until solved (there is no skip / fail-out). */

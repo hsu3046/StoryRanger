@@ -159,6 +159,7 @@ export function EncounterFlow({
       <BattleScreen
         storyId={storyId}
         age={age}
+        challengeType={encounter.challengeType ?? "mixed"}
         recordWrongChallenge={recordWrongChallenge}
         characterImageBase={(id) => characterImageBase(id, "battle")}
         heroId={heroId}

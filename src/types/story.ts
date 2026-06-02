@@ -70,7 +70,9 @@ export interface Branch {
    *  the branch is taken. Difficulty derives from the player's age. */
   challenge?: {
     enabled: true;
-    category: "auto" | "english" | ChallengeCategory;
+    /** Subject pool. "auto" = legacy alias for "math". A concrete
+     *  ChallengeCategory is accepted for back-compat (old granular content). */
+    category: "mixed" | "math" | "english" | "logic" | "auto" | ChallengeCategory;
     /** Number of problems to solve in sequence (default 1). A wrong answer
      *  always re-rolls a fresh problem — the gate retries until solved. */
     count?: number;
