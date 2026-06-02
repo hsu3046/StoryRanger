@@ -12,9 +12,9 @@
     },
     {
       "id": "honey-cake",
-      "name": "Honey Cake",
+      "name": "Honey Jar",
       "icon": "🍯",
-      "description": "Aunt Em's honey cake — a big warm bite brings you back. Restores 2 hearts in battle.",
+      "description": "A spoonful of enchanted honey warms you from the inside. Restores 2 hearts in battle.",
       "effect": {
         "kind": "heal",
         "amount": 2
@@ -23,7 +23,7 @@
     {
       "id": "oil",
       "name": "Oil",
-      "icon": "🛢️",
+      "icon": "⚱️",
       "description": "It makes rusty metal move smoothly again!",
       "effect": {
         "kind": "event"
@@ -34,6 +34,34 @@
       "name": "Crown of the Mouse King",
       "icon": "👑",
       "description": "Show this to any mouse, and they will help you once — no questions asked.",
+      "effect": {
+        "kind": "event"
+      }
+    },
+    {
+      "id": "ravens-frozen-feather",
+      "name": "Raven's Frozen Feather",
+      "icon": "🪶",
+      "description": "A feather from the mysterious Raven. It freezes time for a single moment — use it wisely.",
+      "effect": {
+        "kind": "stop-time",
+        "scope": "one-attack"
+      }
+    },
+    {
+      "id": "bucket-of-water",
+      "name": "Bucket of Water",
+      "icon": "🪣",
+      "description": "Rumor has it the Wicked Witch of the West fears one thing above all — water.",
+      "effect": {
+        "kind": "event"
+      }
+    },
+    {
+      "id": "green-tinted-glasses",
+      "name": "Green-tinted Glasses",
+      "icon": "👓",
+      "description": "Wear these inside the Emerald City — the green light is too bright without them.",
       "effect": {
         "kind": "event"
       }

@@ -69,7 +69,7 @@
     "s03_munchkinland": {
       "image": "/stories/wizard-of-oz/scenes/03-munchkinland",
       "bgm": "munchkinland",
-      "speaker": "glinda",
+      "speaker": "narrator",
       "narration": "All at once, small cheerful people appear from behind the flowers — popping up from every direction! A beautiful witch in pink smiles. \"You are a hero! Your house has crushed the Wicked Witch of the East. Look — only her silver shoes remain!\"",
       "branches": [
         {
@@ -119,7 +119,7 @@
     "s05_scarecrow": {
       "image": "/stories/wizard-of-oz/scenes/05a-scarecrow-pole",
       "bgm": "kansas-calm",
-      "speaker": "scarecrow",
+      "speaker": "narrator",
       "narration": "A floppy figure of straw is tied to a tall pole. 'Hello!' he calls down brightly. 'Could you maybe lift me off this thing? I would so dearly like to come along and find a brain.'",
       "branches": [
         {
@@ -194,11 +194,6 @@
           "outcome": "You knelt down and spoke softly to the great beast until his growl turned into a shaky sigh."
         }
       ],
-      "reward": {
-        "items": [
-          "lost-pup-trust"
-        ]
-      },
       "dialogueCharacters": [
         "scarecrow",
         "tinman",
@@ -272,12 +267,22 @@
         {
           "id": "wade_across",
           "label": "Let's find a shallow spot to cross!",
-          "next": "s10a_stepping_stones"
+          "next": "s10a_stepping_stones",
+          "challenge": {
+            "enabled": true,
+            "category": "auto",
+            "count": 1
+          }
         },
         {
           "id": "branch_rfwlo",
           "label": "Let's chop down some trees and build a raft!",
-          "next": "10b-river-boat"
+          "next": "10b-river-boat",
+          "challenge": {
+            "enabled": true,
+            "category": "auto",
+            "count": 1
+          }
         }
       ],
       "dialogueCharacters": [
@@ -291,47 +296,40 @@
       "image": "/stories/wizard-of-oz/scenes/11-poppy-field",
       "bgm": "munchkinland",
       "speaker": "narrator",
-      "narration": "\"Look! A field of red poppies!\" The sight was so beautiful, it took their breath away. You ran toward the blazing red field with excitement — but the moment you stepped inside, a deep, sweet scent filled the air and made your head spin.",
+      "narration": "As you crossed the river, a blazing red field of poppies stretched out before you. It was so beautiful, it took your breath away — but the moment you stepped inside, a deep, sweet scent filled the air and made your head spin.",
       "branches": [
         {
-          "id": "push_through",
-          "label": "Push on with all your strength",
-          "next": "s12_poppy_field_past"
-        },
-        {
           "id": "call_for_help",
-          "label": "Call for help from your friends",
-          "next": "s12_poppy_field_past"
+          "label": "Call your little friends!",
+          "next": "s12_poppy_field_past",
+          "condition": {
+            "hasItems": [
+              "crown-of-the-mouse-king"
+            ]
+          },
+          "outcome": "You took out the Crown of the Mouse King and called for help."
         },
         {
           "id": "branch_xbyie",
-          "label": "New choice",
-          "next": "12b-past-poppies-sleep"
+          "label": "Hop on lion's back",
+          "next": "12b-past-poppies-sleep",
+          "outcome": "You climbed onto the Lion's soft back and held tight to his golden mane as he leaped forward through the sleepy red flowers."
         }
-      ],
-      "reward": {
-        "items": [
-          "wisp-light"
-        ]
-      }
+      ]
     },
     "s12_poppy_field_past": {
       "image": "/stories/wizard-of-oz/scenes/12-past-poppies",
       "bgm": "munchkinland",
       "speaker": "narrator",
-      "narration": "Field mice carry you, snoring, out of the poppies. When you wake, the green city shines closer than ever. You walk the last stretch with your eyes wide.",
+      "narration": "You pulled out the crown and gave it a shake — and from every direction, tiny field mice came running. Together, they carried you, snoring softly, out of the poppy field.",
       "branches": [
         {
           "id": "_to_gates",
           "label": "Approach the great green gates",
-          "next": "13b-emerald-city"
+          "next": "13b-emerald-city",
+          "outcome": "You shook off the last of your drowsiness and marched toward the towering emerald walls."
         }
-      ],
-      "reward": {
-        "items": [
-          "mouse-call"
-        ]
-      }
+      ]
     },
     "s13_emerald_gate": {
       "image": "/stories/wizard-of-oz/scenes/13a-emerald-spectacles",
@@ -341,8 +339,26 @@
       "branches": [
         {
           "id": "go_to_throne",
-          "label": "Go meet the great Wizard",
-          "next": "s14_throne"
+          "label": "Go to the Great Green Throne",
+          "next": "s14_throne",
+          "outcome": "You marched through the emerald halls until you reached the center of the palace."
+        }
+      ],
+      "reward": {
+        "items": [
+          "green-tinted-glasses"
+        ]
+      },
+      "asks": [
+        {
+          "id": "ask_09zkc",
+          "label": "How do we meet Oz?",
+          "characterId": "gatekeeper"
+        },
+        {
+          "id": "ask_5s0gx",
+          "label": "Why the glasses?",
+          "characterId": "gatekeeper"
         }
       ]
     },
@@ -350,13 +366,25 @@
       "image": "/stories/wizard-of-oz/scenes/14-throne-room",
       "bgm": "emerald-city",
       "speaker": "narrator",
-      "narration": "A great green throne stands empty. A voice booms from nowhere: 'You may have your wishes, but FIRST — bring me the broomstick of the Wicked Witch of the West.' Your friends look at you with wide eyes.",
+      "narration": "A great green throne stands empty. A deep and terrible voice boomed from everywhere and nowhere at once.\n\"I know why you have come. I know what you seek.\" A long silence fell. \"If you wish to meet me — come alone.\"",
       "branches": [
         {
           "id": "branch_q4klz",
-          "label": "New choice",
-          "next": "wizard-faces"
+          "label": "I'll go meet him alone.",
+          "next": "wizard-faces",
+          "removesCompanions": [
+            "scarecrow",
+            "tinman",
+            "lion"
+          ],
+          "outcome": "You bravely left your friends behind and stepped into the grand chamber to face the invisible Wizard alone."
         }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "s15_west_journey": {
@@ -386,7 +414,7 @@
         {
           "id": "stand_with_friends",
           "label": "Stand together with your friends",
-          "next": "17a-witch-water"
+          "next": "16b-castle-battle"
         }
       ]
     },
@@ -432,12 +460,7 @@
           "label": "Sit down and cry",
           "next": "s20_glinda"
         }
-      ],
-      "reward": {
-        "items": [
-          "silver-thread"
-        ]
-      }
+      ]
     },
     "s20_glinda": {
       "image": "/stories/wizard-of-oz/scenes/20-glinda-south",
@@ -524,7 +547,7 @@
       "branches": [
         {
           "id": "branch_epnn8",
-          "label": "New choice",
+          "label": "Wow, there is a beautiful flower field!",
           "next": "s11_poppies"
         }
       ],
@@ -538,7 +561,7 @@
     "s05_scarecrow_2": {
       "image": "/stories/wizard-of-oz/scenes/05a-scarecrow-pole-with-tinman",
       "bgm": "kansas-calm",
-      "speaker": "scarecrow",
+      "speaker": "narrator",
       "narration": "A floppy figure of straw is tied to a tall pole. 'Hello!' he calls down brightly. 'Could you maybe lift me off this thing? I would so dearly like to come along and find a brain.'",
       "branches": [
         {
@@ -660,12 +683,27 @@
       "image": "/stories/wizard-of-oz/scenes/14a-wizard-faces",
       "bgm": "emerald-city",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "A voice booms from nowhere.\n\"Only those who overcome my trials are worthy of meeting me.\"",
       "branches": [
         {
           "id": "branch_rj3n9",
-          "label": "New choice",
-          "next": "14b-wizard-faces-open"
+          "label": "Trial of Wisdom",
+          "next": "14b-wizard-faces-open",
+          "challenge": {
+            "enabled": true,
+            "category": "auto",
+            "count": 10
+          }
+        },
+        {
+          "id": "branch_87ksp",
+          "label": "Trial of Bravery",
+          "next": "14b-wizard-faces-open_2_2"
+        },
+        {
+          "id": "branch_ved9c",
+          "label": "Trial of Truth",
+          "next": "14b-wizard-faces-open_2"
         }
       ]
     },
@@ -696,15 +734,16 @@
       ]
     },
     "12b-past-poppies-sleep": {
-      "image": "/stories/wizard-of-oz/scenes/12b-past-poppies-sleep.jpeg",
+      "image": "/stories/wizard-of-oz/scenes/12b-past-poppies-sleep",
       "bgm": "munchkinland",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "The Lion carried {{name}} on his back, and the Scarecrow held Toto close. Together, they walked and walked until they were safely out of the poppy field. And there, glimmering in the distance, was a beautiful castle shining in brilliant green.",
       "branches": [
         {
           "id": "branch_ryy1s",
-          "label": "New choice",
-          "next": "13b-emerald-city"
+          "label": "Approach the great green gates",
+          "next": "13b-emerald-city",
+          "outcome": "You followed the yellow brick road until you reached the high walls of the shimmering city."
         }
       ]
     },
@@ -750,14 +789,14 @@
       ]
     },
     "10b-river-boat": {
-      "image": "/stories/wizard-of-oz/scenes/10b-river-boat.jpeg",
+      "image": "/stories/wizard-of-oz/scenes/10b-river-boat",
       "bgm": "yellow-road",
       "speaker": "narrator",
       "narration": "The Tin Man chopped, the Scarecrow twisted ropes, and together they built a raft. It took hours — but as the sun dipped low, they pushed off from the bank and drifted safely across the glittering river.",
       "branches": [
         {
           "id": "branch_ksvsv",
-          "label": "New choice",
+          "label": "Wow, there is a beautiful flower field!",
           "next": "s11_poppies"
         }
       ],
@@ -769,16 +808,23 @@
       ]
     },
     "13b-emerald-city": {
-      "image": "/stories/wizard-of-oz/scenes/13b-emerald-city.jpeg",
+      "image": "/stories/wizard-of-oz/scenes/13b-emerald-city",
       "bgm": "emerald-city",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "At last — the Emerald City rose before you like a dream. Towers of green glass sparkled in the light, and golden gates glittered ahead. Everything glowed — bright, magical, and more beautiful than you had ever imagined.",
       "branches": [
         {
           "id": "branch_3ee1m",
-          "label": "New choice",
-          "next": "s13_emerald_gate"
+          "label": "Wow… everything is so green!",
+          "next": "s13_emerald_gate",
+          "outcome": "You gaped at the emerald towers as they shimmered under the afternoon sun."
         }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "20b-farewell-magic": {
@@ -817,7 +863,9 @@
           "id": "branch_2zyso",
           "label": "Let's go to the Emerald City together!",
           "next": "s09_dark_forest",
-          "addsCompanion": "lion",
+          "addsCompanions": [
+            "lion"
+          ],
           "outcome": "You invited the Cowardly Lion to join your group, and together you stepped deeper into the darkening woods."
         }
       ],
@@ -844,7 +892,7 @@
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
       "bgm": "tornado",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
       "branches": [
         {
           "id": "branch_5pnf7",
@@ -863,7 +911,6 @@
           "id": "branch_mz45i",
           "label": "Let's be friends!",
           "next": "s06_after_tinman",
-          "addsCompanion": "tinman",
           "outcome": "You shook the Tin Woodman's shiny metal hand and invited him to join your journey."
         }
       ],
@@ -885,7 +932,6 @@
           "id": "branch_nkgv4",
           "label": "Let's find your brain!",
           "next": "s06_after_tinman_2",
-          "addsCompanion": "scarecrow",
           "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road."
         }
       ],
@@ -907,7 +953,9 @@
           "id": "branch_wpfkt",
           "label": "We'll find your brain!",
           "next": "s07_forest_edge",
-          "addsCompanion": "scarecrow",
+          "addsCompanions": [
+            "scarecrow"
+          ],
           "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road."
         }
       ],
@@ -926,7 +974,9 @@
           "id": "branch_6vtqw",
           "label": "We'll find your heart!",
           "next": "s07_forest_edge",
-          "addsCompanion": "tinman",
+          "addsCompanions": [
+            "tinman"
+          ],
           "outcome": "You invited the Tin Woodman to join your quest, and together you marched deeper into the thick, shadowy forest."
         }
       ],
@@ -936,7 +986,7 @@
       ]
     },
     "02c-tornado-inside": {
-      "image": "/stories/wizard-of-oz/scenes/02c-tornado-inside.jpeg",
+      "image": "/stories/wizard-of-oz/scenes/02c-tornado-inside",
       "bgm": "tornado",
       "speaker": "narrator",
       "narration": "You held Toto close and squeezed his eyes shut. The wind screamed and the house shook. Things crashed and banged all around them.",
@@ -953,7 +1003,7 @@
       ]
     },
     "02c-tornado-after": {
-      "image": "/stories/wizard-of-oz/scenes/02c-tornado-after.jpeg",
+      "image": "/stories/wizard-of-oz/scenes/02c-tornado-after",
       "bgm": "kansas-calm",
       "speaker": "narrator",
       "narration": "The cyclone finally fell silent, and a warm, golden light spilled through the window. You slowly opened the window to find a land of brilliant flowers and sparkling brooks.",
@@ -967,6 +1017,45 @@
       ],
       "dialogueCharacters": [
         "toto"
+      ]
+    },
+    "14b-wizard-faces-open_2": {
+      "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
+      "bgm": "tornado",
+      "speaker": "narrator",
+      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "branches": [
+        {
+          "id": "branch_6gi57",
+          "label": "New choice",
+          "next": "monkey-ambush"
+        }
+      ]
+    },
+    "14b-wizard-faces-open_2_2": {
+      "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
+      "bgm": "tornado",
+      "speaker": "narrator",
+      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "branches": [
+        {
+          "id": "branch_fjqr2",
+          "label": "New choice",
+          "next": "monkey-ambush"
+        }
+      ]
+    },
+    "16b-castle-battle": {
+      "image": "/stories/wizard-of-oz/scenes/16b-castle-battle.jpeg",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "(Write the narration for this new scene.)",
+      "branches": [
+        {
+          "id": "branch_ytp8l",
+          "label": "New choice",
+          "next": "s17_witch_melts"
+        }
       ]
     }
   }
