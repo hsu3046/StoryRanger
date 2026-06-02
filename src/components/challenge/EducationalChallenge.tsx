@@ -103,7 +103,10 @@ export function EducationalChallenge({
   const remainingMs = Math.max(0, HARD_TIMEOUT_MS - elapsedMs);
   const remainingSec = Math.ceil(remainingMs / 1000);
   const remainingTenths = Math.max(0, Math.ceil(remainingMs / 100) / 10);
-  const inCrit = remainingMs > HARD_TIMEOUT_MS - CRIT_WINDOW_MS;
+  // `>=` keeps the green crit window inclusive at the boundary, matching the
+  // engine's `durationMs <= CRIT_WINDOW_MS` (else the bar dims one 100ms tick
+  // before the crit actually expires).
+  const inCrit = remainingMs >= HARD_TIMEOUT_MS - CRIT_WINDOW_MS;
   const inWarn = remainingMs <= 5_000;
   const timerPct = remainingMs / HARD_TIMEOUT_MS;
 
@@ -216,7 +219,7 @@ export function EducationalChallenge({
 
       {/* Prompt */}
       <div className="flex flex-col items-center gap-2 py-2">
-        <p className="text-balance text-center text-xl font-semibold tabular-nums text-ink sm:text-2xl">
+        <p className="whitespace-pre-line text-center text-xl font-semibold tabular-nums text-ink sm:text-2xl">
           {challenge.prompt}
         </p>
       </div>

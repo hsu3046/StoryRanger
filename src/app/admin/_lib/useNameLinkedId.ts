@@ -11,7 +11,7 @@ import { uniqueId } from "./uniqueId";
  *   • the object is saved (`reset`).
  *
  * Saved / pre-existing ids are never auto-changed, because an id doubles as a
- * stable reference (scene.speaker, branch.addsCompanion, …) and an asset-path
+ * stable reference (scene.speaker, branch.addsCompanions, …) and an asset-path
  * slug (`characters/<id>`, `dialogue/<id>`); rewriting one post-save would
  * break those. Field-agnostic — works for `id` or `key`.
  *

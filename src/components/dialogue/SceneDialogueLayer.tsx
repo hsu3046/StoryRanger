@@ -67,12 +67,21 @@ interface Props {
   /** External request to open a SEEDED conversation (from the choice-area
    *  "ask" chips). When `key` changes, the layer opens `characterId` and
    *  immediately sends `question` as a normal hero turn. */
-  askRequest?: { characterId: SpeakerId; question: string; key: number } | null;
+  askRequest?: {
+    characterId: SpeakerId;
+    question: string;
+    key: number;
+    /** Optional unlock for this seeded ask — judged across the conversation. */
+    unlock?: { keyword: string; goal: string };
+  } | null;
   /** Fired once the current `askRequest` has been claimed, so the caller can
    *  clear it. Without this the request is write-only and a later
    *  unmount→remount (encounter / outcome bridge) re-opens the stale ask's
    *  character over the NEW scene. */
   onAskConsumed?: () => void;
+  /** Fired once when, during an unlock ask's conversation, the LLM judges the
+   *  goal met — the caller adds `keyword` to PlayState.unlockedKeywords. */
+  onKeywordUnlocked?: (keyword: string) => void;
 }
 
 const IMAGE_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
@@ -108,6 +117,7 @@ export function SceneDialogueLayer({
   onActiveChange,
   askRequest,
   onAskConsumed,
+  onKeywordUnlocked,
 }: Props) {
   void storyId;
   const [active, setActive] = useState<SpeakerId | null>(null);
@@ -131,6 +141,10 @@ export function SceneDialogueLayer({
   const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionStartedRef = useRef<SpeakerId | null>(null);
   const handledAskKeyRef = useRef<number | null>(null);
+  // The active seeded-ask unlock (kept across turns — `askRequest` is consumed
+  // after one turn) + a fire-once latch so the keyword unlocks at most once.
+  const sessionGoalRef = useRef<{ keyword: string; goal: string } | null>(null);
+  const goalFiredRef = useRef(false);
 
   /** ~0.7s breathing room between the reply landing and the choices. */
   const CHOICE_REVEAL_DELAY_MS = 700;
@@ -220,6 +234,10 @@ export function SceneDialogueLayer({
     // surfaces them while talking — so we gate only on persona presence.)
     if (!canTalkTo(characterMap[characterId])) return;
     if (active && active !== characterId) closeSession();
+    // Arm the unlock for the WHOLE session (sent on every turn; askRequest is
+    // cleared after one turn so we can't read it later). Reset the latch.
+    sessionGoalRef.current = askRequest.unlock ?? null;
+    goalFiredRef.current = false;
     sessionStartedRef.current = characterId;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- open the seeded conversation in response to an external request
     setActive(characterId);
@@ -283,6 +301,9 @@ export function SceneDialogueLayer({
           alreadyGifted: hasGifted(characterId),
           heroMemory,
           journeyNote,
+          // Re-sent every turn for the whole seeded-ask session (the goal must
+          // persist across turns). Undefined for normal chat.
+          unlockGoal: sessionGoalRef.current?.goal,
         }),
       });
       if (!res.ok) throw new Error(`dialogue ${res.status}`);
@@ -295,6 +316,12 @@ export function SceneDialogueLayer({
       });
       setSpeakNonce((n) => n + 1);
       onApplyTurn(characterId, data, opts.isFirstTurn ? "" : heroText);
+      // Goal met → unlock the ask's keyword exactly once (mood/history already
+      // folded in above; the keyword is a separate state field).
+      if (data.goalMet && sessionGoalRef.current && !goalFiredRef.current) {
+        goalFiredRef.current = true;
+        onKeywordUnlocked?.(sessionGoalRef.current.keyword);
+      }
       if (data.endsConversation) {
         clearEndTimer();
         endTimerRef.current = setTimeout(() => closeSession(), 2400);
@@ -325,6 +352,9 @@ export function SceneDialogueLayer({
       onSessionClose(active);
       sessionStartedRef.current = null;
     }
+    // Drop any armed unlock so a later normal chat carries no stale goal.
+    sessionGoalRef.current = null;
+    goalFiredRef.current = false;
     setActive(null);
     setLatestReply(null);
     // Clear the parent's flag in THIS commit rather than waiting for the

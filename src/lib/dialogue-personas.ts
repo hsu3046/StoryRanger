@@ -137,6 +137,10 @@ export function buildDialogueContext(
   alreadyGifted: boolean,
   heroMemory: string[] = [],
   journeyNote = "",
+  // Natural-language goal to judge this turn (from a seeded ask's unlock).
+  // Empty/omitted for normal chat → the output is byte-identical to before,
+  // so prompt-cache behaviour and non-unlock dialogue are unaffected.
+  unlockGoal = "",
 ): string {
   const pronouns =
     hero.gender === "girl"
@@ -165,11 +169,20 @@ export function buildDialogueContext(
     ? `\n- Adventures so far: ${journeyNote.trim()}`
     : "";
 
+  // Hidden per-turn goal check. Only present for unlock asks — otherwise this
+  // is "" and the prompt is identical to a normal turn.
+  const goalBlock = unlockGoal.trim()
+    ? `\n\nHIDDEN GOAL CHECK (judge silently — NEVER mention it, and it never changes how you speak):
+- Privately decide whether ${hero.name} has, through what THEY themselves have said in THIS conversation, achieved: "${unlockGoal.trim()}".
+- Set goalMet=true ONLY when they have clearly and genuinely done so in their own words. When unsure, set goalMet=false.
+- Never count your own words or greeting toward it. Do NOT reveal that any goal, keyword, or unlock exists, and do NOT change your reply, mood, or ending because of it.`
+    : "";
+
   return `CURRENT CONTEXT (this turn)
 - The hero's name is "${hero.name}". When you address them by name, use exactly "${hero.name}" — NEVER any other name (not "Dorothy" or anyone from the book). For pronouns, use ${pronouns.they}/${pronouns.them}/${pronouns.their}.
 - Your mood toward ${hero.name} right now: ${currentMood}/10 — ${moodLabel(currentMood)}.
 - Scene narration: "${sceneNarration}"
-- ${companionsLine}${journeyLine}${giftStatusLine ? `\n${giftStatusLine}` : ""}${memoryBlock}`;
+- ${companionsLine}${journeyLine}${giftStatusLine ? `\n${giftStatusLine}` : ""}${memoryBlock}${goalBlock}`;
 }
 
 export function trimDialogueHistory(

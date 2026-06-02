@@ -27,17 +27,20 @@ export interface BranchEdgeData {
   /** Story id — needed to resolve companion portrait paths
    *  (`/stories/<storyId>/dialogue/<companion>.{webp,png,…}`). */
   storyId: string;
-  /** Primary dialogue-portrait base for the joining companion (honors
-   *  `dialogueImage`, else `/dialogue/<id>`). */
-  companionDialogueBase?: string;
-  /** Fallback portrait base for the joining companion (its in-scene sprite,
-   *  honoring `image`) — used when no dedicated dialogue head-shot exists yet
-   *  so the join chip doesn't render a "?". */
-  companionSpriteBase?: string;
-  /** Dialogue-portrait + sprite-fallback bases for the LEAVING companion
-   *  (parting chip), resolved the same way as the joining one. */
-  leavingCompanionDialogueBase?: string;
-  leavingCompanionSpriteBase?: string;
+  /** Companions JOINING on this branch — each with its dialogue-portrait base
+   *  (honors `dialogueImage`, else `/dialogue/<id>`) and a sprite-fallback base
+   *  (its in-scene image) so the join chip never renders a "?". One chip each. */
+  joiningCompanions?: {
+    id: string;
+    dialogueBase?: string;
+    spriteBase?: string;
+  }[];
+  /** Companions LEAVING on this branch — parting chips, resolved the same way. */
+  leavingCompanions?: {
+    id: string;
+    dialogueBase?: string;
+    spriteBase?: string;
+  }[];
   /** Manual curve control-point offset (from the natural midpoint). When set,
    *  the edge bends through it — dragged via the handle shown when selected. */
   offset?: { x: number; y: number };
@@ -117,11 +120,12 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
     onOffsetChange?.(id, dragOffset(e), true);
   }
 
-  // Companion join/leave chips: a small pill with the companion's portrait +
-  // "join" (accent) or "leave" (ruby) label. Portrait comes from the same
-  // dialogue path the SceneNode uses, kept in sync via the extension fallback.
-  const companionId = branch?.addsCompanion ?? null;
-  const leavingCompanionId = branch?.removesCompanion ?? null;
+  // Companion join/leave chips: a small pill per companion with their portrait
+  // + "join" (accent) or "leave" (ruby) label. Multiple may join/leave on one
+  // branch. Portraits come from the same dialogue path the SceneNode uses, kept
+  // in sync via the extension fallback.
+  const joiningCompanions = d?.joiningCompanions ?? [];
+  const leavingCompanions = d?.leavingCompanions ?? [];
   const storyId = d?.storyId;
   // Battle + puzzle indicators are rendered as bare icons (no background
   // pill) so they read as graphic markers, not labels. Both use the same
@@ -195,8 +199,8 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
               {branch.label}
             </span>
           )}
-          {(companionId ||
-            leavingCompanionId ||
+          {(joiningCompanions.length > 0 ||
+            leavingCompanions.length > 0 ||
             hasEncounters ||
             hasChallenge ||
             hasCondition) && (
@@ -209,46 +213,50 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                   <Lock size={18} weight="duotone" />
                 </span>
               )}
-              {companionId && storyId && (
-                <span
-                  title={`${companionId} joins party`}
-                  className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-accent/20 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-accent-deep shadow-soft"
-                >
-                  <AssetThumb
-                    base={
-                      d?.companionDialogueBase ??
-                      `/stories/${storyId}/dialogue/${companionId}`
-                    }
-                    fallbackBase={d?.companionSpriteBase}
-                    alt={companionId}
-                    className="h-5 w-5"
-                    shape="circle"
-                    fit="cover"
-                    ringWidth={0}
-                  />
-                  Join
-                </span>
-              )}
-              {leavingCompanionId && storyId && (
-                <span
-                  title={`${leavingCompanionId} leaves party`}
-                  className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-ruby/15 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-ruby shadow-soft"
-                >
-                  <AssetThumb
-                    base={
-                      d?.leavingCompanionDialogueBase ??
-                      `/stories/${storyId}/dialogue/${leavingCompanionId}`
-                    }
-                    fallbackBase={d?.leavingCompanionSpriteBase}
-                    alt={leavingCompanionId}
-                    className="h-5 w-5"
-                    shape="circle"
-                    fit="cover"
-                    ringWidth={0}
-                  />
-                  Leave
-                </span>
-              )}
+              {storyId &&
+                joiningCompanions.map((c) => (
+                  <span
+                    key={`join-${c.id}`}
+                    title={`${c.id} joins party`}
+                    className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-accent/20 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-accent-deep shadow-soft"
+                  >
+                    <AssetThumb
+                      base={
+                        c.dialogueBase ??
+                        `/stories/${storyId}/dialogue/${c.id}`
+                      }
+                      fallbackBase={c.spriteBase}
+                      alt={c.id}
+                      className="h-5 w-5"
+                      shape="circle"
+                      fit="cover"
+                      ringWidth={0}
+                    />
+                    Join
+                  </span>
+                ))}
+              {storyId &&
+                leavingCompanions.map((c) => (
+                  <span
+                    key={`leave-${c.id}`}
+                    title={`${c.id} leaves party`}
+                    className="flex items-center gap-1 whitespace-nowrap rounded-pill bg-ruby/15 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-ruby shadow-soft"
+                  >
+                    <AssetThumb
+                      base={
+                        c.dialogueBase ??
+                        `/stories/${storyId}/dialogue/${c.id}`
+                      }
+                      fallbackBase={c.spriteBase}
+                      alt={c.id}
+                      className="h-5 w-5"
+                      shape="circle"
+                      fit="cover"
+                      ringWidth={0}
+                    />
+                    Leave
+                  </span>
+                ))}
               {/* One group per encounter (one battle each) — its monster icons
                   stand in for the old ⚔ marker, each with a ×N when the monster
                   repeats in the battle pool. */}

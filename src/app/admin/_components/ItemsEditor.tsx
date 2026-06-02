@@ -19,11 +19,16 @@ import { Field, StyledSelect, inputCls } from "./form";
 
 /** Effect kinds offered in the editor. Add a kind here + a default + a
  *  field block below when a new effect ships. */
-const EFFECT_KINDS = ["heal", "event"] as const satisfies readonly ItemEffectKind[];
+const EFFECT_KINDS = [
+  "heal",
+  "event",
+  "stop-time",
+] as const satisfies readonly ItemEffectKind[];
 
 const EFFECT_KIND_LABEL: Record<ItemEffectKind, string> = {
   heal: "Restore HP",
   event: "Event",
+  "stop-time": "Stop time",
 };
 
 /** Default-shaped effect when switching the kind dropdown. */
@@ -33,6 +38,8 @@ function defaultEffect(kind: ItemEffectKind): ItemEffectT {
       return { kind: "heal", amount: 1 };
     case "event":
       return { kind: "event" };
+    case "stop-time":
+      return { kind: "stop-time", scope: "one-attack" };
   }
 }
 
@@ -224,7 +231,7 @@ export function ItemsEditor({
                 <tr>
                   <th className="px-3 py-2 w-10"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-28">Effect</th>
+                  <th className="px-3 py-2 w-44">Effect</th>
                   <th className="px-3 py-2">Description</th>
                 </tr>
               </thead>
@@ -245,7 +252,7 @@ export function ItemsEditor({
                     <td className="px-3 py-2 text-2xl">{it.icon ?? "🎁"}</td>
                     <td className="px-3 py-2 text-ink">{it.name}</td>
                     <td className="px-3 py-2">
-                      <span className="rounded-pill bg-emerald/15 px-2 py-0.5 text-xs text-emerald">
+                      <span className="inline-block whitespace-nowrap rounded-pill bg-emerald/15 px-2 py-0.5 text-xs text-emerald">
                         {effectLabel(it.effect)}
                       </span>
                     </td>
@@ -396,6 +403,32 @@ function ItemForm({
             className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`}
           />
         </Field>
+        {/* Stop-time scope — shown only for stop-time items. */}
+        {item.effect.kind === "stop-time" && (
+          <Field label="Stop-time scope">
+            <StyledSelect
+              value={item.effect.scope}
+              onChange={(e) =>
+                onChange((it) =>
+                  it.effect.kind === "stop-time"
+                    ? {
+                        ...it,
+                        effect: {
+                          kind: "stop-time",
+                          scope: e.target.value as
+                            | "one-attack"
+                            | "whole-battle",
+                        },
+                      }
+                    : it,
+                )
+              }
+            >
+              <option value="one-attack">One attack</option>
+              <option value="whole-battle">Whole battle</option>
+            </StyledSelect>
+          </Field>
+        )}
       </div>
       <Field label="Description">
         <textarea

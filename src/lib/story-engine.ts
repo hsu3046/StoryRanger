@@ -121,28 +121,31 @@ export function takeBranch(
     throw new Error(`Scene not found: ${branch.next}`);
   }
 
-  // A branch may add a companion (join) and/or remove one (parting). Removal
-  // only drops them from the active party — their mood + HP entries are kept so
-  // a later re-join restores the relationship instead of resetting it.
-  const companions = removeCompanion(
-    addCompanion(state.companions, branch.addsCompanion),
-    branch.removesCompanion,
-  );
+  // A branch may add and/or remove companions (multiple of each). Removal only
+  // drops them from the active party — their mood + HP entries are kept so a
+  // later re-join restores the relationship instead of resetting it.
+  const adds = branch.addsCompanions ?? [];
+  const removes = branch.removesCompanions ?? [];
+  let companions = state.companions;
+  for (const id of adds) companions = addCompanion(companions, id);
+  for (const id of removes) companions = removeCompanion(companions, id);
   const branchHistory = [...state.branchHistory, branch.id];
 
-  // v2.0 — initialise mood for newly added companion at 5/10
+  // v2.0 — initialise mood for each newly added companion at 5/10
   const companionMoods = { ...(state.companionMoods ?? {}) };
-  if (branch.addsCompanion && companionMoods[branch.addsCompanion] === undefined) {
-    companionMoods[branch.addsCompanion] = 5;
+  for (const id of adds) {
+    if (companionMoods[id] === undefined) companionMoods[id] = 5;
   }
 
-  // Initialise persistent HP for newly added companion at default max.
+  // Initialise persistent HP for each newly added companion at default max.
   const partyHp: PartyHp = { ...(state.partyHp ?? {}) };
   const partyMaxHp: PartyHp = { ...(state.partyMaxHp ?? {}) };
-  if (branch.addsCompanion && partyHp[branch.addsCompanion] === undefined) {
-    const max = DEFAULT_MAX_HP[branch.addsCompanion];
-    partyHp[branch.addsCompanion] = max;
-    partyMaxHp[branch.addsCompanion] = max;
+  for (const id of adds) {
+    if (partyHp[id] === undefined) {
+      const max = DEFAULT_MAX_HP[id];
+      partyHp[id] = max;
+      partyMaxHp[id] = max;
+    }
   }
 
   let nextState: PlayState = {

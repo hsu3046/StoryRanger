@@ -22,5 +22,10 @@ export function isBranchVisible(branch: Branch, state: PlayState): boolean {
     if (!c.hasCompanions.every((id) => party.has(id))) return false;
   }
 
+  if (c.hasKeywords && c.hasKeywords.length > 0) {
+    const unlocked = new Set(state.unlockedKeywords ?? []);
+    if (!c.hasKeywords.every((k) => unlocked.has(k))) return false;
+  }
+
   return true;
 }

@@ -10,6 +10,24 @@ interface Props {
 }
 
 const AUDIO_EXTS = new Set([".mp3", ".ogg", ".m4a", ".wav"]);
+/** Map image extensions, in resolution order (webp preferred). */
+const MAP_EXTS = ["webp", "jpeg", "jpg", "png"] as const;
+
+/** Resolve the story's map image (`public/stories/<id>/map/map.<ext>`) to a
+ *  public path, or null when the story has no map folder/image. Drives the
+ *  in-game map button — only shown when an image exists. */
+async function resolveMapImage(storyId: string): Promise<string | null> {
+  for (const ext of MAP_EXTS) {
+    const rel = `stories/${storyId}/map/map.${ext}`;
+    try {
+      await fs.access(path.join(process.cwd(), "public", rel));
+      return `/${rel}`;
+    } catch {
+      /* try the next extension */
+    }
+  }
+  return null;
+}
 
 /** Scan a BGM folder for track keys (filename without extension). Used for the
  *  story's own folder + the shared/common pool so the player can resolve a key
@@ -36,9 +54,10 @@ export default async function PlayPage({ params }: Props) {
   const { storyId } = await params;
   const loaded = getStory(storyId);
   if (!loaded) notFound();
-  const [bgmKeys, commonBgmKeys] = await Promise.all([
+  const [bgmKeys, commonBgmKeys, mapImage] = await Promise.all([
     listBgmKeysAt("stories", storyId, "audio", "bgm"),
     listBgmKeysAt("audio", "bgm"),
+    resolveMapImage(storyId),
   ]);
   return (
     <StoryPlayer
@@ -47,6 +66,7 @@ export default async function PlayPage({ params }: Props) {
       characters={loaded.characters}
       bgmKeys={bgmKeys}
       commonBgmKeys={commonBgmKeys}
+      mapImage={mapImage}
     />
   );
 }

@@ -43,6 +43,10 @@ export const EncounterDefSchema = z.object({
   }),
   rewards: EncounterRewardsSchema,
   displayMonsters: z.array(z.string()).optional(),
+  /** Subject the in-battle problems are drawn from. Default "mixed". */
+  challengeType: z
+    .enum(["mixed", "math", "english", "logic"])
+    .default("mixed"),
 });
 
 export const EncountersFileSchema = z.object({

@@ -10,12 +10,10 @@ import {
   CaretRight,
   GearSix,
   Ghost,
-  Image as ImageIcon,
   Medal,
   Package,
   Scroll,
   SquaresFour,
-  Sword,
   TreeStructure,
   UsersFour,
   type Icon,
@@ -45,8 +43,6 @@ function storyMenu(storyId: string): MenuEntry[] {
     { label: "Story Graph", href: `/admin/stories/${storyId}/graph`, icon: TreeStructure },
     { label: "Characters", href: `/admin/stories/${storyId}/characters`, icon: UsersFour },
     { label: "Monsters", href: `/admin/stories/${storyId}/monsters`, icon: Ghost },
-    { label: "Backgrounds", href: `/admin/stories/${storyId}/backgrounds`, icon: ImageIcon },
-    { label: "Encounters", href: `/admin/stories/${storyId}/encounters`, icon: Sword },
     { label: "Items", href: `/admin/stories/${storyId}/items`, icon: Package },
   ];
 }

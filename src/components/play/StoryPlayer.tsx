@@ -46,7 +46,7 @@ import {
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
 
-import { Backpack, GearSix } from "@phosphor-icons/react";
+import { Backpack, GearSix, MapTrifold } from "@phosphor-icons/react";
 
 import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
@@ -139,6 +139,10 @@ interface Props {
   /** BGM keys in the SHARED/common pool (`public/audio/bgm`). A story can use
    *  these too; story keys override same-named common keys. */
   commonBgmKeys?: string[];
+  /** Resolved public path of the story's map image (server-scanned), or null
+   *  when the story has no `map/` image. When set, an in-game map button is
+   *  shown that opens the image full-screen. */
+  mapImage?: string | null;
 }
 
 export function StoryPlayer({
@@ -153,6 +157,7 @@ export function StoryPlayer({
   initialBranchId,
   bgmKeys = EMPTY_BGM_KEYS,
   commonBgmKeys = EMPTY_BGM_KEYS,
+  mapImage,
 }: Props) {
   const previewMode = !!initialSceneId;
   const [state, setState] = useState<PlayState>(() => {
@@ -175,6 +180,8 @@ export function StoryPlayer({
   const [sfxVolume, setSfxVolume] = useState<number>(DEFAULT_VOLUMES.sfx);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Map viewer open (only reachable when `mapImage` is set). */
+  const [mapOpen, setMapOpen] = useState(false);
   /** True while a SceneDialogueLayer bubble is open — hides the
    *  underlying narration + branch UI to avoid visual overlap. */
   const [dialogueActive, setDialogueActive] = useState(false);
@@ -183,6 +190,8 @@ export function StoryPlayer({
     characterId: SpeakerId;
     question: string;
     key: number;
+    /** Optional branch-unlock carried from the tapped ask. */
+    unlock?: { keyword: string; goal: string };
   } | null>(null);
   /** Gates the choice-button entrance animation. Flips true when the
    *  narration typewriter finishes (or user taps to skip), and resets
@@ -353,6 +362,25 @@ export function StoryPlayer({
         inventory,
         giftedCharacters,
         heroMemory,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
+  /** A seeded-ask conversation judged its goal met → bank the keyword. The
+   *  gated branch (condition.hasKeywords) then appears via `visibleBranches`,
+   *  which re-derives from `state`. Idempotent — banking a keyword twice is a
+   *  no-op. */
+  function handleKeywordUnlocked(keyword: string) {
+    setState((prev) => {
+      if ((prev.unlockedKeywords ?? []).includes(keyword)) return prev;
+      // SFX cue only — the previously-hidden gated branch now appearing in the
+      // choice row is the visible reward (a text toast would need to surface a
+      // raw keyword id, which we deliberately keep hidden from the child).
+      getAudio().playSfx(SFX.MEDAL);
+      return {
+        ...prev,
+        unlockedKeywords: [...(prev.unlockedKeywords ?? []), keyword],
         updatedAt: new Date().toISOString(),
       };
     });
@@ -621,7 +649,7 @@ export function StoryPlayer({
     const audio = getAudio();
     // The choice button's click already plays the generic click SFX (global
     // delegated listener below). Here we only add the event-specific cue.
-    if (branch.addsCompanion) audio.playSfx(SFX.COMPANION);
+    if (branch.addsCompanions?.length) audio.playSfx(SFX.COMPANION);
 
     const prevSceneId = state.currentSceneId;
 
@@ -1067,6 +1095,16 @@ export function StoryPlayer({
               {(state.inventory ?? []).length}
             </span>
           </button>
+          {mapImage && (
+            <button
+              type="button"
+              onClick={() => setMapOpen(true)}
+              aria-label="View the map"
+              className="flex h-11 w-11 items-center justify-center rounded-pill bg-paper/85 text-ink-soft ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper hover:text-ink active:scale-90"
+            >
+              <MapTrifold size={22} weight="duotone" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -1240,6 +1278,7 @@ export function StoryPlayer({
                         characterId: ask.characterId,
                         question: ask.label,
                         key: Date.now(),
+                        unlock: ask.unlock,
                       })
                     }
                   />,
@@ -1336,6 +1375,7 @@ export function StoryPlayer({
           onSessionClose={() => handleDialogueClose()}
           onActiveChange={setDialogueActive}
           onAskConsumed={() => setAskRequest(null)}
+          onKeywordUnlocked={handleKeywordUnlocked}
         />
       )}
 
@@ -1436,6 +1476,45 @@ export function StoryPlayer({
         }}
         onPreviewSfx={() => getAudio().playSfx(SFX.MEDAL)}
       />
+
+      {/* Map viewer — the story map shown large. Tap the backdrop or ✕ to
+          close; tapping the image itself doesn't close (so it can be studied). */}
+      <AnimatePresence>
+        {mapOpen && mapImage && (
+          <motion.div
+            key="map-viewer"
+            role="dialog"
+            aria-modal="true"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setMapOpen(false)}
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-ink/85 p-4 backdrop-blur-sm"
+          >
+            <button
+              type="button"
+              onClick={() => setMapOpen(false)}
+              aria-label="Close map"
+              className="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95"
+              style={{ top: "max(1rem, env(safe-area-inset-top))" }}
+            >
+              ✕
+            </button>
+            <motion.img
+              initial={{ scale: 0.96 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 240, damping: 24 }}
+              src={assetUrl(mapImage)}
+              alt={`${story.title} map`}
+              draggable={false}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90dvh] max-w-[95vw] rounded-card-lg object-contain shadow-overlay ring-1 ring-paper/10"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* "Arriving in the world" veil — starts black (continuing the home
           dive's fade-out) and lifts on mount, so the route handoff is

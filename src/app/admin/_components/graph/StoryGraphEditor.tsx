@@ -42,7 +42,6 @@ import "@xyflow/react/dist/style.css";
 import {
   EncountersFileSchema,
   StorySchema,
-  type BackgroundMetaT,
   type BranchT,
   type EncounterDefT,
   type ItemDefT,
@@ -63,7 +62,7 @@ import {
   saveScenesAction,
 } from "../../_actions/saveJson";
 import { isTerminalScene } from "@/lib/story-engine";
-import type { ChallengeCategory } from "@/lib/education";
+import type { ChallengeSubject } from "@/lib/education";
 import { AssetThumb } from "../AssetThumb";
 
 /**
@@ -95,7 +94,7 @@ function dialoguePortraitBase(
 /**
  * Companions in the party when the player ARRIVES at each scene — i.e. who has
  * joined (minus who has left) on a path from the start scene to that scene.
- * Computed as a graph fixpoint over branch `addsCompanion` / `removesCompanion`.
+ * Computed as a graph fixpoint over branch `addsCompanions` / `removesCompanions`.
  *
  * Branching makes membership path-dependent, so this is the UNION across paths
  * ("possibly in the party here"). The branch editor uses it to show inherited
@@ -121,8 +120,8 @@ function companionsArrivingByScene(
       for (const b of scene.branches) {
         if (!scenes[b.next]) continue; // orphan target
         const leaving = new Set(here);
-        if (b.addsCompanion) leaving.add(b.addsCompanion);
-        if (b.removesCompanion) leaving.delete(b.removesCompanion);
+        for (const id of b.addsCompanions ?? []) leaving.add(id);
+        for (const id of b.removesCompanions ?? []) leaving.delete(id);
         if (!arriving[b.next]) {
           arriving[b.next] = new Set();
           changed = true; // newly reachable → needs another pass
@@ -155,11 +154,10 @@ interface Props {
   /** For encounter authoring: monster + item catalogs used in dropdowns. */
   monsters: MonsterStatsT[];
   items: ItemDefT[];
-  /** Background catalog used in the scene/encounter `bg` dropdowns. */
-  backgrounds: BackgroundMetaT[];
-  /** Shared/common background image stems (`public/backgrounds`) — listed in
-   *  the battle bg dropdown alongside the story catalog. */
-  commonBackgroundKeys: string[];
+  /** Background image stems for the encounter `bg` dropdown — scanned from
+   *  this story's /backgrounds folder merged with the shared /public/backgrounds
+   *  pool (mirrors how Scene Image is sourced; no JSON catalog). */
+  backgroundKeys: string[];
   /** Scene image options — `value` = full path, `label` = short stem. */
   sceneImages: { value: string; label: string }[];
   /** BGM track keys discovered under /public/stories/<id>/audio/bgm/. */
@@ -170,6 +168,9 @@ interface Props {
   runtimeStory: Story;
   runtimeMedalsFile: MedalsFile;
   runtimeCharactersFile: CharactersFile;
+  /** Resolved map-image path (server-scanned), or null. Forwarded to the
+   *  preview's StoryPlayer so the map button shows in the scene preview too. */
+  mapImage?: string | null;
 }
 
 const nodeTypes = { scene: SceneNode };
@@ -194,13 +195,13 @@ function StoryGraphEditorInner({
   initialEncounters,
   monsters,
   items,
-  backgrounds,
-  commonBackgroundKeys,
+  backgroundKeys,
   sceneImages,
   bgmOptions,
   runtimeStory,
   runtimeMedalsFile,
   runtimeCharactersFile,
+  mapImage,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -464,18 +465,16 @@ function StoryGraphEditorInner({
           parallelCount: arr.length,
           encounters: encInfo ?? [],
           storyId,
-          companionDialogueBase: b.addsCompanion
-            ? dialogueBaseById[b.addsCompanion]
-            : undefined,
-          companionSpriteBase: b.addsCompanion
-            ? spriteBaseById[b.addsCompanion]
-            : undefined,
-          leavingCompanionDialogueBase: b.removesCompanion
-            ? dialogueBaseById[b.removesCompanion]
-            : undefined,
-          leavingCompanionSpriteBase: b.removesCompanion
-            ? spriteBaseById[b.removesCompanion]
-            : undefined,
+          joiningCompanions: (b.addsCompanions ?? []).map((id) => ({
+            id,
+            dialogueBase: dialogueBaseById[id],
+            spriteBase: spriteBaseById[id],
+          })),
+          leavingCompanions: (b.removesCompanions ?? []).map((id) => ({
+            id,
+            dialogueBase: dialogueBaseById[id],
+            spriteBase: spriteBaseById[id],
+          })),
           offset: edgeOffsets[edgeId],
           onOffsetChange: setEdgeOffset,
         };
@@ -864,6 +863,7 @@ function StoryGraphEditorInner({
       },
       body: { kind: "battle", monsterIds: [] },
       rewards: {},
+      challengeType: "mixed",
     };
     setEncounters((prev) => [...prev, newEnc]);
   }
@@ -1242,8 +1242,7 @@ function StoryGraphEditorInner({
                         e.trigger.branchId === selectedBranch.id,
                     )}
                     monsters={monsters}
-                    backgrounds={backgrounds}
-                    commonBackgroundKeys={commonBackgroundKeys}
+                    backgroundKeys={backgroundKeys}
                     items={items}
                     characters={runtimeCharactersFile.characters}
                     onChange={(mut) =>
@@ -1285,6 +1284,7 @@ function StoryGraphEditorInner({
         story={{ ...runtimeStory, scenes: story.scenes } as unknown as Story}
         medals={runtimeMedalsFile}
         characters={runtimeCharactersFile}
+        mapImage={mapImage}
         sceneId={previewSceneId}
         branchId={previewBranchId}
         onClose={() => {
@@ -1461,7 +1461,10 @@ function SceneInspector({
           // when the catalog also defines a "narrator" character (avoid a
           // duplicate option key).
           options={[
-            { value: "narrator", label: "narrator" },
+            // value stays the "narrator" SpeakerId (used across scenes.json /
+            // SceneNode / the player); only the display label is capitalized to
+            // match the character names (Hero, Scarecrow, …).
+            { value: "narrator", label: "Narrator" },
             ...characters
               .filter((c) => c.id !== "narrator")
               .map((c) => ({ value: c.id, label: c.name })),
@@ -1652,8 +1655,7 @@ function EncounterCard({
   storyId,
   encounter,
   monsters,
-  backgrounds,
-  commonBackgroundKeys,
+  backgroundKeys,
   items,
   onChange,
   onDelete,
@@ -1661,8 +1663,7 @@ function EncounterCard({
   storyId: string;
   encounter: EncounterDefT;
   monsters: MonsterStatsT[];
-  backgrounds: BackgroundMetaT[];
-  commonBackgroundKeys: string[];
+  backgroundKeys: string[];
   items: ItemDefT[];
   onChange: (mut: (e: EncounterDefT) => EncounterDefT) => void;
   onDelete: () => void;
@@ -1716,29 +1717,22 @@ function EncounterCard({
                 }))
               }
             >
-              {/* Surface the saved value even if it's in neither the catalog
-                  nor the common pool (e.g. typo or pre-catalog data). */}
-              {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
-                !commonBackgroundKeys.includes(encounter.intro.bg) &&
-                encounter.intro.bg && (
+              {/* Surface the saved value even if no image file exists for it on
+                  disk (e.g. typo or a deleted file) so it isn't silently lost. */}
+              {encounter.intro.bg &&
+                !backgroundKeys.includes(encounter.intro.bg) && (
                   <option value={encounter.intro.bg}>
-                    {encounter.intro.bg} (not in catalog)
+                    {encounter.intro.bg} (missing)
                   </option>
                 )}
-              {backgrounds.map((b) => (
-                <option key={b.key} value={b.key}>
-                  {b.label} ({b.key})
+              {/* Background stems scanned from the story's /backgrounds folder +
+                  the shared /public/backgrounds pool (same source pattern as the
+                  Scene Image dropdown — no JSON catalog). */}
+              {backgroundKeys.map((k) => (
+                <option key={k} value={k}>
+                  {k}
                 </option>
               ))}
-              {/* Shared/common background images (resolved from /backgrounds at
-                  runtime) — only those not already in this story's catalog. */}
-              {commonBackgroundKeys
-                .filter((k) => !backgrounds.some((b) => b.key === k))
-                .map((k) => (
-                  <option key={`common-${k}`} value={k}>
-                    {k} (common)
-                  </option>
-                ))}
             </StyledSelect>
             {/* Preview the picked background — small banner under the select.
                 Falls back to the shared/common image for common-only keys. */}
@@ -1752,6 +1746,25 @@ function EncounterCard({
                 fit="cover"
               />
             )}
+          </MiniField>
+
+          <MiniField label="Question type">
+            <StyledSelect
+              compact
+              value={encounter.challengeType ?? "mixed"}
+              onChange={(e) =>
+                onChange((x) => ({
+                  ...x,
+                  challengeType: e.target.value as ChallengeSubject,
+                }))
+              }
+            >
+              {CHALLENGE_SUBJECTS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </StyledSelect>
           </MiniField>
 
           <MiniField label="Monsters">
@@ -1894,12 +1907,16 @@ function withCondition(
     merged.hasCompanions && merged.hasCompanions.length > 0
       ? merged.hasCompanions
       : undefined;
-  if (!hasItems && !hasCompanions) {
+  const hasKeywords =
+    merged.hasKeywords && merged.hasKeywords.length > 0
+      ? merged.hasKeywords
+      : undefined;
+  if (!hasItems && !hasCompanions && !hasKeywords) {
     const next = { ...b };
     delete next.condition;
     return next;
   }
-  return { ...b, condition: { hasItems, hasCompanions } };
+  return { ...b, condition: { hasItems, hasCompanions, hasKeywords } };
 }
 
 function BranchInspector({
@@ -1914,8 +1931,7 @@ function BranchInspector({
   sourceScene,
   encounters,
   monsters,
-  backgrounds,
-  commonBackgroundKeys,
+  backgroundKeys,
   items,
   characters,
   onChange,
@@ -1940,8 +1956,7 @@ function BranchInspector({
   sourceScene: SceneT;
   encounters: EncounterDefT[];
   monsters: MonsterStatsT[];
-  backgrounds: BackgroundMetaT[];
-  commonBackgroundKeys: string[];
+  backgroundKeys: string[];
   /** Item catalog — for the per-encounter reward-items picker. */
   items: ItemDefT[];
   /** Character catalog — Add-companion chips show `name` not raw id. */
@@ -1961,6 +1976,27 @@ function BranchInspector({
   onPreview: () => void;
 }) {
   const targetScene = storyScenes[branch.next];
+
+  // Unlock keywords defined by any ask across the whole story — offered as a
+  // datalist so this branch's "Requires keywords" picker avoids typos. Asks
+  // live on scenes other than this branch's, so we scan all of them.
+  const knownKeywords = useMemo(
+    () => [
+      ...new Set(
+        Object.values(storyScenes)
+          .flatMap((s) => s.asks ?? [])
+          .map((a) => a.unlock?.keyword)
+          .filter((k): k is string => !!k),
+      ),
+    ],
+    [storyScenes],
+  );
+  // Keywords this branch already requires, and the ones still pickable from
+  // the dropdown (registered story-wide minus the ones already chosen).
+  const selectedKeywords = branch.condition?.hasKeywords ?? [];
+  const availableKeywords = knownKeywords.filter(
+    (k) => !selectedKeywords.includes(k),
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -2038,8 +2074,8 @@ function BranchInspector({
             // prior branch)? That decides whether clicking parts them (leave)
             // or recruits them (join).
             const inParty = inheritedCompanions.includes(c.id);
-            const joins = branch.addsCompanion === c.id; // recruited HERE
-            const leaves = branch.removesCompanion === c.id; // parts HERE
+            const joins = (branch.addsCompanions ?? []).includes(c.id); // recruited HERE
+            const leaves = (branch.removesCompanions ?? []).includes(c.id); // parts HERE
             // Display state (priority): leaves > joined(inherited) > joins.
             const state: "leaves" | "joined" | "joins" | "none" = leaves
               ? "leaves"
@@ -2054,27 +2090,29 @@ function BranchInspector({
                 key={c.id}
                 type="button"
                 // In-party companion → toggle Leave. Otherwise → toggle Join.
-                // Clearing the opposite op keeps the data unambiguous.
+                // Each op is a set so multiple companions can join/leave on the
+                // same branch; clearing the opposite op keeps data unambiguous.
                 onClick={() =>
-                  onChange((b) =>
-                    inParty
-                      ? {
-                          ...b,
-                          removesCompanion: leaves ? undefined : c.id,
-                          addsCompanion:
-                            b.addsCompanion === c.id
-                              ? undefined
-                              : b.addsCompanion,
-                        }
-                      : {
-                          ...b,
-                          addsCompanion: joins ? undefined : c.id,
-                          removesCompanion:
-                            b.removesCompanion === c.id
-                              ? undefined
-                              : b.removesCompanion,
-                        },
-                  )
+                  onChange((b) => {
+                    const addSet = new Set(b.addsCompanions ?? []);
+                    const removeSet = new Set(b.removesCompanions ?? []);
+                    if (inParty) {
+                      if (leaves) removeSet.delete(c.id);
+                      else removeSet.add(c.id);
+                      addSet.delete(c.id);
+                    } else {
+                      if (joins) addSet.delete(c.id);
+                      else addSet.add(c.id);
+                      removeSet.delete(c.id);
+                    }
+                    return {
+                      ...b,
+                      addsCompanions: addSet.size ? [...addSet] : undefined,
+                      removesCompanions: removeSet.size
+                        ? [...removeSet]
+                        : undefined,
+                    };
+                  })
                 }
                 title={
                   state === "leaves"
@@ -2200,6 +2238,68 @@ function BranchInspector({
               })}
             </div>
           </div>
+          <div>
+            <p className="mb-1 text-[11px] font-medium text-ink-soft/80">
+              Requires keywords
+            </p>
+            {/* Keywords unlocked via an ask's dialogue goal. Pick from the
+                dropdown of keywords defined across the story's asks; chosen
+                ones show as removable chips. (Define keywords on a scene's Ask
+                → "Unlocks branch" — that's the only place they're created.) */}
+            {selectedKeywords.length > 0 && (
+              <div className="mb-1 flex flex-wrap gap-1">
+                {selectedKeywords.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    title="Remove keyword"
+                    onClick={() =>
+                      onChange((b) => {
+                        const set = new Set(b.condition?.hasKeywords ?? []);
+                        set.delete(k);
+                        return withCondition(b, {
+                          hasKeywords: set.size > 0 ? [...set] : undefined,
+                        });
+                      })
+                    }
+                    className="flex items-center gap-1 rounded-pill bg-accent-deep py-0.5 pl-2 pr-1.5 text-[11px] text-paper"
+                  >
+                    {k}
+                    <span aria-hidden className="font-bold">
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {availableKeywords.length > 0 ? (
+              <StyledSelect
+                compact
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  onChange((b) => {
+                    const set = new Set(b.condition?.hasKeywords ?? []);
+                    set.add(v);
+                    return withCondition(b, { hasKeywords: [...set] });
+                  });
+                }}
+              >
+                <option value="">+ Add a keyword…</option>
+                {availableKeywords.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </StyledSelect>
+            ) : knownKeywords.length === 0 ? (
+              <p className="text-[10px] text-ink-soft/60">
+                No keywords defined yet — add one on a scene&apos;s Ask
+                (&ldquo;Unlocks branch&rdquo;).
+              </p>
+            ) : null}
+          </div>
         </div>
       </Field>
 
@@ -2270,8 +2370,7 @@ function BranchInspector({
                 storyId={storyId}
                 encounter={enc}
                 monsters={monsters}
-                backgrounds={backgrounds}
-                commonBackgroundKeys={commonBackgroundKeys}
+                backgroundKeys={backgroundKeys}
                 items={items}
                 onChange={(mut) => onUpdateEncounter(enc.id, mut)}
                 onDelete={() => onDeleteEncounter(enc.id)}
@@ -2508,32 +2607,27 @@ function SceneNarrationEditor({
 
 /** Challenge category options for the branch-gate picker. `auto` lets the
  *  generator pick an age-appropriate category at runtime (the default). */
-const CHALLENGE_CATEGORIES: { value: "auto" | ChallengeCategory; label: string }[] = [
-  { value: "auto", label: "Auto (Mixed)" },
-  { value: "counting", label: "Counting" },
-  { value: "shape", label: "Shapes" },
-  { value: "compare", label: "Compare" },
-  { value: "odd-one-out", label: "Odd one out" },
-  { value: "pattern", label: "Number pattern" },
-  { value: "add", label: "Addition" },
-  { value: "sub", label: "Subtraction" },
-  { value: "multiply", label: "Multiplication" },
-  { value: "divide", label: "Division" },
-  { value: "missing", label: "Missing number" },
-  { value: "fraction", label: "Fractions" },
-  { value: "decimal", label: "Decimals" },
-  { value: "percentage", label: "Percentage" },
-  { value: "ratio", label: "Ratio" },
-  { value: "money", label: "Money" },
-  { value: "time", label: "Time" },
-  { value: "measure", label: "Area / perimeter / volume" },
-  { value: "geometry", label: "Geometry / angles" },
-  { value: "average", label: "Average" },
-  { value: "factors", label: "Factors & multiples" },
-  { value: "algebra", label: "Algebra" },
-  { value: "speed", label: "Speed" },
-  { value: "word", label: "Word / thinking" },
+/** Simple subject selector for challenge gates + battles. Per-subject detail
+ *  categories are intentionally NOT exposed here — the generator picks an
+ *  age-appropriate mix within the chosen subject. */
+const CHALLENGE_SUBJECTS: { value: ChallengeSubject; label: string }[] = [
+  { value: "mixed", label: "Mixed (Math + English + Logic)" },
+  { value: "math", label: "Math" },
+  { value: "english", label: "English" },
+  { value: "logic", label: "Logic / Coding" },
 ];
+
+/** Coerce a stored challenge subject to one of the options ("auto" is the
+ *  legacy alias for Math). */
+function asSubject(v: string): ChallengeSubject {
+  return v === "english"
+    ? "english"
+    : v === "logic"
+      ? "logic"
+      : v === "mixed"
+        ? "mixed"
+        : "math";
+}
 
 function BranchChallengeCard({
   branch,
@@ -2585,7 +2679,7 @@ function BranchChallengeCard({
               <span className="text-ink-soft">Type:</span>
               <StyledSelect
                 className="flex-1"
-                value={challenge.category}
+                value={asSubject(challenge.category)}
                 onChange={(e) =>
                   onChange((b) =>
                     b.challenge?.enabled
@@ -2593,16 +2687,14 @@ function BranchChallengeCard({
                           ...b,
                           challenge: {
                             ...b.challenge,
-                            category: e.target.value as
-                              | "auto"
-                              | ChallengeCategory,
+                            category: e.target.value as ChallengeSubject,
                           },
                         }
                       : b,
                   )
                 }
               >
-                {CHALLENGE_CATEGORIES.map((c) => (
+                {CHALLENGE_SUBJECTS.map((c) => (
                   <option key={c.value} value={c.value}>
                     {c.label}
                   </option>
@@ -2782,6 +2874,22 @@ function newAsk(askable: { id: string }[]): SceneAskT {
   };
 }
 
+/** Merge an unlock patch onto an ask, dropping `unlock` when both fields are
+ *  blank (mirrors `withCondition`'s empty-drop discipline). */
+function withUnlock(
+  a: SceneAskT,
+  patch: Partial<{ keyword: string; goal: string }>,
+): SceneAskT {
+  const keyword = patch.keyword ?? a.unlock?.keyword ?? "";
+  const goal = patch.goal ?? a.unlock?.goal ?? "";
+  if (!keyword.trim() && !goal.trim()) {
+    const next = { ...a };
+    delete next.unlock;
+    return next;
+  }
+  return { ...a, unlock: { keyword, goal } };
+}
+
 /**
  * Ask rows shown alongside the branch list (the player sees branch choices
  * and ask chips together). The "+ Add ask" button lives in the branch
@@ -2900,6 +3008,26 @@ function AskRow({
             </div>
           </div>
           <CharCount value={ask.label} limit={120} />
+          {/* Optional branch-unlock. Filling these makes this ask gate a branch:
+              the dialogue LLM silently judges `goal`; on success the `keyword`
+              is banked and any branch requiring it (Condition → Requires
+              keywords) appears. Leave both blank for a plain chat ask. */}
+          <span className="mt-1 text-[10px] uppercase tracking-wide text-ink-soft/60">
+            Unlocks branch (optional)
+          </span>
+          <input
+            value={ask.unlock?.keyword ?? ""}
+            onChange={(e) => onUpdate((a) => withUnlock(a, { keyword: e.target.value }))}
+            placeholder="Keyword id, e.g. trusts_lion"
+            spellCheck={false}
+            className={inputClsSm}
+          />
+          <input
+            value={ask.unlock?.goal ?? ""}
+            onChange={(e) => onUpdate((a) => withUnlock(a, { goal: e.target.value }))}
+            placeholder="Win condition, e.g. The child promises to be brave"
+            className={inputClsSm}
+          />
         </div>
       )}
     </div>

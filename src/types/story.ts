@@ -47,11 +47,12 @@ export interface Branch {
   label: string;
   /** Next scene to transition to when picked. */
   next: string;
-  /** Optional companion gained (added to party; no-op if already present). */
-  addsCompanion?: CompanionId;
-  /** Optional companion who leaves the party here (parting moment). Mood + HP
-   *  are kept so a later re-join restores them. */
-  removesCompanion?: CompanionId;
+  /** Companions gained here (added to party; each a no-op if already present).
+   *  Multiple can join on one branch. */
+  addsCompanions?: CompanionId[];
+  /** Companions who leave the party here (parting moment). Multiple can leave
+   *  on one branch. Mood + HP are kept so a later re-join restores them. */
+  removesCompanions?: CompanionId[];
   /** Optional visibility gate. The branch only appears as a choice when the
    *  condition is met. Every present clause must hold (AND); each clause
    *  requires ALL of its ids. Evaluated against PlayState at render time. */
@@ -60,13 +61,18 @@ export interface Branch {
     hasItems?: string[];
     /** ALL of these companions must be in the party. */
     hasCompanions?: CompanionId[];
+    /** ALL of these unlock keywords must be in PlayState.unlockedKeywords
+     *  (earned via an ask-dialogue goal — see Scene.asks[].unlock). */
+    hasKeywords?: string[];
   };
   /** Optional educational-challenge gate. When `enabled`, an age-appropriate
    *  math problem (auto-picked, or the forced `category`) must be solved before
    *  the branch is taken. Difficulty derives from the player's age. */
   challenge?: {
     enabled: true;
-    category: "auto" | ChallengeCategory;
+    /** Subject pool. "auto" = legacy alias for "math". A concrete
+     *  ChallengeCategory is accepted for back-compat (old granular content). */
+    category: "mixed" | "math" | "english" | "logic" | "auto" | ChallengeCategory;
     /** Number of problems to solve in sequence (default 1). A wrong answer
      *  always re-rolls a fresh problem — the gate retries until solved. */
     count?: number;
@@ -103,7 +109,15 @@ export interface Scene {
    *  area. Tapping one opens a seeded in-character conversation with the
    *  named character (who MUST have a persona) — for educational / story
    *  context before choosing a branch. Independent of `speaker`/the rail. */
-  asks?: { id: string; label: string; characterId: SpeakerId }[];
+  asks?: {
+    id: string;
+    label: string;
+    characterId: SpeakerId;
+    /** Optional branch-unlock. When the child meets `goal` (judged per-turn by
+     *  the dialogue LLM), `keyword` is added to PlayState.unlockedKeywords; a
+     *  branch gated on it (condition.hasKeywords) then appears. */
+    unlock?: { keyword: string; goal: string };
+  }[];
 }
 
 export interface Story {
@@ -302,6 +316,11 @@ export interface PlayState {
    *  reward items are already in `inventory`; this is just the pending toast.
    *  Persisted so a refresh mid-overlay still surfaces it on arrival. */
   pendingRewardToast?: { sceneId: string; items: string[] };
+  /** Unlock keywords earned via an ask-dialogue goal (see Scene.asks[].unlock).
+   *  Drives Branch.condition.hasKeywords gates. Set-like (deduped on insert),
+   *  global + persisted so a keyword earned in one scene can gate a branch in
+   *  another. */
+  unlockedKeywords?: string[];
   /** ISO timestamp of last update. */
   updatedAt: string;
 }
@@ -326,6 +345,10 @@ export interface DialogueRequest {
   /** Deterministic one-line "adventures so far" summary (medals, items,
    *  encounters cleared) for ambient situational awareness. */
   journeyNote?: string;
+  /** Natural-language goal the LLM judges THIS turn (from a seeded ask's
+   *  unlock). Present only for unlock asks; absent for normal chat. The server
+   *  never sees the keyword — only this goal. */
+  unlockGoal?: string;
 }
 
 export interface DialogueResponse {
@@ -343,5 +366,9 @@ export interface DialogueResponse {
   /** 2 short suggested next-replies for the hero (~3-8 words each). Story
    *  branches are surfaced separately by the client. */
   suggestions: string[];
+  /** True only when the seeded ask supplied a goal this turn AND the child has
+   *  met it. Always false for normal chat / no-goal asks. The client unlocks
+   *  the ask's keyword on the first `true`. */
+  goalMet: boolean;
 }
 

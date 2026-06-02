@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import type { ZodType } from "zod";
 
 import {
-  BackgroundsFileSchema,
   CharactersFileSchema,
   EncountersFileSchema,
   ItemsFileSchema,
@@ -149,21 +148,9 @@ export async function saveEncountersAction(
   ensureDev();
   try {
     await writeJson(EncountersFileSchema, storyPath(storyId, "encounters.json"), payload);
-    revalidatePath(`/admin/stories/${storyId}/encounters`);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-export async function saveBackgroundsAction(
-  storyId: string,
-  payload: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  ensureDev();
-  try {
-    await writeJson(BackgroundsFileSchema, storyPath(storyId, "backgrounds.json"), payload);
-    revalidatePath(`/admin/stories/${storyId}`);
+    // Encounters are authored in the Story Graph (its scene/branch inspector),
+    // so revalidate the graph route — the standalone Encounters page is gone.
+    revalidatePath(`/admin/stories/${storyId}/graph`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };

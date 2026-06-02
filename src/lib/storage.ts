@@ -67,6 +67,7 @@ export function loadState(
     if (!parsed.companions) parsed.companions = [];
     if (!parsed.branchHistory) parsed.branchHistory = [];
     if (!parsed.giftedCharacters) parsed.giftedCharacters = [];
+    if (!parsed.unlockedKeywords) parsed.unlockedKeywords = [];
     if (typeof parsed.dialogueCount !== "number") parsed.dialogueCount = 0;
 
     // Apply id renames, then drop ids no longer in the catalog. Old

@@ -159,6 +159,7 @@ export function EncounterFlow({
       <BattleScreen
         storyId={storyId}
         age={age}
+        challengeType={encounter.challengeType ?? "mixed"}
         recordWrongChallenge={recordWrongChallenge}
         characterImageBase={(id) => characterImageBase(id, "battle")}
         heroId={heroId}
@@ -237,7 +238,20 @@ function EncounterAlertSplash({
   storyId: string;
 }) {
   const primary = monsterIds[0];
-  const primaryName = primary ? MONSTERS[primary]?.name ?? primary : null;
+
+  // Group the pool by type (first-appearance order) so the roster chip shows
+  // EVERY monster kind with its own count — e.g. "KALIDAH ×2 · WOLF". The old
+  // label paired monsterIds[0]'s name with monsterIds.length (the TOTAL), so a
+  // mixed pool wrongly read as one type with the whole-pool count.
+  const groups: { id: string; name: string; count: number }[] = [];
+  for (const id of monsterIds) {
+    const g = groups.find((x) => x.id === id);
+    if (g) g.count += 1;
+    else groups.push({ id, name: MONSTERS[id]?.name ?? id, count: 1 });
+  }
+  const rosterLabel = groups
+    .map((g) => (g.count > 1 ? `${g.name} ×${g.count}` : g.name))
+    .join(" · ");
 
   // "ENCOUNTER!" sting — fires once as the alert splash appears. The ref guards
   // against React StrictMode's double-invoked mount effect (dev) playing it
@@ -331,16 +345,14 @@ function EncounterAlertSplash({
         >
           ENCOUNTER!
         </p>
-        {primaryName && (
+        {rosterLabel && (
           <motion.p
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.4 }}
-            className="rounded-pill bg-ink/70 px-5 py-1.5 text-lg font-semibold uppercase tracking-wide text-paper sm:text-xl"
+            className="max-w-[90vw] rounded-pill bg-ink/70 px-5 py-1.5 text-center text-lg font-semibold uppercase tracking-wide text-paper sm:text-xl"
           >
-            {monsterIds.length > 1
-              ? `${primaryName} ×${monsterIds.length}`
-              : primaryName}
+            {rosterLabel}
           </motion.p>
         )}
       </motion.div>

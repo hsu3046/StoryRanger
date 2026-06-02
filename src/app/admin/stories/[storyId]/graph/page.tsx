@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 
 import { contentRepo } from "@/lib/content-repo";
 import { MEDALS } from "@/data/medals";
+import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
 import { StoryGraphEditor } from "@/app/admin/_components/graph/StoryGraphEditor";
 import type { EncounterDefT, StoryT } from "@/data/schemas";
 
@@ -54,13 +55,14 @@ export default async function GraphPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
 
-  const [sceneStems, bgmOptions, commonBackgroundKeys] = await Promise.all([
-    // Scenes are story-only; BGM merges the shared/common pool.
+  const [sceneStems, bgmOptions, backgroundKeys] = await Promise.all([
+    // Scenes are story-only; BGM + backgrounds merge the shared/common pool.
     listStemsAt(IMAGE_EXTS, "stories", storyId, "scenes"),
     listStems(storyId, "audio/bgm", "audio/bgm", AUDIO_EXTS),
-    // Shared background image stems — offered in the battle bg dropdown
-    // alongside this story's catalog (resolved from /backgrounds at runtime).
-    listStemsAt(IMAGE_EXTS, "backgrounds"),
+    // Battle background stems — this story's /backgrounds folder merged with the
+    // shared /public/backgrounds pool. Scanned from disk (no JSON catalog), the
+    // same way Scene Image is sourced.
+    listStems(storyId, "backgrounds", "backgrounds", IMAGE_EXTS),
   ]);
 
   // Scene image dropdown stores the full path but displays only the
@@ -78,13 +80,13 @@ export default async function GraphPage({
       initialEncounters={repo.listEncounters(storyId) as EncounterDefT[]}
       monsters={repo.listMonsters(storyId)}
       items={repo.listItems(storyId)}
-      backgrounds={repo.listBackgrounds(storyId)}
-      commonBackgroundKeys={commonBackgroundKeys}
+      backgroundKeys={backgroundKeys}
       sceneImages={sceneImages}
       bgmOptions={bgmOptions}
       runtimeStory={loaded.story}
       runtimeMedalsFile={MEDALS}
       runtimeCharactersFile={loaded.characters}
+      mapImage={resolveAssetPath(`/stories/${storyId}/map/map`)}
     />
   );
 }

@@ -15,6 +15,13 @@ export const ItemEffectSchema = z.discriminatedUnion("kind", [
    *  it lives in the inventory to be referenced by scene/branch logic, not
    *  "used" in battle. */
   z.object({ kind: z.literal("event") }),
+  /** Stop the battle answer-timer. `one-attack` = the next attack puzzle only;
+   *  `whole-battle` = every attack + defend for the rest of the fight. Crit is
+   *  suppressed while frozen (no time pressure → no speed bonus). */
+  z.object({
+    kind: z.literal("stop-time"),
+    scope: z.enum(["one-attack", "whole-battle"]),
+  }),
   // [+EXT] add future kinds here, e.g.:
   // z.object({ kind: z.literal("hint") }),                            // quiz: dim 2 wrong answers
   // z.object({ kind: z.literal("extra-time"), seconds: z.number().int() }), // quiz: extend timer

@@ -65,6 +65,29 @@ export const ChallengeCategorySchema = z.enum([
   "algebra",
   "speed",
   "word", // word / heuristic problems
+  // English literacy (offline word-bank; author-gated only — NOT in the math
+  // AGE_PLAN, so battles + "auto" stay math). See src/data/english-bank.ts.
+  "vocab-picture", // emoji → which word
+  "first-letter", // phonics: starting letter / which word starts with X
+  "rhyme",
+  "syllables", // phonological awareness: clap the beats
+  "missing-letter", // fill the blank (c _ t)
+  "spelling", // pick the correct spelling for the picture
+  "plural", // grammar: one cat → two cats / irregulars
+  "compound", // word-building: rain + bow = rainbow
+  "homophone", // same sound, different word (see / sea)
+  "opposite", // antonyms
+  "synonym", // words that mean the same (upper grades)
+  "analogy", // word relationships (big:small :: hot:cold)
+  // Logic / computational-thinking (pseudo-programming + algorithm basics;
+  // all NON-numeric — author-gated, never in math "auto"/battles unless picked).
+  "sequence", // order the steps of an algorithm
+  "commands", // run a 1-D instruction list (where does the robot land?)
+  "loop", // repeat / iteration
+  "conditional", // if / else branching
+  "trace", // execute + predict (which way are you facing?)
+  "debug", // find the wrong step
+  "boolean", // AND / OR / NOT logic gates
 ]);
 
 /** ElevenLabs voice id (e.g. "21m00Tcm4TlvDq8ikWAM"). Free-form because the

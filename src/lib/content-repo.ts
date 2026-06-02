@@ -10,13 +10,11 @@
  */
 
 import type {
-  BackgroundMetaT,
   EncounterDefT,
   ItemDefT,
   MonsterStatsT,
 } from "@/data/schemas";
 import { ITEMS, listItems } from "@/data/items";
-import { listBackgrounds } from "@/data/backgrounds";
 import { listMonsters } from "@/data/monsters";
 import { ENCOUNTERS } from "@/data/encounters";
 import { getStory, listStoryIds, type LoadedStory } from "./stories";
@@ -35,9 +33,6 @@ export interface ContentRepo {
 
   // Encounters
   listEncounters(storyId: string): EncounterDefT[];
-
-  // Backgrounds
-  listBackgrounds(storyId: string): BackgroundMetaT[];
 }
 
 /**
@@ -66,10 +61,6 @@ class BundledContentRepo implements ContentRepo {
   listEncounters(storyId: string): EncounterDefT[] {
     void storyId;
     return ENCOUNTERS as EncounterDefT[];
-  }
-  listBackgrounds(storyId: string): BackgroundMetaT[] {
-    void storyId;
-    return listBackgrounds() as BackgroundMetaT[];
   }
 }
 

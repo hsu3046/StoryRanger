@@ -5,6 +5,9 @@
       "name": "Forest Wolf",
       "type": "hostile",
       "hits": 3,
+      "drops": [
+        "magic-berry"
+      ],
       "size": "small"
     },
     {
@@ -30,6 +33,9 @@
       "name": "Crow Scout",
       "type": "hostile",
       "hits": 3,
+      "drops": [
+        "ravens-frozen-feather"
+      ],
       "size": "tiny",
       "airborne": true
     },
@@ -39,7 +45,7 @@
       "type": "hostile",
       "hits": 4,
       "drops": [
-        "magic-berry"
+        "ravens-frozen-feather"
       ],
       "size": "small",
       "airborne": true
@@ -50,7 +56,9 @@
       "type": "hostile",
       "hits": 8,
       "drops": [
-        "honey-cake"
+        "honey-cake",
+        "ravens-frozen-feather",
+        "magic-berry"
       ],
       "size": "large",
       "notes": "Mini-boss. Encounter only in deep forest."
@@ -60,6 +68,9 @@
       "name": "Fighting Tree",
       "type": "hostile",
       "hits": 5,
+      "drops": [
+        "honey-cake"
+      ],
       "size": "large"
     },
     {
@@ -77,6 +88,10 @@
       "name": "Winged Monkey",
       "type": "hostile",
       "hits": 3,
+      "drops": [
+        "ravens-frozen-feather",
+        "honey-cake"
+      ],
       "size": "medium",
       "airborne": true
     },
@@ -95,6 +110,9 @@
       "name": "Crystal Cave Spider",
       "type": "hostile",
       "hits": 3,
+      "drops": [
+        "magic-berry"
+      ],
       "size": "tiny",
       "airborne": true
     },
@@ -114,6 +132,9 @@
       "name": "Goblin Scout",
       "type": "hostile",
       "hits": 2,
+      "drops": [
+        "magic-berry"
+      ],
       "size": "small"
     },
     {
@@ -132,6 +153,9 @@
       "name": "Will-o-Wisp",
       "type": "neutral",
       "hits": 2,
+      "drops": [
+        "magic-berry"
+      ],
       "size": "tiny",
       "airborne": true,
       "notes": "Reveals hidden paths. Can be befriended via riddle."
@@ -144,7 +168,7 @@
       "drops": [
         "magic-berry"
       ],
-      "size": "small"
+      "size": "tiny"
     }
   ]
 }

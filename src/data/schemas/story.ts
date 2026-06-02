@@ -29,6 +29,9 @@ export const BranchConditionSchema = z.object({
   hasItems: z.array(z.string()).optional(),
   /** ALL of these companions must be in the party. */
   hasCompanions: z.array(CompanionIdSchema).optional(),
+  /** ALL of these unlock keywords must be in PlayState.unlockedKeywords —
+   *  earned via an ask-dialogue goal (see SceneAskSchema.unlock). */
+  hasKeywords: z.array(z.string()).optional(),
 });
 
 /** Branch gate: an age-appropriate educational challenge auto-generated at
@@ -36,7 +39,21 @@ export const BranchConditionSchema = z.object({
  *  defaults to "auto" (pick an age-appropriate one) — authors rarely set it. */
 export const BranchChallengeSchema = z.object({
   enabled: z.literal(true),
-  category: z.union([z.literal("auto"), ChallengeCategorySchema]).default("auto"),
+  /** Subject the gating problems are drawn from. The admin only offers the 4
+   *  subjects (mixed/math/english/logic); "auto" is the legacy alias for math.
+   *  A concrete ChallengeCategory is still ACCEPTED (not offered) so branches
+   *  authored by the old granular dropdown keep validating + playing. Default
+   *  "mixed". */
+  category: z
+    .union([
+      z.literal("mixed"),
+      z.literal("math"),
+      z.literal("english"),
+      z.literal("logic"),
+      z.literal("auto"),
+      ChallengeCategorySchema,
+    ])
+    .default("mixed"),
   /** How many problems the player must solve (in sequence) to pass the gate.
    *  Default 1. A wrong answer always re-rolls a fresh problem — the gate
    *  retries until solved (there is no skip / fail-out). */
@@ -47,12 +64,15 @@ export const BranchSchema = z.object({
   id: z.string(),
   label: z.string(),
   next: z.string(),
-  /** Companion who JOINS the party when this branch is taken (dedup — a
-   *  no-op if already in the party). */
-  addsCompanion: CompanionIdSchema.optional(),
-  /** Companion who LEAVES the party when this branch is taken (parting
-   *  moment). Their mood + HP are kept, so re-joining later restores them. */
-  removesCompanion: CompanionIdSchema.optional(),
+  /** Companions who JOIN the party when this branch is taken (dedup — each a
+   *  no-op if already in the party). Multiple may join on one branch.
+   *  (The pre-v5 singular `addsCompanion` is dropped by Zod on the next admin
+   *  save; bundled content is migrated to this array form.) */
+  addsCompanions: z.array(CompanionIdSchema).optional(),
+  /** Companions who LEAVE the party when this branch is taken (parting
+   *  moment). Multiple may leave on one branch. Their mood + HP are kept, so
+   *  re-joining later restores them. */
+  removesCompanions: z.array(CompanionIdSchema).optional(),
   /** Optional visibility gate — the branch only appears as a choice when the
    *  condition is met (e.g. holds an item, has a companion). */
   condition: BranchConditionSchema.optional(),
@@ -80,6 +100,16 @@ export const SceneAskSchema = z.object({
   id: z.string(),
   label: z.string(),
   characterId: SpeakerIdSchema,
+  /** Optional branch-unlock. When the child meets `goal` (judged per-turn by
+   *  the dialogue LLM during this ask's conversation), `keyword` is added to
+   *  PlayState.unlockedKeywords; a branch gated on it (condition.hasKeywords)
+   *  then appears. Both fields required together when present. */
+  unlock: z
+    .object({
+      keyword: z.string().min(1),
+      goal: z.string().min(1),
+    })
+    .optional(),
 });
 
 export const SceneSchema = z.object({
