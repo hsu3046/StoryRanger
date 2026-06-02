@@ -1887,12 +1887,16 @@ function withCondition(
     merged.hasCompanions && merged.hasCompanions.length > 0
       ? merged.hasCompanions
       : undefined;
-  if (!hasItems && !hasCompanions) {
+  const hasKeywords =
+    merged.hasKeywords && merged.hasKeywords.length > 0
+      ? merged.hasKeywords
+      : undefined;
+  if (!hasItems && !hasCompanions && !hasKeywords) {
     const next = { ...b };
     delete next.condition;
     return next;
   }
-  return { ...b, condition: { hasItems, hasCompanions } };
+  return { ...b, condition: { hasItems, hasCompanions, hasKeywords } };
 }
 
 function BranchInspector({
@@ -1952,6 +1956,27 @@ function BranchInspector({
   onPreview: () => void;
 }) {
   const targetScene = storyScenes[branch.next];
+
+  // Unlock keywords defined by any ask across the whole story — offered as a
+  // datalist so this branch's "Requires keywords" picker avoids typos. Asks
+  // live on scenes other than this branch's, so we scan all of them.
+  const knownKeywords = useMemo(
+    () => [
+      ...new Set(
+        Object.values(storyScenes)
+          .flatMap((s) => s.asks ?? [])
+          .map((a) => a.unlock?.keyword)
+          .filter((k): k is string => !!k),
+      ),
+    ],
+    [storyScenes],
+  );
+  // Keywords this branch already requires, and the ones still pickable from
+  // the dropdown (registered story-wide minus the ones already chosen).
+  const selectedKeywords = branch.condition?.hasKeywords ?? [];
+  const availableKeywords = knownKeywords.filter(
+    (k) => !selectedKeywords.includes(k),
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -2192,6 +2217,68 @@ function BranchInspector({
                 );
               })}
             </div>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-medium text-ink-soft/80">
+              Requires keywords
+            </p>
+            {/* Keywords unlocked via an ask's dialogue goal. Pick from the
+                dropdown of keywords defined across the story's asks; chosen
+                ones show as removable chips. (Define keywords on a scene's Ask
+                → "Unlocks branch" — that's the only place they're created.) */}
+            {selectedKeywords.length > 0 && (
+              <div className="mb-1 flex flex-wrap gap-1">
+                {selectedKeywords.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    title="Remove keyword"
+                    onClick={() =>
+                      onChange((b) => {
+                        const set = new Set(b.condition?.hasKeywords ?? []);
+                        set.delete(k);
+                        return withCondition(b, {
+                          hasKeywords: set.size > 0 ? [...set] : undefined,
+                        });
+                      })
+                    }
+                    className="flex items-center gap-1 rounded-pill bg-accent-deep py-0.5 pl-2 pr-1.5 text-[11px] text-paper"
+                  >
+                    {k}
+                    <span aria-hidden className="font-bold">
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {availableKeywords.length > 0 ? (
+              <StyledSelect
+                compact
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  onChange((b) => {
+                    const set = new Set(b.condition?.hasKeywords ?? []);
+                    set.add(v);
+                    return withCondition(b, { hasKeywords: [...set] });
+                  });
+                }}
+              >
+                <option value="">+ Add a keyword…</option>
+                {availableKeywords.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </StyledSelect>
+            ) : knownKeywords.length === 0 ? (
+              <p className="text-[10px] text-ink-soft/60">
+                No keywords defined yet — add one on a scene&apos;s Ask
+                (&ldquo;Unlocks branch&rdquo;).
+              </p>
+            ) : null}
           </div>
         </div>
       </Field>
@@ -2774,6 +2861,22 @@ function newAsk(askable: { id: string }[]): SceneAskT {
   };
 }
 
+/** Merge an unlock patch onto an ask, dropping `unlock` when both fields are
+ *  blank (mirrors `withCondition`'s empty-drop discipline). */
+function withUnlock(
+  a: SceneAskT,
+  patch: Partial<{ keyword: string; goal: string }>,
+): SceneAskT {
+  const keyword = patch.keyword ?? a.unlock?.keyword ?? "";
+  const goal = patch.goal ?? a.unlock?.goal ?? "";
+  if (!keyword.trim() && !goal.trim()) {
+    const next = { ...a };
+    delete next.unlock;
+    return next;
+  }
+  return { ...a, unlock: { keyword, goal } };
+}
+
 /**
  * Ask rows shown alongside the branch list (the player sees branch choices
  * and ask chips together). The "+ Add ask" button lives in the branch
@@ -2892,6 +2995,26 @@ function AskRow({
             </div>
           </div>
           <CharCount value={ask.label} limit={120} />
+          {/* Optional branch-unlock. Filling these makes this ask gate a branch:
+              the dialogue LLM silently judges `goal`; on success the `keyword`
+              is banked and any branch requiring it (Condition → Requires
+              keywords) appears. Leave both blank for a plain chat ask. */}
+          <span className="mt-1 text-[10px] uppercase tracking-wide text-ink-soft/60">
+            Unlocks branch (optional)
+          </span>
+          <input
+            value={ask.unlock?.keyword ?? ""}
+            onChange={(e) => onUpdate((a) => withUnlock(a, { keyword: e.target.value }))}
+            placeholder="Keyword id, e.g. trusts_lion"
+            spellCheck={false}
+            className={inputClsSm}
+          />
+          <input
+            value={ask.unlock?.goal ?? ""}
+            onChange={(e) => onUpdate((a) => withUnlock(a, { goal: e.target.value }))}
+            placeholder="Win condition, e.g. The child promises to be brave"
+            className={inputClsSm}
+          />
         </div>
       )}
     </div>

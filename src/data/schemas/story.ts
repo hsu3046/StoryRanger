@@ -29,6 +29,9 @@ export const BranchConditionSchema = z.object({
   hasItems: z.array(z.string()).optional(),
   /** ALL of these companions must be in the party. */
   hasCompanions: z.array(CompanionIdSchema).optional(),
+  /** ALL of these unlock keywords must be in PlayState.unlockedKeywords —
+   *  earned via an ask-dialogue goal (see SceneAskSchema.unlock). */
+  hasKeywords: z.array(z.string()).optional(),
 });
 
 /** Branch gate: an age-appropriate educational challenge auto-generated at
@@ -83,6 +86,16 @@ export const SceneAskSchema = z.object({
   id: z.string(),
   label: z.string(),
   characterId: SpeakerIdSchema,
+  /** Optional branch-unlock. When the child meets `goal` (judged per-turn by
+   *  the dialogue LLM during this ask's conversation), `keyword` is added to
+   *  PlayState.unlockedKeywords; a branch gated on it (condition.hasKeywords)
+   *  then appears. Both fields required together when present. */
+  unlock: z
+    .object({
+      keyword: z.string().min(1),
+      goal: z.string().min(1),
+    })
+    .optional(),
 });
 
 export const SceneSchema = z.object({

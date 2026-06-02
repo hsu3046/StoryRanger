@@ -190,6 +190,8 @@ export function StoryPlayer({
     characterId: SpeakerId;
     question: string;
     key: number;
+    /** Optional branch-unlock carried from the tapped ask. */
+    unlock?: { keyword: string; goal: string };
   } | null>(null);
   /** Gates the choice-button entrance animation. Flips true when the
    *  narration typewriter finishes (or user taps to skip), and resets
@@ -360,6 +362,25 @@ export function StoryPlayer({
         inventory,
         giftedCharacters,
         heroMemory,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
+  /** A seeded-ask conversation judged its goal met → bank the keyword. The
+   *  gated branch (condition.hasKeywords) then appears via `visibleBranches`,
+   *  which re-derives from `state`. Idempotent — banking a keyword twice is a
+   *  no-op. */
+  function handleKeywordUnlocked(keyword: string) {
+    setState((prev) => {
+      if ((prev.unlockedKeywords ?? []).includes(keyword)) return prev;
+      // SFX cue only — the previously-hidden gated branch now appearing in the
+      // choice row is the visible reward (a text toast would need to surface a
+      // raw keyword id, which we deliberately keep hidden from the child).
+      getAudio().playSfx(SFX.MEDAL);
+      return {
+        ...prev,
+        unlockedKeywords: [...(prev.unlockedKeywords ?? []), keyword],
         updatedAt: new Date().toISOString(),
       };
     });
@@ -1257,6 +1278,7 @@ export function StoryPlayer({
                         characterId: ask.characterId,
                         question: ask.label,
                         key: Date.now(),
+                        unlock: ask.unlock,
                       })
                     }
                   />,
@@ -1353,6 +1375,7 @@ export function StoryPlayer({
           onSessionClose={() => handleDialogueClose()}
           onActiveChange={setDialogueActive}
           onAskConsumed={() => setAskRequest(null)}
+          onKeywordUnlocked={handleKeywordUnlocked}
         />
       )}
 

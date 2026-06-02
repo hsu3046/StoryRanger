@@ -47,6 +47,10 @@ const RequestSchema = z.object({
   heroMemory: z.array(z.string().max(500)).max(40).default([]),
   /** Deterministic "adventures so far" one-liner. */
   journeyNote: z.string().max(600).default(""),
+  /** Natural-language goal to judge THIS turn (from a seeded ask's unlock).
+   *  Present only for unlock asks. The server only ever sees this goal — never
+   *  the keyword it would unlock. */
+  unlockGoal: z.string().max(500).optional(),
 });
 
 /** How many recent turns of THIS dialogue to replay to the LLM. */
@@ -68,6 +72,10 @@ const ResponseLLMSchema = z.object({
    *  exactly 2 below. (Story-advancing choices are the scene branches, shown
    *  by the client alongside these.) */
   suggestions: z.array(z.string()).min(1).max(6),
+  /** Silent per-turn judgment: did the child meet the supplied unlock goal?
+   *  Only meaningful when a goal was sent; defaults false (an omitted field is
+   *  a non-pass). Server hard-gates it on unlockGoal being present. */
+  goalMet: z.boolean().default(false),
 });
 
 /** Generic suggestions used to pad up to 2 when the LLM returns fewer. */
@@ -91,6 +99,7 @@ const SAFE_FALLBACK: DialogueResponse = {
   itemGift: null,
   endsConversation: false,
   suggestions: ["Are you okay?", "Tell me more."],
+  goalMet: false,
 };
 
 export async function POST(req: Request) {
@@ -137,6 +146,7 @@ export async function POST(req: Request) {
     body.alreadyGifted,
     body.heroMemory,
     body.journeyNote,
+    body.unlockGoal,
   );
 
   const history = trimDialogueHistory(body.history, HISTORY_WINDOW);
@@ -198,6 +208,9 @@ export async function POST(req: Request) {
       itemGift,
       endsConversation: parsed.endsConversation,
       suggestions: normalizeSuggestions(parsed.suggestions),
+      // Hard-gate: a goal verdict only counts when a goal was actually sent —
+      // it can never be true for a normal chat / no-unlock ask.
+      goalMet: !!body.unlockGoal && parsed.goalMet === true,
     };
     return NextResponse.json(result);
   } catch (err) {
