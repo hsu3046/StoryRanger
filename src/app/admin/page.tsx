@@ -32,7 +32,6 @@ export default function AdminDashboard() {
             const medals = listMedals().length;
             const characters =
               repo.getStory(sid)?.characters.characters.length ?? 0;
-            const backgrounds = repo.listBackgrounds(sid).length;
             return (
               <div
                 key={sid}
@@ -46,11 +45,10 @@ export default function AdminDashboard() {
                     {sid}
                   </code>
                 </div>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                   <Stat label="Scenes" value={sceneCount} />
                   <Stat label="Characters" value={characters} />
                   <Stat label="Monsters" value={monsters} />
-                  <Stat label="Backgrounds" value={backgrounds} />
                   <Stat label="Encounters" value={encounters} />
                   <Stat label="Medals" value={medals} />
                   <Stat label="Items" value={items} />
@@ -64,9 +62,6 @@ export default function AdminDashboard() {
                   </DashLink>
                   <DashLink href={`/admin/stories/${sid}/items`}>
                     Items →
-                  </DashLink>
-                  <DashLink href={`/admin/stories/${sid}/encounters`}>
-                    Encounters →
                   </DashLink>
                 </div>
               </div>

@@ -42,7 +42,6 @@ import "@xyflow/react/dist/style.css";
 import {
   EncountersFileSchema,
   StorySchema,
-  type BackgroundMetaT,
   type BranchT,
   type EncounterDefT,
   type ItemDefT,
@@ -155,11 +154,10 @@ interface Props {
   /** For encounter authoring: monster + item catalogs used in dropdowns. */
   monsters: MonsterStatsT[];
   items: ItemDefT[];
-  /** Background catalog used in the scene/encounter `bg` dropdowns. */
-  backgrounds: BackgroundMetaT[];
-  /** Shared/common background image stems (`public/backgrounds`) — listed in
-   *  the battle bg dropdown alongside the story catalog. */
-  commonBackgroundKeys: string[];
+  /** Background image stems for the encounter `bg` dropdown — scanned from
+   *  this story's /backgrounds folder merged with the shared /public/backgrounds
+   *  pool (mirrors how Scene Image is sourced; no JSON catalog). */
+  backgroundKeys: string[];
   /** Scene image options — `value` = full path, `label` = short stem. */
   sceneImages: { value: string; label: string }[];
   /** BGM track keys discovered under /public/stories/<id>/audio/bgm/. */
@@ -197,8 +195,7 @@ function StoryGraphEditorInner({
   initialEncounters,
   monsters,
   items,
-  backgrounds,
-  commonBackgroundKeys,
+  backgroundKeys,
   sceneImages,
   bgmOptions,
   runtimeStory,
@@ -1244,8 +1241,7 @@ function StoryGraphEditorInner({
                         e.trigger.branchId === selectedBranch.id,
                     )}
                     monsters={monsters}
-                    backgrounds={backgrounds}
-                    commonBackgroundKeys={commonBackgroundKeys}
+                    backgroundKeys={backgroundKeys}
                     items={items}
                     characters={runtimeCharactersFile.characters}
                     onChange={(mut) =>
@@ -1658,8 +1654,7 @@ function EncounterCard({
   storyId,
   encounter,
   monsters,
-  backgrounds,
-  commonBackgroundKeys,
+  backgroundKeys,
   items,
   onChange,
   onDelete,
@@ -1667,8 +1662,7 @@ function EncounterCard({
   storyId: string;
   encounter: EncounterDefT;
   monsters: MonsterStatsT[];
-  backgrounds: BackgroundMetaT[];
-  commonBackgroundKeys: string[];
+  backgroundKeys: string[];
   items: ItemDefT[];
   onChange: (mut: (e: EncounterDefT) => EncounterDefT) => void;
   onDelete: () => void;
@@ -1722,29 +1716,22 @@ function EncounterCard({
                 }))
               }
             >
-              {/* Surface the saved value even if it's in neither the catalog
-                  nor the common pool (e.g. typo or pre-catalog data). */}
-              {!backgrounds.some((b) => b.key === encounter.intro.bg) &&
-                !commonBackgroundKeys.includes(encounter.intro.bg) &&
-                encounter.intro.bg && (
+              {/* Surface the saved value even if no image file exists for it on
+                  disk (e.g. typo or a deleted file) so it isn't silently lost. */}
+              {encounter.intro.bg &&
+                !backgroundKeys.includes(encounter.intro.bg) && (
                   <option value={encounter.intro.bg}>
-                    {encounter.intro.bg} (not in catalog)
+                    {encounter.intro.bg} (missing)
                   </option>
                 )}
-              {backgrounds.map((b) => (
-                <option key={b.key} value={b.key}>
-                  {b.label} ({b.key})
+              {/* Background stems scanned from the story's /backgrounds folder +
+                  the shared /public/backgrounds pool (same source pattern as the
+                  Scene Image dropdown — no JSON catalog). */}
+              {backgroundKeys.map((k) => (
+                <option key={k} value={k}>
+                  {k}
                 </option>
               ))}
-              {/* Shared/common background images (resolved from /backgrounds at
-                  runtime) — only those not already in this story's catalog. */}
-              {commonBackgroundKeys
-                .filter((k) => !backgrounds.some((b) => b.key === k))
-                .map((k) => (
-                  <option key={`common-${k}`} value={k}>
-                    {k} (common)
-                  </option>
-                ))}
             </StyledSelect>
             {/* Preview the picked background — small banner under the select.
                 Falls back to the shared/common image for common-only keys. */}
@@ -1920,8 +1907,7 @@ function BranchInspector({
   sourceScene,
   encounters,
   monsters,
-  backgrounds,
-  commonBackgroundKeys,
+  backgroundKeys,
   items,
   characters,
   onChange,
@@ -1946,8 +1932,7 @@ function BranchInspector({
   sourceScene: SceneT;
   encounters: EncounterDefT[];
   monsters: MonsterStatsT[];
-  backgrounds: BackgroundMetaT[];
-  commonBackgroundKeys: string[];
+  backgroundKeys: string[];
   /** Item catalog — for the per-encounter reward-items picker. */
   items: ItemDefT[];
   /** Character catalog — Add-companion chips show `name` not raw id. */
@@ -2278,8 +2263,7 @@ function BranchInspector({
                 storyId={storyId}
                 encounter={enc}
                 monsters={monsters}
-                backgrounds={backgrounds}
-                commonBackgroundKeys={commonBackgroundKeys}
+                backgroundKeys={backgroundKeys}
                 items={items}
                 onChange={(mut) => onUpdateEncounter(enc.id, mut)}
                 onDelete={() => onDeleteEncounter(enc.id)}
