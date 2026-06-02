@@ -77,89 +77,6 @@
       "rewards": {}
     },
     {
-      "id": "bat-swarm",
-      "trigger": {
-        "sceneId": "s15_west_journey",
-        "branchId": "_to_witch"
-      },
-      "intro": {
-        "bg": "witch-castle-corridor"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "bat-swarm"
-        ]
-      },
-      "rewards": {}
-    },
-    {
-      "id": "wicked-witch-boss",
-      "trigger": {
-        "sceneId": "s15_west_journey",
-        "branchId": "_to_witch"
-      },
-      "intro": {
-        "bg": "witch-castle-corridor"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "wicked-witch"
-        ]
-      },
-      "rewards": {
-        "moodBoost": [
-          {
-            "companionId": "lion",
-            "delta": 2
-          },
-          {
-            "companionId": "scarecrow",
-            "delta": 2
-          },
-          {
-            "companionId": "tinman",
-            "delta": 2
-          }
-        ]
-      }
-    },
-    {
-      "id": "kalidah-rogue__throw_water",
-      "trigger": {
-        "sceneId": "s16_witch_castle",
-        "branchId": "throw_water"
-      },
-      "intro": {
-        "bg": "forest-deep"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "kalidah"
-        ]
-      },
-      "rewards": {}
-    },
-    {
-      "id": "kalidah-rogue__stand_with_friends",
-      "trigger": {
-        "sceneId": "s16_witch_castle",
-        "branchId": "stand_with_friends"
-      },
-      "intro": {
-        "bg": "forest-deep"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "kalidah"
-        ]
-      },
-      "rewards": {}
-    },
-    {
       "id": "s01_kansas__rescue_toto-battle",
       "trigger": {
         "sceneId": "s01_kansas",
@@ -363,6 +280,101 @@
         ]
       },
       "rewards": {}
+    },
+    {
+      "id": "monkey-ambush__branch_1zgqx-battle",
+      "trigger": {
+        "sceneId": "monkey-ambush",
+        "branchId": "branch_1zgqx"
+      },
+      "intro": {
+        "bg": "cave-entrance"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "winged-monkey",
+          "winged-monkey",
+          "winged-monkey",
+          "winged-monkey",
+          "winged-monkey",
+          "winged-monkey"
+        ]
+      },
+      "rewards": {}
+    },
+    {
+      "id": "s08_party_2__branch_3c8xm-battle",
+      "trigger": {
+        "sceneId": "s08_party_2",
+        "branchId": "branch_3c8xm"
+      },
+      "intro": {
+        "bg": "cave-interior"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "bat-swarm",
+          "bat-swarm"
+        ]
+      },
+      "rewards": {}
+    },
+    {
+      "id": "monkey-ambush__branch_1zgqx-battle-1",
+      "trigger": {
+        "sceneId": "monkey-ambush",
+        "branchId": "branch_1zgqx"
+      },
+      "intro": {
+        "bg": "forest-clearing"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": []
+      },
+      "rewards": {}
+    },
+    {
+      "id": "s08_party_2__branch_3c8xm-battle-1",
+      "trigger": {
+        "sceneId": "s08_party_2",
+        "branchId": "branch_3c8xm"
+      },
+      "intro": {
+        "bg": "cave-interior"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "cave-spider",
+          "cave-spider",
+          "cave-spider"
+        ]
+      },
+      "rewards": {}
+    },
+    {
+      "id": "16b-castle-battle__branch_ytp8l-battle",
+      "trigger": {
+        "sceneId": "16b-castle-battle",
+        "branchId": "branch_ytp8l"
+      },
+      "intro": {
+        "bg": "witch-castle-corridor"
+      },
+      "body": {
+        "kind": "battle",
+        "monsterIds": [
+          "wicked-witch"
+        ]
+      },
+      "rewards": {
+        "items": [
+          "broomstick-of-the-wicked-witch"
+        ]
+      }
     }
   ]
 }

@@ -65,6 +65,15 @@
       "effect": {
         "kind": "event"
       }
+    },
+    {
+      "id": "broomstick-of-the-wicked-witch",
+      "name": "Broomstick of the Wicked Witch ",
+      "icon": "🧹",
+      "description": "A magic broomstick of the Wicked Witch",
+      "effect": {
+        "kind": "event"
+      }
     }
   ]
 }

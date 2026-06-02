@@ -391,12 +391,13 @@
       "image": "/stories/wizard-of-oz/scenes/15-west-journey",
       "bgm": "battle_2",
       "speaker": "narrator",
-      "narration": "You travel west, past hills the color of slate. The sky turns gray. A flock of winged monkeys descends on great leathery wings, and carries you to the Witch's castle.",
+      "narration": "They fought back with all they had — and for a moment, it seemed to be working. But more winged monkeys kept coming, wave after wave. In the end, there was nothing left to do. They were caught.",
       "branches": [
         {
           "id": "_to_witch",
-          "label": "Face the Wicked Witch",
-          "next": "16a-castle-captive"
+          "label": "Go to the Wicked Witch's Castle",
+          "next": "s16_witch_castle",
+          "outcome": "You were hauled into the air by the screeching monkeys and carried high over the hills to the Witch's dark fortress."
         }
       ]
     },
@@ -404,17 +405,12 @@
       "image": "/stories/wizard-of-oz/scenes/16-witch-castle",
       "bgm": "witch-castle",
       "speaker": "wicked-witch",
-      "narration": "The Wicked Witch grins with green teeth. 'So — the little one who killed my sister. I will keep you as my servant and your dog as my dinner.' She raises a long bony finger. A bucket of water trembles on a shelf nearby.",
+      "narration": "The Wicked Witch grins with green teeth. 'So — the little one who killed my sister. I will keep you as my servant and your dog as my dinner.' She raises a long bony finger.",
       "branches": [
         {
-          "id": "throw_water",
-          "label": "Grab the bucket and throw the water",
-          "next": "17a-witch-water"
-        },
-        {
-          "id": "stand_with_friends",
-          "label": "Stand together with your friends",
-          "next": "16b-castle-battle"
+          "id": "branch_8ptmn",
+          "label": "New choice",
+          "next": "16a-castle-captive"
         }
       ]
     },
@@ -703,7 +699,12 @@
         {
           "id": "branch_ved9c",
           "label": "Trial of Truth",
-          "next": "14b-wizard-faces-open_2"
+          "next": "14b-wizard-faces-open_2",
+          "challenge": {
+            "enabled": true,
+            "category": "auto",
+            "count": 10
+          }
         }
       ]
     },
@@ -711,12 +712,18 @@
       "image": "/stories/wizard-of-oz/scenes/15a-monkey-ambush",
       "bgm": "battle_2",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "Suddenly — something moved in the shadows ahead.\n\"Wa...Watch out!\"\nThe sky filled with winged monkeys, screeching and swooping down. Their dark wings blotted out the sun — and before anyone could run, they struck.",
       "branches": [
         {
           "id": "branch_1zgqx",
-          "label": "New choice",
+          "label": "We fight back!",
           "next": "s15_west_journey"
+        },
+        {
+          "id": "branch_4bouz",
+          "label": "Run!",
+          "next": "s15_west_journey_2",
+          "outcome": "You turned and bolted down the rocky path, but the screeching shadows above moved much faster than you could run."
         }
       ]
     },
@@ -844,12 +851,33 @@
       "image": "/stories/wizard-of-oz/scenes/16a-castle-captive",
       "bgm": "witch-castle",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "Each was locked away alone, forced to do whatever the Witch commanded. But you refused to give up.",
       "branches": [
         {
-          "id": "branch_mys2w",
-          "label": "New choice",
-          "next": "s16_witch_castle"
+          "id": "branch_zi83z",
+          "label": "Stand together with your friends",
+          "next": "16b-castle-battle"
+        },
+        {
+          "id": "branch_3faod",
+          "label": "Grab the bucket and throw the water",
+          "next": "17a-witch-water",
+          "condition": {
+            "hasKeywords": [
+              "knows_water_weakness"
+            ]
+          }
+        }
+      ],
+      "asks": [
+        {
+          "id": "ask_obapj",
+          "label": "What is the Witch afraid of?",
+          "characterId": "lion",
+          "unlock": {
+            "keyword": "knows_water_weakness",
+            "goal": "The child works out and says that WATER is the Witch's weakness"
+          }
         }
       ]
     },
@@ -896,8 +924,14 @@
       "branches": [
         {
           "id": "branch_5pnf7",
-          "label": "New choice",
-          "next": "monkey-ambush"
+          "label": "Let's go find the Wicked Witch of the West!",
+          "next": "s08_party_2",
+          "addsCompanions": [
+            "scarecrow",
+            "tinman",
+            "lion"
+          ],
+          "outcome": "You turned away from the shimmering throne and stepped out into the bright sun, ready to face the long journey to the West."
         }
       ]
     },
@@ -1027,8 +1061,14 @@
       "branches": [
         {
           "id": "branch_6gi57",
-          "label": "New choice",
-          "next": "monkey-ambush"
+          "label": "Let's go find the Wicked Witch of the West!",
+          "next": "s08_party_2",
+          "addsCompanions": [
+            "scarecrow",
+            "tinman",
+            "lion"
+          ],
+          "outcome": "You turned away from the shimmering throne and stepped out into the bright sun, ready to face the long journey to the West."
         }
       ]
     },
@@ -1040,8 +1080,14 @@
       "branches": [
         {
           "id": "branch_fjqr2",
-          "label": "New choice",
-          "next": "monkey-ambush"
+          "label": "Let's go find the Wicked Witch of the West!",
+          "next": "s08_party_2",
+          "addsCompanions": [
+            "scarecrow",
+            "tinman",
+            "lion"
+          ],
+          "outcome": "You turned away from the shimmering throne and stepped out into the bright sun, ready to face the long journey to the West."
         }
       ]
     },
@@ -1049,12 +1095,46 @@
       "image": "/stories/wizard-of-oz/scenes/16b-castle-battle.jpeg",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "You scrubbed the palace floors while secretly watching for a chance to escape your cell. Every shadow held a secret, and you knew it was time to make a move.",
       "branches": [
         {
           "id": "branch_ytp8l",
           "label": "New choice",
           "next": "s17_witch_melts"
+        }
+      ]
+    },
+    "s08_party_2": {
+      "image": "/stories/wizard-of-oz/scenes/15b-west-journey",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "Together, they set off to find the Wicked Witch of the West.Together, they set off to find the Wicked Witch of the West. The path grew steep and rocky, and they climbed carefully — one slow step at a time.",
+      "branches": [
+        {
+          "id": "branch_3c8xm",
+          "label": "We are almost there",
+          "next": "monkey-ambush",
+          "outcome": "You cheered your friends on, certain that the Wicked Witch's castle was just over the next ridge."
+        }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
+      ]
+    },
+    "s15_west_journey_2": {
+      "image": "/stories/wizard-of-oz/scenes/15-west-journey",
+      "bgm": "battle_2",
+      "speaker": "narrator",
+      "narration": "They ran as fast as their legs could carry them — but the winged monkeys were faster. One by one, they were swept off the ground. There was no escape.",
+      "branches": [
+        {
+          "id": "branch_tun37",
+          "label": "Go to the Wicked Witch's Castle",
+          "next": "s16_witch_castle",
+          "outcome": "You held on tight as the monkeys swooped you up and flew toward the tall, jagged towers of the Wicked Witch's castle."
         }
       ]
     }
