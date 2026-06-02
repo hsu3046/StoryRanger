@@ -1,0 +1,14 @@
+{
+  "voices": [
+    { "id": "21m00Tcm4TlvDq8ikWAM", "label": "Storyteller (warm, female)" },
+    { "id": "EXAVITQu4vr4xnSDxMaL", "label": "Young Hero (female)" },
+    { "id": "ErXwobaYiN019PkySvjV", "label": "Cheerful Friend (male)" },
+    { "id": "pNInz6obpgDQGcFmaJgB", "label": "Gentle Giant (male)" },
+    { "id": "VR6AewLTigWG4xSOukaG", "label": "Big Softie (male)" },
+    { "id": "AZnzlk1XvdvUeBnXmlld", "label": "Sly Villain (female)" },
+    { "id": "MF3mGyEYCl7XYWbV9V6O", "label": "Kind Fairy (female)" },
+    { "id": "TxGEqnHWrfWFTfGW9XjX", "label": "Grand Wizard (male)" },
+    { "id": "RILOU7YmBhvwJGDGjNmP", "label": "Caring Grown-up (female)" },
+    { "id": "yoZ06aMxZJJ28mfd3POQ", "label": "Playful Sidekick" }
+  ]
+}

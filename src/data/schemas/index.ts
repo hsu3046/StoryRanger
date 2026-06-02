@@ -12,3 +12,4 @@ export * from "./monster";
 export * from "./background";
 export * from "./item";
 export * from "./encounter";
+export * from "./voice";

@@ -14,6 +14,7 @@ import {
 } from "@/data/schemas";
 import type { SpeakerId } from "@/types/story";
 import { SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
+import { VOICES } from "@/data/voices";
 import { saveCharactersAction } from "../_actions/saveJson";
 import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { AssetThumb } from "./AssetThumb";
@@ -21,6 +22,7 @@ import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
 import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
+import { VoiceSelectWithPreview } from "./VoiceSelectWithPreview";
 
 /** Placeholder ElevenLabs voice id for new characters — replace with a real
  *  one from the Voice Library (https://elevenlabs.io/app/voice-library). */
@@ -542,19 +544,19 @@ function CharacterForm({
         onPick={(v) => onChange((c) => ({ ...c, battleImage: v }))}
       />
 
-      <Field label="Voice (ElevenLabs voice id)">
-        <input
-          type="text"
+      <Field label="Voice">
+        <VoiceSelectWithPreview
           value={character.voice}
-          placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"
-          spellCheck={false}
-          onChange={(e) =>
-            onChange((c) => ({ ...c, voice: e.target.value.trim() }))
-          }
-          className={inputCls}
+          options={VOICES}
+          placeholder="(choose a voice)"
+          onChange={(v) => onChange((c) => ({ ...c, voice: v }))}
         />
         <p className="mt-1 text-xs text-ink-soft/70">
-          Copy from the{" "}
+          ▶ plays a free sample. The list + display names are curated in{" "}
+          <span className="font-mono text-[0.7rem]">
+            src/data/global/voices.json
+          </span>{" "}
+          — edit that file to add a voice (its id from the{" "}
           <a
             href="https://elevenlabs.io/app/voice-library"
             target="_blank"
@@ -562,9 +564,9 @@ function CharacterForm({
             className="underline hover:text-accent"
           >
             Voice Library
-          </a>{" "}
-          (add the voice to your workspace, then use its id). Avoid child-like
-          voices for kid characters — they&apos;re disallowed in the library.
+          </a>
+          , added to your workspace) or rename one. Avoid child-like voices for
+          kid characters — they&apos;re disallowed in the library.
         </p>
       </Field>
 
