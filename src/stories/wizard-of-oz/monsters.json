@@ -141,7 +141,7 @@
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
       "type": "hostile",
-      "hits": 12,
+      "hits": 16,
       "drops": [
         "honey-cake"
       ],

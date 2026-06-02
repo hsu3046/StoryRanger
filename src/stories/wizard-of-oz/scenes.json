@@ -422,25 +422,37 @@
       "image": "/stories/wizard-of-oz/scenes/17-witch-melts",
       "bgm": "sneak_1",
       "speaker": "narrator",
-      "narration": "The Wicked Witch shrieks. 'I am melting! Melting!' And before your eyes she is gone — only a pile of black cloth and a tall pointed hat. The castle servants cheer. You are free.",
+      "narration": "The Wicked Witch shrieks. 'I am melting! Melting!' And before your eyes she is gone — only a pile of black cloth and a tall pointed hat.",
       "branches": [
         {
           "id": "_back_to_emerald",
           "label": "Return to the Emerald City",
           "next": "14b-wizard-faces-open_3"
         }
+      ],
+      "reward": {
+        "items": [
+          "broomstick-of-the-wicked-witch"
+        ]
+      },
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "s18_unmasked": {
       "image": "/stories/wizard-of-oz/scenes/18-wizard-unmasked",
       "bgm": "sneak_2",
       "speaker": "narrator",
-      "narration": "Behind the great green throne, Toto pulls back a curtain — and there stands a small, kind old man pulling levers. 'I am no great wizard,' he sighs. 'Only a man from a place called Omaha. But I will help you all the same.'",
+      "narration": "Toto tugged at the curtain — and pulled it back. There stood a small, kind old man surrounded by levers and buttons.\n\"I am no great wizard,\" he said softly. \"Only a man from Omaha.\" He looked at them warmly. \"But I will help you. All the same.\"",
       "branches": [
         {
           "id": "branch_f9kaa",
-          "label": "New choice",
-          "next": "18b-wizard-unmasked-episode"
+          "label": "Tell your story",
+          "next": "18b-wizard-unmasked-episode",
+          "outcome": "You asked the little man how he arrived in Oz, and he sighed with a wistful look in his eyes."
         }
       ]
     },
@@ -448,17 +460,13 @@
       "image": "/stories/wizard-of-oz/scenes/19-balloon-launch",
       "bgm": "night-reste",
       "speaker": "narrator",
-      "narration": "A great green balloon rises in the square. The Wizard waves. But just as you step toward it, Toto leaps after a stray kitten — and the ropes snap free. The balloon drifts up into the sky without you.",
+      "narration": "\"Of course I do. I have been fixing my balloon for a long time — and I am nearly ready to leave.\" He paused, eyes falling on your feet. \"Wait — are those the magic shoes? Yes… I believe they can take you home. Glinda will know the spell.\"",
       "branches": [
         {
-          "id": "ask_glinda",
-          "label": "Travel south to find Glinda",
-          "next": "s20_glinda"
-        },
-        {
-          "id": "give_up",
-          "label": "Sit down and cry",
-          "next": "s20_glinda"
+          "id": "branch_ghqv6",
+          "label": "Go find Glinda!",
+          "next": "s20_glinda",
+          "outcome": "You waved goodbye as the Wizard's balloon drifted up into the sky. Then, together, you set off through the emerald gates to find Glinda, the Good Witch of the South."
         }
       ]
     },
@@ -466,11 +474,11 @@
       "image": "/stories/wizard-of-oz/scenes/20-glinda-south",
       "bgm": "farewell_3",
       "speaker": "glinda",
-      "narration": "Glinda smiles softly. 'My dear — you have had the power all along. The silver shoes on your feet can carry you home. Click the heels three times, and speak your wish.'",
+      "narration": "Glinda smiled softly. \"My dear, you had the power all along. But the shoes only work when your heart is truly ready.\" She looked at you warmly. \"And now — I think it is. Click your heels three times, and wish yourself home.\"",
       "branches": [
         {
           "id": "to_farewell",
-          "label": "Turn to your friends first",
+          "label": "Time to say goodbye",
           "next": "s20a_farewell"
         }
       ]
@@ -479,35 +487,27 @@
       "image": "/stories/wizard-of-oz/scenes/20a-farewell",
       "bgm": "farewell_3",
       "speaker": "narrator",
-      "narration": "The Scarecrow's straw arms wrap you up first — he is going back to rule the Emerald City. The Tin Man's metal cheek glistens with one careful tear. The Lion presses his great mane against your shoulder, brave at last. None of you wants to be the first to say it.",
+      "narration": "One by one, you said goodbye. The brave Lion, who had found his courage. The wise Scarecrow, who had found his mind. The warm-hearted Tin Man, who had found his heart. They had walked this road together — and now, it was time to part.",
       "branches": [
         {
-          "id": "hug_scarecrow",
-          "label": "Hug the Scarecrow one more time",
-          "next": "20b-farewell-magic"
-        },
-        {
-          "id": "hug_tinman",
-          "label": "Press your hand to the Tin Man's heart",
-          "next": "20b-farewell-magic"
-        },
-        {
-          "id": "hug_lion",
-          "label": "Bury your face in the Lion's mane",
-          "next": "20b-farewell-magic"
-        },
-        {
           "id": "all_at_once",
-          "label": "Pull them all into one last hug",
-          "next": "20b-farewell-magic"
+          "label": "Cast a magic spell",
+          "next": "20b-farewell-magic",
+          "outcome": "You tapped your heels together three times and thought of the place you loved most."
         }
+      ],
+      "dialogueCharacters": [
+        "scarecrow",
+        "tinman",
+        "lion",
+        "toto"
       ]
     },
     "s21_home": {
       "image": "/stories/wizard-of-oz/scenes/21-kansas-return",
       "bgm": "farewell_3",
       "speaker": "narrator",
-      "narration": "The wind rushes. The colors blur. And then — Aunt Em is hugging you tight on the porch of the gray Kansas farmhouse. Toto barks at your feet. 'My darling,' Aunt Em whispers. 'Where on earth did you come from?'",
+      "narration": "Aunt Em pulls you close on the porch of the little gray farmhouse, her arms warm and safe. Toto spins in happy circles at your feet.\n\"My darling,\" she whispers. \"Where on earth did you come from?\"\nThere's no place like home.",
       "branches": [],
       "ending": {
         "id": "home",
@@ -735,12 +735,35 @@
       "image": "/stories/wizard-of-oz/scenes/18a-wizard-gifts",
       "bgm": "night-reste",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "\"No magic, I'm afraid. But I can still grant your wishes.\" He smiled warmly. \"Courage, wisdom, a heart — you already have all of it. You always did.\" He reached into his coat. \"But here's a little something to remind you.\"",
       "branches": [
         {
-          "id": "branch_4rp5f",
-          "label": "New choice",
-          "next": "s19_balloon_launch"
+          "id": "branch_q1u12",
+          "label": "Go find Glinda!",
+          "next": "s20_glinda",
+          "condition": {
+            "hasKeywords": [
+              "hint-to-get-back-home"
+            ]
+          },
+          "outcome": "You thanked the Wizard and set off through the emerald gates to find the Good Witch of the South."
+        },
+        {
+          "id": "branch_pjy0u",
+          "label": "Don't you miss home?",
+          "next": "s19_balloon_launch",
+          "outcome": "You looked at the old man with soft eyes and asked if he ever missed his own home across the clouds."
+        }
+      ],
+      "asks": [
+        {
+          "id": "ask_2tsoh",
+          "label": "How about me? How can I get back home?",
+          "characterId": "wizard",
+          "unlock": {
+            "keyword": "hint-to-get-back-home",
+            "goal": "You tell the wizard that you have the magic shoes"
+          }
         }
       ]
     },
@@ -842,12 +865,13 @@
       "image": "/stories/wizard-of-oz/scenes/20b-farewell-magic.jpeg",
       "bgm": "farewell_3",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "You slipped on the silver shoes and whispered the spell. Slowly, the world around you began to shift and change. The smiling faces of your friends faded one by one — and there, at last, stood the little farmhouse you had always called home.",
       "branches": [
         {
           "id": "branch_1ynd9",
-          "label": "New choice",
-          "next": "s21_home"
+          "label": "Open your eyes",
+          "next": "s21_home",
+          "outcome": "You opened your eyes and felt the soft wind blowing across your face."
         }
       ]
     },
@@ -913,12 +937,13 @@
       "image": "/stories/wizard-of-oz/scenes/17a-witch-water.jpeg",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "The Wicked Witch watched from the shadows as you scrubbed the cold stone floors. The bucket of water sat nearby. You took a deep breath — and made up your mind.",
       "branches": [
         {
           "id": "branch_nz0pd",
-          "label": "New choice",
-          "next": "s17_witch_melts"
+          "label": "We did it!",
+          "next": "s17_witch_melts",
+          "outcome": "You tossed the entire bucket of water onto the Wicked Witch, watching as she began to shrink and wail."
         }
       ]
     },
@@ -1105,8 +1130,9 @@
       "branches": [
         {
           "id": "branch_ytp8l",
-          "label": "New choice",
-          "next": "s17_witch_melts"
+          "label": "It's time to stand and fight!",
+          "next": "s17_witch_melts",
+          "outcome": "You and your friends dropped your mop and confronted the Wicked Witch with all the courage you could muster."
         }
       ]
     },
@@ -1145,15 +1171,16 @@
       ]
     },
     "18b-wizard-unmasked-episode": {
-      "image": "/stories/wizard-of-oz/scenes/18b-wizard-unmasked-episode.jpeg",
+      "image": "/stories/wizard-of-oz/scenes/18b-wizard-unmasked-episode",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "(Write the narration for this new scene.)",
+      "narration": "\"I was a circus man,\" he said with a small smile. \"One day, my balloon was caught in a great storm — and it carried me here. I had no magic. So I built levers and buttons and a very loud voice.\" He shrugged. \"And somehow… it worked.\"",
       "branches": [
         {
           "id": "branch_esc50",
-          "label": "New choice",
-          "next": "wizard-gifts"
+          "label": "So… you don't have any magic power?",
+          "next": "wizard-gifts",
+          "outcome": "You asked him for the truth about his magic, and the old man sighed with a gentle nod."
         }
       ]
     },
@@ -1161,12 +1188,13 @@
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
       "bgm": "tornado",
       "speaker": "narrator",
-      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "narration": "\"You… actually did it.\" The voice boomed — but this time, just a little less steady. A long pause. \"Yes, well. Defeating the Wicked Witch is… no small thing.\" A faint cough echoed. \"Return tomorrow. I shall… consider your wishes.\"",
       "branches": [
         {
           "id": "branch_7y8oq",
-          "label": "New choice",
-          "next": "s18_unmasked"
+          "label": "Toto... Where are you going?",
+          "next": "s18_unmasked",
+          "outcome": "You chased after Toto as he bounded toward the heavy velvet curtain at the side of the room."
         }
       ]
     }
