@@ -12,6 +12,12 @@ export const runtime = "nodejs";
  * plays it directly — the clip lives on ElevenLabs' CDN).
  */
 export async function GET(req: Request) {
+  // Admin-only helper. The admin UI 404s in production, but this API route
+  // would still deploy — guard it so the public can't drive the ElevenLabs
+  // key (mirrors the dev-only admin write actions). 404 = "doesn't exist here".
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const voiceId = new URL(req.url).searchParams.get("voiceId")?.trim();
   if (!voiceId) {
     return NextResponse.json({ error: "voiceId required" }, { status: 400 });
