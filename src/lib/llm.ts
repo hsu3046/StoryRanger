@@ -1,16 +1,27 @@
 /**
- * Provider-agnostic LLM chat with structured (zod-validated) output.
+ * Provider-agnostic LLM chat with structured (zod-validated) output + a
+ * resilient fallback chain.
  *
  * The active provider + model are picked from environment variables:
  *   LLM_PROVIDER=openai | gemini | anthropic    (default: openai)
  *   LLM_MODEL=<provider-specific id>            (provider-specific default)
+ *   LLM_FALLBACK=gemini,anthropic               (optional ordered fallbacks)
+ *
+ * Resilience (so a single transient hiccup doesn't surface as a canned
+ * dialogue reply / failed generation):
+ *   1. Each attempt has a soft timeout.
+ *   2. Transient failures (429 / 5xx / network / empty-or-malformed JSON) are
+ *      retried with exponential backoff on the SAME provider.
+ *   3. If a provider is exhausted (or a non-retryable error like a 4xx), we
+ *      fall through to the next provider that has an API key. The fallback
+ *      provider uses ITS default model (LLM_MODEL only applies to the active
+ *      provider, so it can't be a wrong model id on another provider).
  *
  * Each provider returns JSON guaranteed by its native structured-output
  * mechanism, then we re-validate with the supplied zod schema and return
  * a typed result.
  *
- * TTS (`/api/tts`) is still OpenAI-only — it's not an LLM call and is
- * unaffected by this abstraction.
+ * TTS (`/api/tts`) is ElevenLabs — not an LLM call and unaffected by this.
  */
 
 import { z, type ZodType } from "zod";
@@ -44,13 +55,18 @@ function envTrim(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
 }
 
+function isProvider(v: string): v is LLMProvider {
+  return v === "openai" || v === "gemini" || v === "anthropic";
+}
+
 export function activeProvider(): LLMProvider {
   const raw = envTrim("LLM_PROVIDER")?.toLowerCase();
-  if (raw === "gemini" || raw === "anthropic" || raw === "openai") return raw;
+  if (raw && isProvider(raw)) return raw;
   return "openai";
 }
 
-/** Provider-specific default model — overridden by `LLM_MODEL`. */
+/** Provider-specific default model — overridden by `LLM_MODEL` for the ACTIVE
+ *  provider only. */
 function defaultModelFor(p: LLMProvider): string {
   switch (p) {
     case "openai":
@@ -66,9 +82,9 @@ export function activeModel(): string {
   return envTrim("LLM_MODEL") ?? defaultModelFor(activeProvider());
 }
 
-/** True when the chosen provider has a usable API key in env. */
-export function hasLLMKey(): boolean {
-  switch (activeProvider()) {
+/** Does a SPECIFIC provider have a usable API key in env. */
+function providerHasKey(p: LLMProvider): boolean {
+  switch (p) {
     case "openai":
       return !!envTrim("OPENAI_API_KEY");
     case "gemini":
@@ -78,16 +94,140 @@ export function hasLLMKey(): boolean {
   }
 }
 
-/** Public chat entry point. Routes to the active provider. */
+/**
+ * Ordered fallback providers (after the active one) that actually have a key.
+ * From `LLM_FALLBACK` (comma list) if set, else the other two in a stable
+ * order. Providers without a key are dropped, so the chain is a safe no-op
+ * when only one key is configured.
+ */
+function fallbackProviders(active: LLMProvider): LLMProvider[] {
+  const raw = envTrim("LLM_FALLBACK");
+  const order: LLMProvider[] = raw
+    ? raw
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(isProvider)
+    : (["openai", "gemini", "anthropic"] as LLMProvider[]).filter(
+        (p) => p !== active,
+      );
+  // dedupe + drop active + keep only key-bearing providers
+  const seen = new Set<LLMProvider>([active]);
+  const out: LLMProvider[] = [];
+  for (const p of order) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    if (providerHasKey(p)) out.push(p);
+  }
+  return out;
+}
+
+/** True when ANY provider in the chain (active or fallback) has a key. The
+ *  routes gate on this before calling `chat()`. */
+export function hasLLMKey(): boolean {
+  const active = activeProvider();
+  if (providerHasKey(active)) return true;
+  return fallbackProviders(active).length > 0;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Resilience helpers
+// ─────────────────────────────────────────────────────────────
+
+const RETRY_ATTEMPTS = 3;
+const ATTEMPT_TIMEOUT_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Soft per-attempt timeout — the underlying request may keep running, but we
+ *  stop awaiting it and treat it as a (retryable) failure. */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`[llm] ${label} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
+/**
+ * Whether an error is worth retrying on the same provider. Retry transient
+ * failures (429 / 5xx / network / timeout) and our own empty/parse errors;
+ * do NOT retry deterministic client/auth failures (other 4xx).
+ */
+function isRetryable(err: unknown): boolean {
+  const status =
+    (err as { status?: unknown })?.status ??
+    (err as { code?: unknown })?.code;
+  if (typeof status === "number") {
+    if (status === 429 || status === 408 || status === 409) return true;
+    if (status >= 500) return true;
+    if (status >= 400) return false; // other 4xx: bad request / auth
+  }
+  // No numeric status → network / timeout / empty-response / JSON-parse glitch.
+  return true;
+}
+
+/** Public chat entry point. Tries the active provider (with retries), then
+ *  falls through to key-bearing fallback providers. */
 export async function chat<T>(opts: ChatOptions<T>): Promise<T> {
-  const p = activeProvider();
-  switch (p) {
+  const active = activeProvider();
+  const candidates: Array<{ provider: LLMProvider; model: string }> = [];
+  if (providerHasKey(active)) {
+    candidates.push({ provider: active, model: activeModel() });
+  }
+  for (const p of fallbackProviders(active)) {
+    candidates.push({ provider: p, model: defaultModelFor(p) });
+  }
+  if (candidates.length === 0) {
+    throw new Error("[llm] no provider has an API key");
+  }
+
+  let lastErr: unknown;
+  for (const cand of candidates) {
+    for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+      try {
+        return await withTimeout(
+          chatOnce(cand.provider, cand.model, opts),
+          ATTEMPT_TIMEOUT_MS,
+          `${cand.provider}:${opts.schemaName}`,
+        );
+      } catch (err) {
+        lastErr = err;
+        const retryable = isRetryable(err);
+        const moreAttempts = attempt < RETRY_ATTEMPTS - 1;
+        if (retryable && moreAttempts) {
+          // exp backoff + jitter: ~0.6s, ~1.2s
+          await sleep(600 * 2 ** attempt + Math.floor(Math.random() * 250));
+          continue;
+        }
+        // Non-retryable, or attempts exhausted → next provider.
+        if (candidates.length > 1) {
+          console.warn(
+            `[llm] ${cand.provider} failed (${retryable ? "exhausted retries" : "non-retryable"}); trying next provider`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+        break;
+      }
+    }
+  }
+  throw lastErr;
+}
+
+function chatOnce<T>(
+  provider: LLMProvider,
+  model: string,
+  opts: ChatOptions<T>,
+): Promise<T> {
+  switch (provider) {
     case "openai":
-      return chatOpenAI(opts);
+      return chatOpenAI(opts, model);
     case "gemini":
-      return chatGemini(opts);
+      return chatGemini(opts, model);
     case "anthropic":
-      return chatAnthropic(opts);
+      return chatAnthropic(opts, model);
   }
 }
 
@@ -95,16 +235,18 @@ export async function chat<T>(opts: ChatOptions<T>): Promise<T> {
 // OpenAI
 // ─────────────────────────────────────────────────────────────
 
-async function chatOpenAI<T>(opts: ChatOptions<T>): Promise<T> {
+async function chatOpenAI<T>(opts: ChatOptions<T>, model: string): Promise<T> {
   if (!_openai) {
     const apiKey = envTrim("OPENAI_API_KEY");
     if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
-    _openai = new OpenAI({ apiKey });
+    // maxRetries: 0 — our chat() layer owns retry/backoff + cross-provider
+    // fallback, so the SDK's own retries don't stack (and delay the fallback).
+    _openai = new OpenAI({ apiKey, maxRetries: 0 });
   }
 
   // OpenAI accepts a zod schema natively via the helper.
   const completion = await _openai.chat.completions.parse({
-    model: activeModel(),
+    model,
     messages: [
       { role: "system", content: opts.system },
       ...opts.messages,
@@ -123,7 +265,7 @@ async function chatOpenAI<T>(opts: ChatOptions<T>): Promise<T> {
 // Gemini
 // ─────────────────────────────────────────────────────────────
 
-async function chatGemini<T>(opts: ChatOptions<T>): Promise<T> {
+async function chatGemini<T>(opts: ChatOptions<T>, model: string): Promise<T> {
   if (!_gemini) {
     const apiKey = envTrim("GEMINI_API_KEY") ?? envTrim("GOOGLE_API_KEY");
     if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
@@ -141,7 +283,7 @@ async function chatGemini<T>(opts: ChatOptions<T>): Promise<T> {
   const responseJsonSchema = zodToJSONSchemaForGemini(opts.schema);
 
   const response = await _gemini.models.generateContent({
-    model: activeModel(),
+    model,
     contents,
     config: {
       systemInstruction: opts.system,
@@ -166,34 +308,29 @@ async function chatGemini<T>(opts: ChatOptions<T>): Promise<T> {
 // Anthropic
 // ─────────────────────────────────────────────────────────────
 
-async function chatAnthropic<T>(opts: ChatOptions<T>): Promise<T> {
+async function chatAnthropic<T>(opts: ChatOptions<T>, model: string): Promise<T> {
   if (!_anthropic) {
     const apiKey = envTrim("ANTHROPIC_API_KEY");
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
-    _anthropic = new Anthropic({ apiKey });
+    // maxRetries: 0 — see the OpenAI client note; our layer owns retries.
+    _anthropic = new Anthropic({ apiKey, maxRetries: 0 });
   }
 
   const schemaForOutput = zodToJSONSchemaForAnthropic(opts.schema);
 
   // The SDK exposes a `messages.parse` helper with `output_config` for
-  // strict JSON-schema-enforced output. We narrow the type with `any`
-  // for the output_config because the helper API is newer than the
-  // declared types in some SDK builds.
+  // strict JSON-schema-enforced output. We narrow the type with `any` for
+  // the output_config because the helper API is newer than the declared
+  // types in some SDK builds.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = _anthropic as any;
   const message = await client.messages.parse({
-    model: activeModel(),
+    model,
     max_tokens: 1024,
     // System prompt is the static, per-character cacheable prefix. Marking
     // it `ephemeral` opts it into Anthropic prompt caching so repeat turns
     // for the same character reuse the cached prefix (the dynamic per-turn
     // context lives in the user message, after this block).
-    //
-    // OpenAI (GPT-5+) and Gemini 3 cache the same prefix AUTOMATICALLY
-    // (implicit) with no per-request flag — only Anthropic needs this
-    // explicit marker. All three require the cached prefix to exceed a
-    // ~1024-token minimum (Gemini ≈2048), so a short single-persona system
-    // prompt may not trigger a cache hit on any provider regardless.
     system: [
       {
         type: "text",
