@@ -74,6 +74,15 @@
       "effect": {
         "kind": "event"
       }
+    },
+    {
+      "id": "magic-shoes-of-wicked-witch",
+      "name": "Magic Shoes of Wicked Witch",
+      "icon": "👟",
+      "description": "A pair of magical shoes, once treasured by the Wicked Witch of the East. They say a mysterious power lies hidden within them.",
+      "effect": {
+        "kind": "event"
+      }
     }
   ]
 }

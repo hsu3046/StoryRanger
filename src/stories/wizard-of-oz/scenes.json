@@ -79,7 +79,11 @@
           "outcome": "You asked the Good Witch for help, hoping there was a way to return to your home."
         }
       ],
-      "reward": {},
+      "reward": {
+        "items": [
+          "magic-shoes-of-wicked-witch"
+        ]
+      },
       "asks": [
         {
           "id": "ask_oximf",
@@ -423,7 +427,7 @@
         {
           "id": "_back_to_emerald",
           "label": "Return to the Emerald City",
-          "next": "s18_unmasked"
+          "next": "14b-wizard-faces-open_3"
         }
       ]
     },
@@ -436,7 +440,7 @@
         {
           "id": "branch_f9kaa",
           "label": "New choice",
-          "next": "wizard-gifts"
+          "next": "18b-wizard-unmasked-episode"
         }
       ]
     },
@@ -687,7 +691,7 @@
           "next": "14b-wizard-faces-open",
           "challenge": {
             "enabled": true,
-            "category": "auto",
+            "category": "logic",
             "count": 10
           }
         },
@@ -856,7 +860,8 @@
         {
           "id": "branch_zi83z",
           "label": "Stand together with your friends",
-          "next": "16b-castle-battle"
+          "next": "16b-castle-battle",
+          "outcome": "You grasped your friends' hands tightly, vowing that no matter where the Witch hid you, you would never let her break your spirit."
         },
         {
           "id": "branch_3faod",
@@ -866,7 +871,8 @@
             "hasKeywords": [
               "knows_water_weakness"
             ]
-          }
+          },
+          "outcome": "You grabbed the heavy bucket and splashed the cool water all over the Wicked Witch."
         }
       ],
       "asks": [
@@ -1135,6 +1141,32 @@
           "label": "Go to the Wicked Witch's Castle",
           "next": "s16_witch_castle",
           "outcome": "You held on tight as the monkeys swooped you up and flew toward the tall, jagged towers of the Wicked Witch's castle."
+        }
+      ]
+    },
+    "18b-wizard-unmasked-episode": {
+      "image": "/stories/wizard-of-oz/scenes/18b-wizard-unmasked-episode.jpeg",
+      "bgm": "yellow-road",
+      "speaker": "narrator",
+      "narration": "(Write the narration for this new scene.)",
+      "branches": [
+        {
+          "id": "branch_esc50",
+          "label": "New choice",
+          "next": "wizard-gifts"
+        }
+      ]
+    },
+    "14b-wizard-faces-open_3": {
+      "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
+      "bgm": "tornado",
+      "speaker": "narrator",
+      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "branches": [
+        {
+          "id": "branch_7y8oq",
+          "label": "New choice",
+          "next": "s18_unmasked"
         }
       ]
     }
