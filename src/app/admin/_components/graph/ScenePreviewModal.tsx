@@ -16,6 +16,8 @@ interface Props {
   /** Optional branch id (on `sceneId`) — when set, the preview opens right
    *  after that branch's choice instead of on the scene itself. */
   branchId?: string | null;
+  /** Resolved map-image path (or null) — shows the map button in the preview. */
+  mapImage?: string | null;
   onClose: () => void;
 }
 
@@ -31,6 +33,7 @@ export function ScenePreviewModal({
   characters,
   sceneId,
   branchId,
+  mapImage,
   onClose,
 }: Props) {
   // ESC closes; body scroll locked while open.
@@ -88,6 +91,7 @@ export function ScenePreviewModal({
           slot="admin-preview"
           initialSceneId={sceneId}
           initialBranchId={branchId ?? undefined}
+          mapImage={mapImage}
         />
       </div>
     </div>,

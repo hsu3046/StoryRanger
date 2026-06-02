@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 
 import { contentRepo } from "@/lib/content-repo";
 import { MEDALS } from "@/data/medals";
+import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
 import { StoryGraphEditor } from "@/app/admin/_components/graph/StoryGraphEditor";
 import type { EncounterDefT, StoryT } from "@/data/schemas";
 
@@ -85,6 +86,7 @@ export default async function GraphPage({
       runtimeStory={loaded.story}
       runtimeMedalsFile={MEDALS}
       runtimeCharactersFile={loaded.characters}
+      mapImage={resolveAssetPath(`/stories/${storyId}/map/map`)}
     />
   );
 }

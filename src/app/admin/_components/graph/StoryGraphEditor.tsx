@@ -170,6 +170,9 @@ interface Props {
   runtimeStory: Story;
   runtimeMedalsFile: MedalsFile;
   runtimeCharactersFile: CharactersFile;
+  /** Resolved map-image path (server-scanned), or null. Forwarded to the
+   *  preview's StoryPlayer so the map button shows in the scene preview too. */
+  mapImage?: string | null;
 }
 
 const nodeTypes = { scene: SceneNode };
@@ -201,6 +204,7 @@ function StoryGraphEditorInner({
   runtimeStory,
   runtimeMedalsFile,
   runtimeCharactersFile,
+  mapImage,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -1285,6 +1289,7 @@ function StoryGraphEditorInner({
         story={{ ...runtimeStory, scenes: story.scenes } as unknown as Story}
         medals={runtimeMedalsFile}
         characters={runtimeCharactersFile}
+        mapImage={mapImage}
         sceneId={previewSceneId}
         branchId={previewBranchId}
         onClose={() => {
