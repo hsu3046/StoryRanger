@@ -413,8 +413,9 @@
       "branches": [
         {
           "id": "branch_8ptmn",
-          "label": "New choice",
-          "next": "16a-castle-captive"
+          "label": "Let's wait for our chance",
+          "next": "16a-castle-captive",
+          "outcome": "You bowed your head and followed her orders, waiting for a moment when her guard might drop."
         }
       ]
     },
@@ -1140,7 +1141,7 @@
       "image": "/stories/wizard-of-oz/scenes/15b-west-journey",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "Together, they set off to find the Wicked Witch of the West.Together, they set off to find the Wicked Witch of the West. The path grew steep and rocky, and they climbed carefully — one slow step at a time.",
+      "narration": "Together, they set off to find the Wicked Witch of the West. The path grew steep and rocky, and they climbed carefully — one slow step at a time.",
       "branches": [
         {
           "id": "branch_3c8xm",
