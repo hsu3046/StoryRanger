@@ -274,8 +274,8 @@
           "next": "s10a_stepping_stones",
           "challenge": {
             "enabled": true,
-            "category": "auto",
-            "count": 1
+            "category": "logic",
+            "count": 6
           }
         },
         {
@@ -285,7 +285,7 @@
           "challenge": {
             "enabled": true,
             "category": "auto",
-            "count": 1
+            "count": 6
           }
         }
       ],
