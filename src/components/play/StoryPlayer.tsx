@@ -18,7 +18,6 @@ import type {
   CompanionId,
   DialogueResponse,
   InteractionState,
-  Medal,
   MedalsFile,
   PlayState,
   Scene,
@@ -52,9 +51,11 @@ import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
 import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
 import { SettingsModal } from "./SettingsModal";
-import { MedalToast } from "../medals/MedalToast";
-import { ItemToast } from "./ItemToast";
-import { CompanionBanner, type CompanionEvent } from "./CompanionBanner";
+import {
+  NotificationStack,
+  itemChips,
+} from "./notifications/NotificationStack";
+import { useNotifications } from "./notifications/useNotifications";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
 import { SpeechAudio } from "../audio/SpeechAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
@@ -168,15 +169,15 @@ export function StoryPlayer({
     }
     return fresh;
   });
-  const [medalQueue, setMedalQueue] = useState<Medal[]>([]);
-  // Items received on the most recent scene entry — shown as a toast (below
-  // the medal toast) once the destination scene is reached.
-  const [itemToast, setItemToast] = useState<string[] | null>(null);
-  // Party-change banner (a companion joined or left) — shown one slot below the
-  // item toast. Single-slot: the latest party change supersedes a prior one.
-  const [companionEvent, setCompanionEvent] = useState<CompanionEvent | null>(
-    null,
-  );
+  // One in-memory queue for ALL top notifications (medal / item / companion).
+  // Replaces three separate toast states + their hardcoded stack offsets.
+  // push/dismiss/clear are stable (useCallback) — safe as effect deps.
+  const {
+    queue: notifQueue,
+    push: pushNotif,
+    dismiss: dismissNotif,
+    clear: clearNotifs,
+  } = useNotifications();
   const [hydrated, setHydrated] = useState(false);
   // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
   // narration TTS, music is BGM, effects are SFX. Seeded from the historic mix
@@ -403,7 +404,17 @@ export function StoryPlayer({
       // Dialogues counter changed → award any metric medals now reached.
       const earned = checkMedals(medals, nextState);
       if (earned.length > 0) {
-        setMedalQueue((q) => [...q, ...earned]);
+        earned.forEach((m) =>
+          pushNotif({
+            kind: "medal",
+            accent: "accent",
+            id: `medal:${m.id}`,
+            icon: m.icon,
+            eyebrow: "New medal!",
+            title: m.name,
+            durationMs: 2000,
+          }),
+        );
         getAudio().playSfx(SFX.MEDAL);
         return {
           ...nextState,
@@ -670,14 +681,20 @@ export function StoryPlayer({
       state.companions.includes(id),
     );
     if (joined.length > 0) {
-      setCompanionEvent({
-        kind: "join",
-        names: joined.map((id) => characterMap[id]?.name ?? id),
+      const names = joined.map((id) => characterMap[id]?.name ?? id);
+      pushNotif({
+        kind: "companion",
+        replace: true,
+        icon: "🎉",
+        title: `${names.join(", ")} joined the party!`,
       });
     } else if (left.length > 0) {
-      setCompanionEvent({
-        kind: "leave",
-        names: left.map((id) => characterMap[id]?.name ?? id),
+      const names = left.map((id) => characterMap[id]?.name ?? id);
+      pushNotif({
+        kind: "companion",
+        replace: true,
+        icon: "👋",
+        title: `${names.join(", ")} left the party`,
       });
     }
 
@@ -689,7 +706,17 @@ export function StoryPlayer({
     // shown as a toast once the player lands on the destination scene (see the
     // scene-reward arrival effect), never on the bridge page.
     if (result.earnedMedals.length > 0) {
-      setMedalQueue((q) => [...q, ...result.earnedMedals]);
+      result.earnedMedals.forEach((m) =>
+        pushNotif({
+          kind: "medal",
+          accent: "accent",
+          id: `medal:${m.id}`,
+          icon: m.icon,
+          eyebrow: "New medal!",
+          title: m.name,
+          durationMs: 2000,
+        }),
+      );
       audio.playSfx(SFX.MEDAL);
     }
     // Stage the scene reward's arrival toast IN PlayState (persisted) so a
@@ -909,7 +936,17 @@ export function StoryPlayer({
       // Battles-cleared counter changed → award any metric medals now reached.
       const earned = checkMedals(medals, base);
       if (earned.length > 0) {
-        setMedalQueue((q) => [...q, ...earned]);
+        earned.forEach((m) =>
+          pushNotif({
+            kind: "medal",
+            accent: "accent",
+            id: `medal:${m.id}`,
+            icon: m.icon,
+            eyebrow: "New medal!",
+            title: m.name,
+            durationMs: 2000,
+          }),
+        );
         getAudio().playSfx(SFX.MEDAL);
         return {
           ...base,
@@ -923,9 +960,7 @@ export function StoryPlayer({
   function handleReset() {
     clearState(story.id, slot);
     setState(newPlayState(story));
-    setMedalQueue([]);
-    setItemToast(null);
-    setCompanionEvent(null);
+    clearNotifs();
   }
 
   // Demo "skip battles" auto-resolve. When a battle would mount and
@@ -1017,14 +1052,22 @@ export function StoryPlayer({
     const r = state.pendingRewardToast;
     if (!r || r.sceneId !== state.currentSceneId) return;
     if (showingOutcome || pendingEncounter) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; cleared below
-    if (r.items.length > 0) setItemToast(r.items);
+    if (r.items.length > 0)
+      pushNotif({
+        kind: "item",
+        replace: true,
+        eyebrow: "Received",
+        chips: itemChips(story.id, r.items),
+      });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; clears the persisted pending toast
     setState((s) => ({ ...s, pendingRewardToast: undefined }));
   }, [
     state.pendingRewardToast,
     state.currentSceneId,
     showingOutcome,
     pendingEncounter,
+    pushNotif,
+    story.id,
   ]);
 
   const outcomePrevScene = pendingOutcome
@@ -1362,15 +1405,7 @@ export function StoryPlayer({
         />
       )}
 
-      <MedalToast
-        medal={medalQueue[0] ?? null}
-        onDismiss={() => setMedalQueue((q) => q.slice(1))}
-      />
-      <ItemToast storyId={story.id} items={itemToast} onDismiss={() => setItemToast(null)} />
-      <CompanionBanner
-        event={companionEvent}
-        onDismiss={() => setCompanionEvent(null)}
-      />
+      <NotificationStack queue={notifQueue} onDismiss={dismissNotif} />
 
       {/* In-scene dialogue — left-edge portrait rail. Suppressed while
           a battle encounter is active so the rail doesn't sit on top of
