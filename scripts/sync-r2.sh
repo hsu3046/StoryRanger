@@ -11,8 +11,8 @@
 #   - awscli v2 installed (`brew install awscli`)
 #   - .env.local has: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
 #
-# Usage:  ./scripts/sync-r2.sh           (sync changed files)
-#         ./scripts/sync-r2.sh --dry-run (preview without uploading)
+# Usage:  ./scripts/sync-r2.sh          (sync changed files)
+#         ./scripts/sync-r2.sh --dryrun (preview without uploading; aws s3 flag)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
