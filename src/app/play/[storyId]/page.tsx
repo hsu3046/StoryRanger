@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 import { getStory } from "@/lib/stories";
 import { MEDALS } from "@/data/medals";
 import { StoryPlayer } from "@/components/play/StoryPlayer";
+import { sceneImageWebpUrl } from "@/lib/asset-paths";
 
 interface Props {
   params: Promise<{ storyId: string }>;
@@ -59,14 +60,36 @@ export default async function PlayPage({ params }: Props) {
     listBgmKeysAt("audio", "bgm"),
     resolveMapImage(storyId),
   ]);
+  // Preload the start scene's image into the streamed HTML so the browser
+  // fetches it in parallel with the JS bundle (high priority) — it's warm
+  // before StoryPlayer mounts. React 19 hoists this <link> into <head>. Covers
+  // a fresh game + a hard refresh on /play; the client preload in beginDive()
+  // additionally warms the SAVED scene for "Continue". webp only (every scene
+  // ships one, so SceneImage's extension fallback never fires on the happy
+  // path). Direct from the asset CDN — no Vercel image optimizer.
+  const startScene = loaded.story.scenes[loaded.story.startScene];
+  const startImageHref = startScene
+    ? sceneImageWebpUrl(startScene.image)
+    : null;
   return (
-    <StoryPlayer
-      story={loaded.story}
-      medals={MEDALS}
-      characters={loaded.characters}
-      bgmKeys={bgmKeys}
-      commonBgmKeys={commonBgmKeys}
-      mapImage={mapImage}
-    />
+    <>
+      {startImageHref && (
+        <link
+          rel="preload"
+          as="image"
+          href={startImageHref}
+          type="image/webp"
+          fetchPriority="high"
+        />
+      )}
+      <StoryPlayer
+        story={loaded.story}
+        medals={MEDALS}
+        characters={loaded.characters}
+        bgmKeys={bgmKeys}
+        commonBgmKeys={commonBgmKeys}
+        mapImage={mapImage}
+      />
+    </>
   );
 }

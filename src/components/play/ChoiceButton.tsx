@@ -19,7 +19,7 @@ interface Props {
  * colour is appended by the variant below (neutral vs accent).
  */
 const CHOICE_BUTTON_BASE =
-  "group relative flex h-20 w-full items-center justify-center gap-2 rounded-pill bg-paper/60 px-6 text-center text-lg font-semibold leading-tight text-balance text-ink ring-1 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 hover:shadow-button-hover hover:-translate-y-0.5 hover:-translate-x-px active:translate-y-0 active:translate-x-0 active:scale-[0.98] active:shadow-button-pressed disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:translate-x-0 disabled:hover:shadow-button";
+  "group relative flex h-20 w-full items-center justify-center gap-2 rounded-pill bg-paper/60 px-6 text-center text-fluid-choice font-semibold leading-tight text-balance text-ink ring-1 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 hover:shadow-button-hover hover:-translate-y-0.5 hover:-translate-x-px active:translate-y-0 active:translate-x-0 active:scale-[0.98] active:shadow-button-pressed disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:translate-x-0 disabled:hover:shadow-button";
 
 /** Neutral choice — branches, ask chips, dialogue reply suggestions. */
 export const choiceButtonClass = `${CHOICE_BUTTON_BASE} ring-ink-soft/15 hover:ring-accent/50 disabled:hover:ring-ink-soft/15`;

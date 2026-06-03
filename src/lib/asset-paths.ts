@@ -49,3 +49,15 @@ export function assetUrl(path: string): string {
   if (!path || !ASSET_BASE_URL || !path.startsWith("/")) return path;
   return ASSET_BASE_URL + path;
 }
+
+/**
+ * The fully-resolved `.webp` URL for a scene image path. `SceneImage` always
+ * requests the `.webp` candidate first (every scene ships a webp), so this is
+ * the exact URL it will fetch — making it the safe target for a `<link
+ * rel="preload">` / `ReactDOM.preload()` that warms the image during the home
+ * dive without ever preloading a 404 fallback variant.
+ */
+export function sceneImageWebpUrl(imagePath: string): string {
+  const base = imagePath.replace(/\.(webp|png|jpg|jpeg)$/i, "");
+  return assetUrl(base + ".webp");
+}

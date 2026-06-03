@@ -4,7 +4,7 @@
       "id": "narrator",
       "name": "Narrator",
       "voice": "lxYfHSkYm1EzQzGhdbfc",
-      "voiceSpeed": 1,
+      "voiceSpeed": 1.05,
       "color": "#5a4128",
       "size": "medium"
     },
@@ -12,7 +12,7 @@
       "id": "dorothy",
       "name": "Hero",
       "isHero": true,
-      "voice": "lxYfHSkYm1EzQzGhdbfc",
+      "voice": "",
       "voiceSpeed": 1,
       "color": "#a8487f",
       "size": "medium"
@@ -101,7 +101,7 @@
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
       "voice": "eppqEXVumQ3CfdndcIBd",
-      "voiceSpeed": 1.2,
+      "voiceSpeed": 1.1,
       "color": "#4a2a4a",
       "size": "medium",
       "persona": {
@@ -149,9 +149,9 @@
     },
     {
       "id": "wizard",
-      "name": "Wizard of Oz (Reveal)",
+      "name": "The little old man",
       "voice": "6sFKzaJr574YWVu4UuJF",
-      "voiceSpeed": 0.95,
+      "voiceSpeed": 1,
       "color": "#7a5a3a",
       "size": "large",
       "persona": {
@@ -200,7 +200,7 @@
     {
       "id": "toto",
       "name": "Toto",
-      "voice": "yoZ06aMxZJJ28mfd3POQ",
+      "voice": "",
       "voiceSpeed": 1,
       "color": "#3d2817",
       "size": "tiny",
@@ -253,7 +253,7 @@
       "id": "wizard-of-oz",
       "name": "Wizard of Oz",
       "voice": "ktrGUw7rURIQyMrQZqCu",
-      "voiceSpeed": 0.8,
+      "voiceSpeed": 0.9,
       "color": "#00bf63",
       "size": "huge",
       "persona": {

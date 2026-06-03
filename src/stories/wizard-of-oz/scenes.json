@@ -69,8 +69,8 @@
     "s03_munchkinland": {
       "image": "/stories/wizard-of-oz/scenes/03-munchkinland",
       "bgm": "munchkinland",
-      "speaker": "narrator",
-      "narration": "All at once, small cheerful people appear from behind the flowers — popping up from every direction! A beautiful witch in pink smiles. \"You are a hero! Your house has crushed the Wicked Witch of the East. Look — only her silver shoes remain!\"",
+      "speaker": "glinda",
+      "narration": "\"You are a hero! Your house has crushed the Wicked Witch of the East! The Munchkins are free at last — and look, only her silver shoes remain. They are yours now!\"",
       "branches": [
         {
           "id": "take_slippers",
@@ -101,7 +101,7 @@
       "image": "/stories/wizard-of-oz/scenes/04-yellow-road",
       "bgm": "kansas-calm",
       "speaker": "narrator",
-      "narration": "Glinda points to a road of yellow bricks. 'Follow it to the Emerald City. The great Wizard of Oz can send you home.' The road soon splits. One path runs through a cornfield. The other curves toward an old orchard.",
+      "narration": "Glinda points to a road of yellow bricks. \"Follow it to the Emerald City. The great Wizard of Oz can send you home.\"\nThe road soon splits. One path runs through a cornfield. The other curves toward an old orchard.",
       "branches": [
         {
           "id": "go_cornfield",
@@ -409,7 +409,7 @@
       "image": "/stories/wizard-of-oz/scenes/16-witch-castle",
       "bgm": "witch-castle",
       "speaker": "wicked-witch",
-      "narration": "The Wicked Witch grins with green teeth. 'So — the little one who killed my sister. I will keep you as my servant and your dog as my dinner.' She raises a long bony finger.",
+      "narration": "\"So — the little one who killed my sister. I will keep you as my servant and your dog as my dinner.\"",
       "branches": [
         {
           "id": "branch_8ptmn",
@@ -423,12 +423,13 @@
       "image": "/stories/wizard-of-oz/scenes/17-witch-melts",
       "bgm": "sneak_1",
       "speaker": "narrator",
-      "narration": "The Wicked Witch shrieks. 'I am melting! Melting!' And before your eyes she is gone — only a pile of black cloth and a tall pointed hat.",
+      "narration": "The Wicked Witch shrieks. \"I am melting! Melting!\" And before your eyes, she is gone — only a pile of black cloth and a broomstick remain.",
       "branches": [
         {
           "id": "_back_to_emerald",
           "label": "Return to the Emerald City",
-          "next": "14b-wizard-faces-open_3"
+          "next": "14b-wizard-faces-open_3",
+          "outcome": "You gathered your friends and began the long journey back to the capital, eager to claim the rewards the Wizard had promised."
         }
       ],
       "reward": {
@@ -453,7 +454,7 @@
           "id": "branch_f9kaa",
           "label": "Tell your story",
           "next": "18b-wizard-unmasked-episode",
-          "outcome": "You asked the little man how he arrived in Oz, and he sighed with a wistful look in his eyes."
+          "outcome": "You asked the old man how he arrived in Oz, and he sighed with a wistful look in his eyes."
         }
       ]
     },
@@ -461,7 +462,7 @@
       "image": "/stories/wizard-of-oz/scenes/19-balloon-launch",
       "bgm": "night-reste",
       "speaker": "narrator",
-      "narration": "\"Of course I do. I have been fixing my balloon for a long time — and I am nearly ready to leave.\" He paused, eyes falling on your feet. \"Wait — are those the magic shoes? Yes… I believe they can take you home. Glinda will know the spell.\"",
+      "narration": "\"Of course I do. I have been fixing my balloon for a long time — and I am nearly ready to leave.\" He paused, eyes falling on your feet. \"Wait — are those the magic shoes? I believe they can take you home. Glinda will know the spell.\"",
       "branches": [
         {
           "id": "branch_ghqv6",
@@ -475,12 +476,13 @@
       "image": "/stories/wizard-of-oz/scenes/20-glinda-south",
       "bgm": "farewell_3",
       "speaker": "glinda",
-      "narration": "Glinda smiled softly. \"My dear, you had the power all along. But the shoes only work when your heart is truly ready.\" She looked at you warmly. \"And now — I think it is. Click your heels three times, and wish yourself home.\"",
+      "narration": "\"My dear, you had the power all along. But the shoes only work when your heart is truly ready. And now — I think it is. Click your heels three times, and wish yourself home.\"",
       "branches": [
         {
           "id": "to_farewell",
           "label": "Time to say goodbye",
-          "next": "s20a_farewell"
+          "next": "s20a_farewell",
+          "outcome": "You hugged each of your dear friends tightly, knowing you would never forget the adventures you shared on the yellow brick road."
         }
       ]
     },
@@ -488,7 +490,7 @@
       "image": "/stories/wizard-of-oz/scenes/20a-farewell",
       "bgm": "farewell_3",
       "speaker": "narrator",
-      "narration": "One by one, you said goodbye. The brave Lion, who had found his courage. The wise Scarecrow, who had found his mind. The warm-hearted Tin Man, who had found his heart. They had walked this road together — and now, it was time to part.",
+      "narration": "The brave Lion, who had found his courage. The wise Scarecrow, who had found his mind. The warm-hearted Tin Man, who had found his heart. They had walked this road together — and now, it was time to part.",
       "branches": [
         {
           "id": "all_at_once",
@@ -657,8 +659,8 @@
     "mouse-queen-rescue": {
       "image": "/stories/wizard-of-oz/scenes/09a-mouse-queen-rescue",
       "bgm": "sneak_2",
-      "speaker": "narrator",
-      "narration": "The tiny Mouse King bowed his head in thanks. \"Thank you so much! That cat has always wanted to catch me. In return, take my crown — show it to any mouse, and they will help you anytime!\"",
+      "speaker": "character-1",
+      "narration": "\"Thank you so much! That cat has always wanted to catch me. In return, take my crown — show it to any mouse, and they will help you anytime!\"",
       "branches": [
         {
           "id": "branch_g6ux9",
@@ -739,32 +741,10 @@
       "narration": "\"No magic, I'm afraid. But I can still grant your wishes.\" He smiled warmly. \"Courage, wisdom, a heart — you already have all of it. You always did.\" He reached into his coat. \"But here's a little something to remind you.\"",
       "branches": [
         {
-          "id": "branch_q1u12",
-          "label": "Go find Glinda!",
-          "next": "s20_glinda",
-          "condition": {
-            "hasKeywords": [
-              "hint-to-get-back-home"
-            ]
-          },
-          "outcome": "You thanked the Wizard and set off through the emerald gates to find the Good Witch of the South."
-        },
-        {
           "id": "branch_pjy0u",
           "label": "Don't you miss home?",
           "next": "s19_balloon_launch",
           "outcome": "You looked at the old man with soft eyes and asked if he ever missed his own home across the clouds."
-        }
-      ],
-      "asks": [
-        {
-          "id": "ask_2tsoh",
-          "label": "How about me? How can I get back home?",
-          "characterId": "wizard",
-          "unlock": {
-            "keyword": "hint-to-get-back-home",
-            "goal": "You tell the wizard that you have the magic shoes"
-          }
         }
       ]
     },
@@ -866,7 +846,7 @@
       "image": "/stories/wizard-of-oz/scenes/20b-farewell-magic.jpeg",
       "bgm": "farewell_3",
       "speaker": "narrator",
-      "narration": "You slipped on the silver shoes and whispered the spell. Slowly, the world around you began to shift and change. The smiling faces of your friends faded one by one — and there, at last, stood the little farmhouse you had always called home.",
+      "narration": "Slowly, the world around you began to shift and change. The smiling faces of your friends faded one by one — and there, at last, stood the little farmhouse you had always called home.",
       "branches": [
         {
           "id": "branch_1ynd9",
@@ -897,7 +877,7 @@
               "knows_water_weakness"
             ]
           },
-          "outcome": "You grabbed the heavy bucket and splashed the cool water all over the Wicked Witch."
+          "outcome": "The bucket of water sat nearby. You took a deep breath — and made up your mind."
         }
       ],
       "asks": [
@@ -915,8 +895,8 @@
     "07a-crying-lion": {
       "image": "/stories/wizard-of-oz/scenes/07a-crying-lion",
       "bgm": "puzzle",
-      "speaker": "narrator",
-      "narration": "I am the King of the Forest — but I am afraid of everything. Thunder, shadows, even a little mouse! The other animals laugh at me. That is why I must find the Wizard of Oz. Maybe he can give me the one thing I need — bravery.",
+      "speaker": "lion",
+      "narration": "\"I am the King of the Forest — but I am afraid of everything. Thunder, shadows, even a little mouse! The other animals laugh at me. I must find the Wizard of Oz. Maybe he can give me the one thing I need — bravery.\"",
       "branches": [
         {
           "id": "branch_2zyso",
@@ -938,21 +918,21 @@
       "image": "/stories/wizard-of-oz/scenes/17a-witch-water.jpeg",
       "bgm": "yellow-road",
       "speaker": "narrator",
-      "narration": "The Wicked Witch watched from the shadows as you scrubbed the cold stone floors. The bucket of water sat nearby. You took a deep breath — and made up your mind.",
+      "narration": "You grabbed the heavy bucket and splashed the cool water all over the Wicked Witch.",
       "branches": [
         {
           "id": "branch_nz0pd",
-          "label": "We did it!",
+          "label": "I did it!",
           "next": "s17_witch_melts",
-          "outcome": "You tossed the entire bucket of water onto the Wicked Witch, watching as she began to shrink and wail."
+          "outcome": "All of a sudden, the Witch began to shrink and wail."
         }
       ]
     },
     "14b-wizard-faces-open": {
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
       "bgm": "tornado",
-      "speaker": "narrator",
-      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "speaker": "wizard-of-oz",
+      "narration": "\"You have proven yourself worthy — but first, bring me the broomstick of the Wicked Witch of the West.\"",
       "branches": [
         {
           "id": "branch_5pnf7",
@@ -970,8 +950,8 @@
     "05d-save-tinman": {
       "image": "/stories/wizard-of-oz/scenes/05d-save-tinman.jpeg",
       "bgm": "yellow-road",
-      "speaker": "narrator",
-      "narration": "You open the small oil can and carefully drip it onto his rusted joints. Slowly, he begins to move — and at last, he can speak again! \"I am searching for a heart,\" he says softly. \"Will you help me?\"",
+      "speaker": "tinman",
+      "narration": "\"Oh, thank you so much! I can move again! I am the Tin Man — and I am searching for a heart. Will you help me?\"",
       "branches": [
         {
           "id": "branch_mz45i",
@@ -991,8 +971,8 @@
     "05c-save-scarecrow": {
       "image": "/stories/wizard-of-oz/scenes/05c-save-scarecrow.jpeg",
       "bgm": "yellow-road",
-      "speaker": "narrator",
-      "narration": "The Scarecrow wobbled on his pole as you reached up to help. With a gentle tug and a loud creak, you managed to set the straw man free. Now that he was finally down, he brushed off his tattered coat and looked around at the great world before them.",
+      "speaker": "scarecrow",
+      "narration": "\"Oh, thank you so much! Those crows were driving me crazy! I am the Scarecrow — and I am searching for a brain. Will you help me?\"",
       "branches": [
         {
           "id": "branch_nkgv4",
@@ -1012,8 +992,8 @@
     "05c-save-scarecrow_2": {
       "image": "/stories/wizard-of-oz/scenes/05c-save-scarecrow-with-tinman",
       "bgm": "yellow-road",
-      "speaker": "narrator",
-      "narration": "You reached up and set the Scarecrow free with a gentle tug. He brushed off his tattered coat and looked around. \"I am searching for a brain,\" he said. \"Will you help me?\"",
+      "speaker": "scarecrow",
+      "narration": "\"Oh, thank you so much! Those crows were driving me crazy! I am the Scarecrow — and I am searching for a brain. Will you help me?\"",
       "branches": [
         {
           "id": "branch_wpfkt",
@@ -1033,8 +1013,8 @@
     "05d-save-tinman_2": {
       "image": "/stories/wizard-of-oz/scenes/05d-save-tinman-with-scarecrow",
       "bgm": "yellow-road",
-      "speaker": "narrator",
-      "narration": "The Tin Woodman stands tall once more, his silver body gleaming in the sunlight. He tells you that the Great Oz might be able to help him find a heart.",
+      "speaker": "tinman",
+      "narration": "\"Oh, thank you so much! I can move again! I am the Tin Man — and I am searching for a heart. Will you help me?\"",
       "branches": [
         {
           "id": "branch_6vtqw",
@@ -1088,8 +1068,8 @@
     "14b-wizard-faces-open_2": {
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
       "bgm": "tornado",
-      "speaker": "narrator",
-      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "speaker": "wizard-of-oz",
+      "narration": "\"You have proven yourself worthy — but first, bring me the broomstick of the Wicked Witch of the West.\"",
       "branches": [
         {
           "id": "branch_6gi57",
@@ -1107,8 +1087,8 @@
     "14b-wizard-faces-open_2_2": {
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
       "bgm": "tornado",
-      "speaker": "narrator",
-      "narration": "The throne room fell silent — then the air began to hum.\n\"You have proven yourself worthy.\" A cold pause. \"But first — bring me the broomstick of the Wicked Witch of the West.\"",
+      "speaker": "wizard-of-oz",
+      "narration": "\"You have proven yourself worthy — but first, bring me the broomstick of the Wicked Witch of the West.\"",
       "branches": [
         {
           "id": "branch_fjqr2",
@@ -1173,9 +1153,9 @@
     },
     "18b-wizard-unmasked-episode": {
       "image": "/stories/wizard-of-oz/scenes/18b-wizard-unmasked-episode",
-      "bgm": "yellow-road",
-      "speaker": "narrator",
-      "narration": "\"I was a circus man,\" he said with a small smile. \"One day, my balloon was caught in a great storm — and it carried me here. I had no magic. So I built levers and buttons and a very loud voice.\" He shrugged. \"And somehow… it worked.\"",
+      "bgm": "kansas-calm",
+      "speaker": "wizard",
+      "narration": "\"I was a circus man. One day, my balloon was caught in a great storm — and it carried me here. I had no magic. So I built levers and buttons and a very loud voice. And somehow… it worked.\"",
       "branches": [
         {
           "id": "branch_esc50",
@@ -1187,9 +1167,9 @@
     },
     "14b-wizard-faces-open_3": {
       "image": "/stories/wizard-of-oz/scenes/14b-wizard-faces-open.jpeg",
-      "bgm": "tornado",
-      "speaker": "narrator",
-      "narration": "\"You… actually did it.\" The voice boomed — but this time, just a little less steady. A long pause. \"Yes, well. Defeating the Wicked Witch is… no small thing.\" A faint cough echoed. \"Return tomorrow. I shall… consider your wishes.\"",
+      "bgm": "emerald-city",
+      "speaker": "wizard-of-oz",
+      "narration": "\"You… actually did it. Yes, well — defeating the Wicked Witch is no small thing. Return tomorrow. I shall consider your wishes.\"",
       "branches": [
         {
           "id": "branch_7y8oq",

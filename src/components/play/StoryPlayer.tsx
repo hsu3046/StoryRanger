@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -34,7 +33,7 @@ import {
 import { checkMedals } from "@/lib/medals-engine";
 import { assetUrl } from "@/lib/asset-paths";
 import { ChallengeGate } from "../challenge/ChallengeGate";
-import { loadState, saveState, clearState } from "@/lib/storage";
+import { loadState, saveState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
 import {
   characterAssetSlug,
@@ -176,7 +175,6 @@ export function StoryPlayer({
     queue: notifQueue,
     push: pushNotif,
     dismiss: dismissNotif,
-    clear: clearNotifs,
   } = useNotifications();
   const [hydrated, setHydrated] = useState(false);
   // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
@@ -276,6 +274,17 @@ export function StoryPlayer({
   // back. Normal scene-to-scene changes leave this untouched (they keep the
   // painterly cross-fade instead).
   const [sceneRevealKey, setSceneRevealKey] = useState(0);
+  // Slow fade-to-black when the player taps "Back to Menu" from the ending —
+  // we darken over ~1.8s, then route home (mirrors the home→story dive in
+  // reverse so leaving feels as deliberate as arriving).
+  const [leaving, setLeaving] = useState(false);
+  // The "arriving" veil lifts only once the FIRST scene image is actually
+  // decode-ready (SceneImage.onReady) — never on a blind timer. So the entrance
+  // never holds black after the image could paint, and on a slow network it
+  // waits for bytes instead of flashing blank-then-pop. Latches once. (The
+  // image is also preloaded during the home dive, so on a normal connection
+  // this is already true at mount.)
+  const [firstImageReady, setFirstImageReady] = useState(false);
   // Bumped by "Try again" after a defeat — part of the EncounterFlow key so the
   // battle re-mounts fresh.
   const [encounterRetryNonce, setEncounterRetryNonce] = useState(0);
@@ -457,6 +466,16 @@ export function StoryPlayer({
     setSfxVolume(readVol("storyranger:sfxVolume", DEFAULT_VOLUMES.sfx));
     setHydrated(true);
   }, [story, slot, previewMode]);
+
+  // Safety net for the arrival veil: if the first image never signals ready
+  // (offline, decode failure, or a race), lift the veil anyway after a beat so
+  // the player is never stranded on black. SceneImage.onReady normally trips
+  // `firstImageReady` well before this fires.
+  useEffect(() => {
+    if (firstImageReady) return;
+    const t = setTimeout(() => setFirstImageReady(true), 3000);
+    return () => clearTimeout(t);
+  }, [firstImageReady]);
 
   // Persist channel volumes + push BGM/SFX levels to the audio engine. (Voice
   // is applied to narration + dialogue via the SpeechAudio `volume` prop.)
@@ -962,12 +981,6 @@ export function StoryPlayer({
     });
   }
 
-  function handleReset() {
-    clearState(story.id, slot);
-    setState(newPlayState(story));
-    clearNotifs();
-  }
-
   // Demo "skip battles" auto-resolve. When a battle would mount and
   // skipBattles is on, fire victory immediately so the storyline walk
   // doesn't stall on combat. We still grant the encounter's medal/mood
@@ -1003,6 +1016,22 @@ export function StoryPlayer({
   // stops being an ending automatically.
   const isEnding =
     !!currentScene.ending && isTerminalScene(currentScene, story.scenes);
+
+  // Ending banner reveal. Once the closing narration finishes typing, we hold
+  // for a long, deliberate beat and THEN mount the banner. Gating the *mount*
+  // (rather than just fading an already-present block) is what keeps the
+  // narration anchored where it is during the wait: with nothing below it, the
+  // text doesn't pre-shift up. When the timer fires the banner mounts and grows
+  // its height in, so the narration rises *with* the banner appearing.
+  // Only ever flips on (via the timer); the render gate also checks `isEnding`,
+  // so a stale `true` can never surface the banner on a non-ending scene — no
+  // synchronous reset needed (and the ending scene is terminal anyway).
+  const [endingReveal, setEndingReveal] = useState(false);
+  useEffect(() => {
+    if (!isEnding || !narrationDone) return;
+    const t = setTimeout(() => setEndingReveal(true), 5500);
+    return () => clearTimeout(t);
+  }, [isEnding, narrationDone]);
 
   // Warm the TTS cache while the player listens to the current scene.
   // For every branch on the current scene, fire-and-forget prefetches for
@@ -1146,7 +1175,7 @@ export function StoryPlayer({
         // admin preview.
         initial={previewMode ? false : { scale: 1.12 }}
         animate={{ scale: 1 }}
-        transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 2.8, ease: [0.16, 1, 0.3, 1] }}
       >
         <AnimatePresence initial={false}>
           <motion.div
@@ -1157,7 +1186,11 @@ export function StoryPlayer({
             transition={{ duration: 2.4, ease: "easeInOut" }}
             className="absolute inset-0"
           >
-            <SceneImage src={displayedImage} alt={`${story.title} — scene`} />
+            <SceneImage
+              src={displayedImage}
+              alt={`${story.title} — scene`}
+              onReady={() => setFirstImageReady(true)}
+            />
           </motion.div>
         </AnimatePresence>
       </motion.div>
@@ -1297,12 +1330,16 @@ export function StoryPlayer({
             );
           }
           if (isEnding) {
+            // Stays unmounted through the closing narration AND the long pause
+            // after it (see the endingReveal timer above), so the narration
+            // holds its position until the banner is actually ready to appear.
+            if (!endingReveal) return null;
             return (
               <EndingPanel
                 endingLabel={currentScene.ending?.label ?? ""}
                 medalCount={state.earnedMedals.length}
                 totalMedals={medals.medals.length}
-                onReset={handleReset}
+                onBackToMenu={() => setLeaving(true)}
               />
             );
           }
@@ -1609,17 +1646,38 @@ export function StoryPlayer({
       </AnimatePresence>
 
       {/* "Arriving in the world" veil — starts black (continuing the home
-          dive's fade-out) and lifts on mount, so the route handoff is
-          seamless. One-shot; skipped in admin preview. */}
+          dive's fade-out) and lifts ONLY once the first scene image is
+          decode-ready (`firstImageReady`), never on a blind timer. So the
+          image is already painted behind the veil as it lifts (a true fade-up,
+          not black-then-pop), and a slow network correctly waits for bytes.
+          With the dive-time preload the image is usually ready at mount, so the
+          veil lifts right away. One-shot; skipped in admin preview. */}
       {!previewMode && (
         <motion.div
           aria-hidden
           className="pointer-events-none absolute inset-0 z-40 bg-ink"
           initial={{ opacity: 1 }}
-          animate={{ opacity: 0 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
+          animate={{ opacity: firstImageReady ? 0 : 1 }}
+          transition={{ duration: 1, ease: "easeOut" }}
         />
       )}
+
+      {/* Leaving veil — slow fade-to-black when the player chooses "Back to
+          Menu" from the ending, then route home. The reverse of the arrival
+          veil above, so the exit feels as unhurried as the entrance. */}
+      <AnimatePresence>
+        {leaving && (
+          <motion.div
+            key="leave-veil"
+            aria-hidden
+            className="absolute inset-0 z-[100] bg-ink"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.8, ease: "easeIn" }}
+            onAnimationComplete={() => router.push("/")}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1700,15 +1758,25 @@ function EndingPanel({
   endingLabel,
   medalCount,
   totalMedals,
-  onReset,
+  onBackToMenu,
 }: {
   endingLabel: string;
   medalCount: number;
   totalMedals: number;
-  onReset: () => void;
+  onBackToMenu: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-4 rounded-card-lg bg-paper-deep/60 p-6 text-center ring-1 ring-ink-soft/10 shadow-card">
+    // Mounts only when the caller's reveal timer fires (the long post-narration
+    // pause has already elapsed by then). Animating height 0 → auto grows the
+    // banner's layout footprint as it fades in, so the narration above it rises
+    // smoothly *with* the banner rather than jumping up beforehand. overflow
+    // hidden clips the padding while the height is mid-grow.
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      transition={{ duration: 1.4, ease: "easeOut" }}
+      className="flex flex-col items-center gap-4 overflow-hidden rounded-card-lg bg-paper-deep/60 p-6 text-center ring-1 ring-ink-soft/10 shadow-card"
+    >
       <p className="font-handwritten text-3xl text-accent-deep">The End</p>
       {endingLabel && (
         <h2 className="text-2xl font-semibold text-ink">{endingLabel}</h2>
@@ -1723,18 +1791,12 @@ function EndingPanel({
       <div className="mt-2 flex flex-wrap items-stretch justify-center gap-2">
         <button
           type="button"
-          onClick={onReset}
-          className="inline-flex min-h-12 items-center justify-center rounded-button bg-accent-deep px-6 text-sm font-medium text-paper shadow-soft transition-transform active:scale-95"
-        >
-          Play Again
-        </button>
-        <Link
-          href="/"
+          onClick={onBackToMenu}
           className="inline-flex min-h-12 items-center justify-center rounded-button bg-paper px-6 text-sm font-medium text-ink-soft ring-1 ring-ink-soft/15 transition-transform active:scale-95"
         >
-          Home
-        </Link>
+          Back to Menu
+        </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

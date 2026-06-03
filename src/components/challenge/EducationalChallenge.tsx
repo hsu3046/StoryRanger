@@ -219,7 +219,7 @@ export function EducationalChallenge({
 
       {/* Prompt */}
       <div className="flex flex-col items-center gap-2 py-2">
-        <p className="whitespace-pre-line text-center text-xl font-semibold tabular-nums text-ink sm:text-2xl">
+        <p className="whitespace-pre-line text-center text-fluid-question font-semibold leading-snug tabular-nums text-ink">
           {challenge.prompt}
         </p>
       </div>

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { preload } from "react-dom";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { CaretLeft, CaretRight, Minus, Plus } from "@phosphor-icons/react";
 
 import type { Hero, HeroGender, PlayState } from "@/types/story";
-import { assetUrl } from "@/lib/asset-paths";
+import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { reviewCount } from "@/lib/review-store";
 import { newPlayState } from "@/lib/story-engine";
@@ -101,6 +102,21 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
    *  on mount, so the route swap itself is invisible. */
   function beginDive(href: string) {
     setShowNewHero(false);
+    // Warm the destination scene image NOW, during the ~1.45s dive, so it's
+    // decode-ready by the time StoryPlayer mounts — otherwise the fetch can't
+    // even start until after the route + hydration gate (~1.6s in). Continue →
+    // the saved scene; a fresh start → the story's start scene. (The play route
+    // also server-preloads the start scene, covering a brand-new game where
+    // `saved` is momentarily stale.) The CDN origin is already preconnected.
+    const sceneId = saved?.currentSceneId ?? story?.startScene;
+    const sceneImg = sceneId ? story?.scenes[sceneId]?.image : undefined;
+    if (sceneImg) {
+      preload(sceneImageWebpUrl(sceneImg), {
+        as: "image",
+        fetchPriority: "high",
+        type: "image/webp",
+      });
+    }
     setDiveTo(href);
   }
 
@@ -241,20 +257,24 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
             )}
 
             {reviewN > 0 && (
+              // Emerald-keyed so it reads as a distinct "practice/learning"
+              // action, not a second Continue: green ring + title + icon,
+              // against the same parchment card so it still feels inviting.
+              // (Continue is brown-keyed.)
               <button
                 type="button"
                 onClick={() => setReviewOpen(true)}
-                className="group inline-flex min-h-14 w-full items-center justify-between gap-3 rounded-button bg-paper/85 px-5 text-left text-base text-ink ring-1 ring-ink-soft/10 shadow-card backdrop-blur transition-all hover:bg-paper hover:-translate-y-px active:translate-y-0"
+                className="group inline-flex min-h-14 w-full items-center justify-between gap-3 rounded-button bg-paper/85 px-5 text-left text-base text-ink ring-1 ring-emerald/30 shadow-card backdrop-blur transition-all hover:bg-paper hover:-translate-y-px active:translate-y-0"
               >
                 <span className="flex flex-col">
-                  <span className="font-handwritten text-base text-accent-deep">
-                    Check Your Answers
+                  <span className="font-handwritten text-base text-emerald">
+                    Study again
                   </span>
                   <span className="text-base font-medium">
-                    {reviewN} to practice
+                    {reviewN} challenges to practice
                   </span>
                 </span>
-                <span className="font-handwritten text-2xl text-accent-deep/70 transition-transform group-hover:translate-x-0.5">
+                <span className="font-handwritten text-2xl text-emerald/70 transition-transform group-hover:translate-x-0.5">
                   ✎
                 </span>
               </button>
