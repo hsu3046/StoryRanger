@@ -83,13 +83,14 @@ export function SpeechAudio({
       setError(null);
       dispose();
       if (!enabled) return;
-      // Already played this exact line — do NOT reload/replay. This is the
-      // guard that makes narration play exactly once per scene: muting then
-      // unmuting (or any effect re-run) re-enters here with the same playKey and
-      // bails. A genuinely new line carries a new playKey and plays once. Set
-      // before the async fetch so concurrent re-runs can't double-fire it.
+      // Already played this exact line — do NOT reload/replay. This guard is
+      // what makes narration play exactly once per scene: muting then unmuting
+      // (or any effect re-run with the same playKey) re-enters here and bails.
+      // A genuinely new line carries a new playKey and plays once. The key is
+      // recorded only AFTER playback actually starts (below), so a cancelled
+      // setup (React StrictMode's setup→cleanup→setup) or a transient fetch
+      // failure never burns the key without any audio having played.
       if (playedKeyRef.current === playKey) return;
-      playedKeyRef.current = playKey;
 
       try {
         let blob: Blob | null = null;
@@ -143,6 +144,9 @@ export function SpeechAudio({
         });
         soundRef.current = sound;
         sound.play();
+        // Mark played only now that audio has actually started (see guard
+        // above) — never before the fetch, so a cancel/failure can't burn it.
+        playedKeyRef.current = playKey;
       } catch (err) {
         if (!cancelled) {
           console.warn("[speech] threw:", err);
