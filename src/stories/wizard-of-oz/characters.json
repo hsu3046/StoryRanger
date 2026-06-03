@@ -3,7 +3,7 @@
     {
       "id": "narrator",
       "name": "Narrator",
-      "voice": "21m00Tcm4TlvDq8ikWAM",
+      "voice": "lxYfHSkYm1EzQzGhdbfc",
       "voiceSpeed": 1,
       "color": "#5a4128",
       "size": "medium"
@@ -12,16 +12,16 @@
       "id": "dorothy",
       "name": "Hero",
       "isHero": true,
-      "voice": "EXAVITQu4vr4xnSDxMaL",
-      "voiceSpeed": 1.05,
+      "voice": "lxYfHSkYm1EzQzGhdbfc",
+      "voiceSpeed": 1,
       "color": "#a8487f",
       "size": "medium"
     },
     {
       "id": "scarecrow",
       "name": "Scarecrow",
-      "voice": "ErXwobaYiN019PkySvjV",
-      "voiceSpeed": 1.1,
+      "voice": "rHWSYoq8UlV0YIBKMryp",
+      "voiceSpeed": 0.8,
       "color": "#c9a23a",
       "size": "medium",
       "persona": {
@@ -47,8 +47,8 @@
     {
       "id": "tinman",
       "name": "Tin Man",
-      "voice": "pNInz6obpgDQGcFmaJgB",
-      "voiceSpeed": 0.95,
+      "voice": "ErXwobaYiN019PkySvjV",
+      "voiceSpeed": 1.2,
       "color": "#6b8aa0",
       "size": "large",
       "persona": {
@@ -74,8 +74,8 @@
     {
       "id": "lion",
       "name": "Cowardly Lion",
-      "voice": "VR6AewLTigWG4xSOukaG",
-      "voiceSpeed": 0.95,
+      "voice": "IRHApOXLvnW57QJPQH2P",
+      "voiceSpeed": 1,
       "color": "#b8651b",
       "size": "large",
       "persona": {
@@ -100,8 +100,8 @@
     {
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
-      "voice": "AZnzlk1XvdvUeBnXmlld",
-      "voiceSpeed": 0.9,
+      "voice": "eppqEXVumQ3CfdndcIBd",
+      "voiceSpeed": 1.2,
       "color": "#4a2a4a",
       "size": "medium",
       "persona": {
@@ -124,7 +124,7 @@
     {
       "id": "glinda",
       "name": "Glinda the Good Witch",
-      "voice": "MF3mGyEYCl7XYWbV9V6O",
+      "voice": "RILOU7YmBhvwJGDGjNmP",
       "voiceSpeed": 1,
       "color": "#d27ab0",
       "size": "medium",
@@ -150,7 +150,7 @@
     {
       "id": "wizard",
       "name": "Wizard of Oz (Reveal)",
-      "voice": "TxGEqnHWrfWFTfGW9XjX",
+      "voice": "6sFKzaJr574YWVu4UuJF",
       "voiceSpeed": 0.95,
       "color": "#7a5a3a",
       "size": "large",
@@ -175,7 +175,7 @@
     {
       "id": "aunt-em",
       "name": "Aunt Em",
-      "voice": "RILOU7YmBhvwJGDGjNmP",
+      "voice": "AZnzlk1XvdvUeBnXmlld",
       "voiceSpeed": 0.95,
       "color": "#8a6d3b",
       "size": "medium",
@@ -201,7 +201,7 @@
       "id": "toto",
       "name": "Toto",
       "voice": "yoZ06aMxZJJ28mfd3POQ",
-      "voiceSpeed": 1.1,
+      "voiceSpeed": 1,
       "color": "#3d2817",
       "size": "tiny",
       "persona": {
@@ -223,8 +223,8 @@
     {
       "id": "character-1",
       "name": "King of the Field Mice",
-      "voice": "21m00Tcm4TlvDq8ikWAM",
-      "voiceSpeed": 1,
+      "voice": "yoZ06aMxZJJ28mfd3POQ",
+      "voiceSpeed": 1.2,
       "color": "#777777",
       "size": "tiny",
       "persona": {
@@ -252,8 +252,8 @@
     {
       "id": "wizard-of-oz",
       "name": "Wizard of Oz",
-      "voice": "21m00Tcm4TlvDq8ikWAM",
-      "voiceSpeed": 1,
+      "voice": "ktrGUw7rURIQyMrQZqCu",
+      "voiceSpeed": 0.8,
       "color": "#00bf63",
       "size": "huge",
       "persona": {
@@ -282,7 +282,7 @@
     {
       "id": "gatekeeper",
       "name": "Gatekeeper",
-      "voice": "21m00Tcm4TlvDq8ikWAM",
+      "voice": "7cOBG34AiHrAzs842Rdi",
       "voiceSpeed": 1,
       "color": "#4e7f48",
       "size": "large",
