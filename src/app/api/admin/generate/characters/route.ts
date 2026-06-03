@@ -67,13 +67,17 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
   const art: { id: string; visualDescription: string }[] = [];
   let heroAssigned = false;
   let npcIdx = 0;
+  let fallbackIdx = 0;
   const usedIds = new Set<string>();
 
   for (const g of generated) {
     // Force a single hero with the conventional id "hero". Otherwise normalise
     // the LLM id to a NAME_RE-safe slug so it can be used as an image filename
-    // (characters/<id>, dialogue/<id>) and a scene speaker reference.
-    let id = slugify(g.id) || g.id;
+    // (characters/<id>, dialogue/<id>) and a scene speaker reference. A
+    // non-ASCII id (e.g. Korean/Japanese) slugifies to "" — fall back to a
+    // deterministic safe id, NOT the raw string (saveStoryImage's NAME_RE would
+    // reject it and the sprite/portrait generation would fail).
+    let id = slugify(g.id) || `character-${++fallbackIdx}`;
     let isHero = false;
     if (g.role === "hero" && !heroAssigned) {
       id = "hero";
