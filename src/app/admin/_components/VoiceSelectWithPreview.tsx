@@ -134,13 +134,21 @@ export function VoiceSelectWithPreview({
 
   const selected = options.find((o) => o.id === value);
   const isCustom = !!value && !selected;
+  // "" is the intentional "no voice" sentinel — the character never speaks via
+  // TTS (e.g. a dog). New characters seed a real DEFAULT_VOICE_ID, so an empty
+  // value here always means the author explicitly chose silence, never "unset".
+  const isNoVoice = value === "";
   const displayLabel = selected
-    ? selected.label
-    : value || placeholder || "(choose a voice)";
+    ? selected.name
+    : isNoVoice
+      ? "(no voice)"
+      : value || placeholder || "(choose a voice)";
 
   /** Render one selectable row with a preview button. A plain helper (not a
-   *  component) so it shares the closure's state without remounting. */
-  const renderRow = (id: string, label: string) => {
+   *  component) so it shares the closure's state without remounting. The
+   *  optional tags render small + muted beside the name (e.g. "#warm #young")
+   *  as a quick visual cue; full search/filter is tracked in issue #14. */
+  const renderRow = (id: string, label: string, tags: string[] = []) => {
     const isPlaying = playingId === id;
     const isLoading = loadingId === id;
     return (
@@ -151,12 +159,19 @@ export function VoiceSelectWithPreview({
             onChange(id);
             setOpen(false);
           }}
-          className={`min-w-0 flex-1 truncate px-3 py-1.5 text-left text-sm hover:bg-paper-deep/40 ${
+          className={`flex min-w-0 flex-1 items-baseline gap-2 px-3 py-1.5 text-left text-sm hover:bg-paper-deep/40 ${
             value === id ? "bg-paper-deep/30 font-semibold" : ""
           }`}
-          title={`${label} — ${id}`}
+          title={
+            tags.length ? `${label} [${tags.join(", ")}] — ${id}` : `${label} — ${id}`
+          }
         >
-          {label}
+          <span className="min-w-0 truncate">{label}</span>
+          {tags.length > 0 && (
+            <span className="shrink-0 text-xs font-normal text-ink-soft/55">
+              {tags.map((t) => `#${t}`).join(" ")}
+            </span>
+          )}
         </button>
         <button
           type="button"
@@ -193,7 +208,9 @@ export function VoiceSelectWithPreview({
         onClick={() => setOpen((o) => !o)}
         className={`${inputCls} flex w-full items-center justify-between pr-9 text-left`}
       >
-        <span className={`truncate ${value ? "" : "text-ink-soft/60"}`}>
+        <span
+          className={`truncate ${value || isNoVoice ? "" : "text-ink-soft/60"}`}
+        >
           {displayLabel}
         </span>
       </button>
@@ -216,13 +233,35 @@ export function VoiceSelectWithPreview({
               direction === "up" ? "bottom-full mb-1" : "top-full mt-1"
             }`}
           >
+            {/* "No voice" sentinel — selecting it stores "" so every TTS
+                trigger short-circuits (the character never speaks aloud; its
+                dialogue/narration text still shows). No preview button: there
+                is no voice id to sample. */}
+            <li className="flex items-center gap-1 pr-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  setOpen(false);
+                }}
+                className={`min-w-0 flex-1 px-3 py-1.5 text-left text-sm text-ink-soft hover:bg-paper-deep/40 ${
+                  isNoVoice ? "bg-paper-deep/30 font-semibold" : ""
+                }`}
+                title="No voice — this character never speaks aloud (dialogue text still shows)"
+              >
+                🔇 (no voice)
+              </button>
+              {/* spacer keeps the label column aligned with rows that have a
+                  preview button (h-6 w-6). */}
+              <span className="h-6 w-6 shrink-0" aria-hidden />
+            </li>
             {isCustom && renderRow(value, `${value} (custom)`)}
             {options.length === 0 && (
               <li className="px-3 py-1.5 text-sm text-ink-soft/60">
                 (no voices in voices.json)
               </li>
             )}
-            {options.map((opt) => renderRow(opt.id, opt.label))}
+            {options.map((opt) => renderRow(opt.id, opt.name, opt.tags))}
           </ul>
         </>
       )}
