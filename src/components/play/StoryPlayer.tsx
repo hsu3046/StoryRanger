@@ -245,8 +245,8 @@ export function StoryPlayer({
     const i = state.interaction;
     if (!i || i.kind !== "encounter") return null;
     const headId = i.queue[0];
-    return headId ? getEncounter(headId) : null;
-  }, [state.interaction]);
+    return headId ? getEncounter(story.id, headId) : null;
+  }, [state.interaction, story.id]);
 
   // Length of the remaining encounter queue. A `count: N` encounter expands to
   // N identical ids, so the id alone can't distinguish occurrence 1 from 2.
@@ -285,7 +285,7 @@ export function StoryPlayer({
       .filter((n): n is string => !!n);
     if (medalNames.length) parts.push(`medals earned: ${medalNames.join(", ")}`);
     const items = Array.from(new Set(state.inventory ?? [])).map((id) =>
-      prettyItem(id),
+      prettyItem(story.id, id),
     );
     if (items.length) parts.push(`carrying: ${items.join(", ")}`);
     const cleared = (state.completedEncounters ?? []).length;
@@ -296,6 +296,7 @@ export function StoryPlayer({
     state.inventory,
     state.completedEncounters,
     medals.medals,
+    story.id,
   ]);
 
   const persistedBattleState: BattleState | undefined = useMemo(() => {
@@ -689,7 +690,7 @@ export function StoryPlayer({
     }
 
     // No outcome → immediate transition + build encounter pool.
-    const queue = buildEncounterQueue(prevSceneId, branch.id, result.state);
+    const queue = buildEncounterQueue(story.id, prevSceneId, branch.id, result.state);
     setState({
       ...result.state,
       interaction:
@@ -709,7 +710,7 @@ export function StoryPlayer({
     const { sourceSceneId, branch } = pendingOutcome;
     // Build the encounter pool for the branch we just traversed and let
     // the regular flow consume it before the destination scene narrates.
-    const queue = buildEncounterQueue(sourceSceneId, branch.id, state);
+    const queue = buildEncounterQueue(story.id, sourceSceneId, branch.id, state);
     setInteraction(
       queue.length > 0
         ? { kind: "encounter", queue: queue.map((e) => e.id) }
@@ -1322,7 +1323,7 @@ export function StoryPlayer({
         medal={medalQueue[0] ?? null}
         onDismiss={() => setMedalQueue((q) => q.slice(1))}
       />
-      <ItemToast items={itemToast} onDismiss={() => setItemToast(null)} />
+      <ItemToast storyId={story.id} items={itemToast} onDismiss={() => setItemToast(null)} />
 
       {/* In-scene dialogue — left-edge portrait rail. Suppressed while
           a battle encounter is active so the rail doesn't sit on top of
@@ -1380,6 +1381,7 @@ export function StoryPlayer({
       )}
 
       <MedalShelfModal
+        storyId={story.id}
         open={shelfOpen}
         catalog={medals}
         earned={state.earnedMedals}

@@ -23,7 +23,7 @@ import {
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { encounterOutroLine } from "@/lib/encounter-lines";
 import { assetUrl } from "@/lib/asset-paths";
-import { MONSTERS } from "@/data/monsters";
+import { monstersFor } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
 import { characterSize, sizeScale } from "@/lib/sprite-size";
@@ -117,9 +117,15 @@ export function BattleScreen({
   challengeType = "mixed",
   recordWrongChallenge,
 }: Props) {
-  const [state, setState] = useState<BattleState>(
-    () => initialState ?? setupBattle(setup),
+  const [state, setState] = useState<BattleState>(() =>
+    initialState
+      ? // Guard pre-refactor saves that predate BattleState.storyId.
+        { ...initialState, storyId: initialState.storyId ?? storyId }
+      : setupBattle(setup),
   );
+  // Per-story monster catalog (stats / sprite / airborne / size). Stable per
+  // storyId so the diff/layer effects below can read it without re-firing.
+  const monsters = useMemo(() => monstersFor(storyId), [storyId]);
   const [effects, setEffects] = useState<FloatingEffect[]>([]);
   const prevHitsRef = useRef<number[]>([]);
   // Anchor the lives baseline to the actual mounted state, not to setup —
@@ -197,7 +203,7 @@ export function BattleScreen({
         newEffects.push({
           id: effectIdRef.current,
           anchor: m.position,
-          airborne: !!MONSTERS[m.monsterId]?.airborne,
+          airborne: !!monsters[m.monsterId]?.airborne,
           amount: delta,
           kind: lastTone === "crit" ? "crit" : "hit",
         });
@@ -263,7 +269,7 @@ export function BattleScreen({
           newEffects.push({
             id: effectIdRef.current,
             anchor: tgt.position,
-            airborne: !!MONSTERS[tgt.monsterId]?.airborne,
+            airborne: !!monsters[tgt.monsterId]?.airborne,
             kind: "miss",
           });
         }
@@ -289,6 +295,7 @@ export function BattleScreen({
     state.pendingTargetIdx,
     state.companions,
     state.activeAttacker,
+    monsters,
   ]);
 
   useEffect(() => {
@@ -417,13 +424,13 @@ export function BattleScreen({
   const monsterLayers = state.monsters.map((m, i) => ({
     monsterId: m.monsterId,
     base:
-      MONSTERS[m.monsterId]?.image ??
+      monsters[m.monsterId]?.image ??
       `/stories/${storyId}/monsters/${m.monsterId}`,
     position: m.position,
     flip: false,
     defeated: m.defeated,
-    airborne: MONSTERS[m.monsterId]?.airborne,
-    scale: sizeScale(MONSTERS[m.monsterId]?.size),
+    airborne: monsters[m.monsterId]?.airborne,
+    scale: sizeScale(monsters[m.monsterId]?.size),
     attacking:
       attackingMonsterIdx === i ? ("left" as const) : undefined,
     hurting: hurtingMonsterIdx === i,
@@ -533,7 +540,7 @@ export function BattleScreen({
               maxHits={m.maxHits}
               defeated={m.defeated}
               portraitBase={
-                MONSTERS[m.monsterId]?.image ??
+                monsters[m.monsterId]?.image ??
                 `/stories/${storyId}/monsters/${m.monsterId}`
               }
             />
@@ -572,6 +579,7 @@ export function BattleScreen({
 
         {isTerminal && showTerminal && (
           <TerminalPanel
+            storyId={storyId}
             outcome={
               state.phase === "victory"
                 ? "victory"
@@ -851,7 +859,7 @@ function BattleBag({
     counts.set(id, (counts.get(id) ?? 0) - 1);
   }
   const entries = [...counts.keys()]
-    .map((id) => ({ id, item: getItem(id), avail: counts.get(id) ?? 0 }))
+    .map((id) => ({ id, item: getItem(state.storyId, id), avail: counts.get(id) ?? 0 }))
     .filter((e) => e.avail > 0 && !!e.item);
   const heroTurn = state.phase === "hero-choose";
 
@@ -954,12 +962,14 @@ function BattleActionButton({
 }
 
 function TerminalPanel({
+  storyId,
   outcome,
   victoryItems,
   rewards,
   onContinue,
   onRetry,
 }: {
+  storyId: string;
   outcome: "victory" | "defeat" | "escaped";
   victoryItems?: string[];
   rewards: string[];
@@ -1001,8 +1011,8 @@ function TerminalPanel({
               key={id}
               className="inline-flex items-center gap-1 rounded-pill bg-paper-deep/80 px-2.5 py-0.5 text-xs font-semibold text-ink ring-1 ring-ink-soft/15"
             >
-              <span aria-hidden>{itemIcon(id)}</span>
-              <span>{prettyItem(id)}</span>
+              <span aria-hidden>{itemIcon(storyId, id)}</span>
+              <span>{prettyItem(storyId, id)}</span>
               {count > 1 && (
                 <span className="ml-0.5 text-ink-soft">×{count}</span>
               )}

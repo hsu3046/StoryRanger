@@ -1,10 +1,10 @@
 /**
  * Content Repository — single read interface over all story content.
  *
- * Today (Phase 0) all reads come from JSON files bundled at build-time via
- * the existing import-and-validate pattern. The Repository abstraction lets
- * the admin UI (Phase 1+) call save methods that, in dev mode only, write
- * the underlying JSON files via server actions. Production stays read-only.
+ * All reads come from JSON files bundled at build-time via the per-story
+ * content modules (`src/stories/<id>/index.ts`), surfaced through `getStory`.
+ * The admin UI (dev mode only) writes the underlying JSON files via server
+ * actions; production stays read-only.
  *
  * Future Supabase / API backends slot in by implementing the same interface.
  */
@@ -14,9 +14,6 @@ import type {
   ItemDefT,
   MonsterStatsT,
 } from "@/data/schemas";
-import { ITEMS, listItems } from "@/data/items";
-import { listMonsters } from "@/data/monsters";
-import { ENCOUNTERS } from "@/data/encounters";
 import { getStory, listStoryIds, type LoadedStory } from "./stories";
 
 export interface ContentRepo {
@@ -29,16 +26,15 @@ export interface ContentRepo {
 
   // Items
   listItems(storyId: string): ItemDefT[];
-  getItem(id: string): ItemDefT | null;
+  getItem(storyId: string, id: string): ItemDefT | null;
 
   // Encounters
   listEncounters(storyId: string): EncounterDefT[];
 }
 
 /**
- * Read-only repo backed by the bundled JSON files. Currently single-story
- * (wizard-of-oz). When more stories are added the helpers below can be
- * keyed by storyId.
+ * Read-only repo backed by the bundled per-story JSON modules. Everything is
+ * keyed by storyId off the loaded story.
  */
 class BundledContentRepo implements ContentRepo {
   getStory(storyId: string): LoadedStory | null {
@@ -48,19 +44,16 @@ class BundledContentRepo implements ContentRepo {
     return listStoryIds();
   }
   listMonsters(storyId: string): MonsterStatsT[] {
-    void storyId; // single-story for now; param kept for the interface
-    return listMonsters() as MonsterStatsT[];
+    return getStory(storyId)?.monsters.monsters ?? [];
   }
   listItems(storyId: string): ItemDefT[] {
-    void storyId;
-    return listItems();
+    return getStory(storyId)?.items.items ?? [];
   }
-  getItem(id: string): ItemDefT | null {
-    return ITEMS[id] ?? null;
+  getItem(storyId: string, id: string): ItemDefT | null {
+    return getStory(storyId)?.items.items.find((it) => it.id === id) ?? null;
   }
   listEncounters(storyId: string): EncounterDefT[] {
-    void storyId;
-    return ENCOUNTERS as EncounterDefT[];
+    return getStory(storyId)?.encounters.encounters ?? [];
   }
 }
 
@@ -109,6 +102,15 @@ export function scanItemReferences(storyId: string): {
             });
           }
         }
+      }
+    }
+  }
+
+  // Encounter rewards + drops also reference the item catalog.
+  for (const enc of repo.listEncounters(storyId)) {
+    for (const itemId of enc.rewards?.items ?? []) {
+      if (!known.has(itemId)) {
+        missing.push({ where: `encounter:${enc.id}.rewards.items`, id: itemId });
       }
     }
   }

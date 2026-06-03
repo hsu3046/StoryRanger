@@ -7,6 +7,8 @@ import { itemIcon, prettyItem } from "@/data/items";
 import { MedalShelf } from "./MedalShelf";
 
 interface Props {
+  /** Story whose item catalog resolves names/icons. */
+  storyId: string;
   open: boolean;
   catalog: MedalsFile;
   earned: string[];
@@ -20,6 +22,7 @@ interface Props {
  * tangible reward; medals follow below as long-term collectibles.
  */
 export function MedalShelfModal({
+  storyId,
   open,
   catalog,
   earned,
@@ -83,9 +86,9 @@ export function MedalShelfModal({
                         className="inline-flex items-center gap-1.5 rounded-pill bg-paper-deep/70 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/10"
                       >
                         <span className="text-base leading-none" aria-hidden>
-                          {itemIcon(id)}
+                          {itemIcon(storyId, id)}
                         </span>
-                        <span>{prettyItem(id)}</span>
+                        <span>{prettyItem(storyId, id)}</span>
                         {count > 1 && (
                           <span className="rounded-pill bg-accent/20 px-1.5 text-xs text-accent-deep">
                             ×{count}

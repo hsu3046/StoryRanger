@@ -1,8 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod";
 
-import { hasElevenLabsKey, synthesizeSpeech } from "@/lib/elevenlabs";
-import { ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
+import { hasElevenLabsKey, isVoiceError, synthesizeSpeech } from "@/lib/elevenlabs";
+import { DEFAULT_TTS_VOICE, ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import { hasR2, r2Put } from "@/lib/r2";
 
 export const runtime = "nodejs";
@@ -41,53 +41,72 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "no_api_key" }, { status: 503 });
   }
 
+  // synthesizeSpeech already retries transient failures (429/5xx/network).
+  // Here we add the LAST link of the chain: if the requested voice itself is
+  // bad (invalid/unavailable id → 4xx), fall back to a known-good default voice
+  // so the line still speaks instead of going silent.
+  let buffer: Buffer;
+  let usedFallbackVoice = false;
   try {
-    const buffer = await synthesizeSpeech(
-      body.text,
-      body.voiceId,
-      body.voiceSpeed,
-    );
-
-    // Populate the R2 cache (best-effort — never fail the request over it).
-    // Skipped for non-cacheable (dialogue) lines so the bucket isn't littered
-    // with one-shot objects. Scheduled with `after()` so the upload runs once
-    // the response is sent BUT the invocation is kept alive until it settles —
-    // a bare fire-and-forget Promise can be frozen/killed in serverless, which
-    // would leave the cache permanently empty (every miss re-hits ElevenLabs).
-    if (body.cache && hasR2()) {
-      after(async () => {
-        try {
-          const key = await ttsObjectKey(
-            body.text,
-            body.voiceId,
-            body.voiceSpeed,
-          );
-          await r2Put(key, buffer, "audio/mpeg");
-        } catch (e) {
-          console.warn("[tts] R2 cache write failed:", String(e));
-        }
-      });
-    }
-
-    return new NextResponse(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "audio/mpeg",
-        // Deterministic narration is immutable-cacheable; unique dialogue lines
-        // must not be stored (they'd never be requested again).
-        "Cache-Control": body.cache
-          ? "public, max-age=31536000, immutable"
-          : "no-store",
-      },
-    });
+    buffer = await synthesizeSpeech(body.text, body.voiceId, body.voiceSpeed);
   } catch (err) {
-    console.error("[tts] ElevenLabs error", err);
-    return NextResponse.json(
-      {
-        error: "tts_failed",
-        detail: err instanceof Error ? err.message : String(err),
-      },
-      { status: 502 },
-    );
+    if (isVoiceError(err) && body.voiceId !== DEFAULT_TTS_VOICE) {
+      console.warn(
+        `[tts] voice "${body.voiceId}" failed (${err instanceof Error ? err.message : err}); falling back to default voice`,
+      );
+      try {
+        buffer = await synthesizeSpeech(
+          body.text,
+          DEFAULT_TTS_VOICE,
+          body.voiceSpeed,
+        );
+        usedFallbackVoice = true;
+      } catch (err2) {
+        console.error("[tts] fallback voice also failed", err2);
+        return NextResponse.json(
+          {
+            error: "tts_failed",
+            detail: err2 instanceof Error ? err2.message : String(err2),
+          },
+          { status: 502 },
+        );
+      }
+    } else {
+      console.error("[tts] ElevenLabs error", err);
+      return NextResponse.json(
+        {
+          error: "tts_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        { status: 502 },
+      );
+    }
   }
+
+  // Cacheable ONLY when the requested voice was used — a fallback-voice clip
+  // must not be stored under the requested voice's key (it'd serve the wrong
+  // voice forever). Best-effort, scheduled with after() so it can't be killed.
+  const cacheable = body.cache && !usedFallbackVoice;
+  if (cacheable && hasR2()) {
+    after(async () => {
+      try {
+        const key = await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed);
+        await r2Put(key, buffer, "audio/mpeg");
+      } catch (e) {
+        console.warn("[tts] R2 cache write failed:", String(e));
+      }
+    });
+  }
+
+  return new NextResponse(new Uint8Array(buffer), {
+    status: 200,
+    headers: {
+      "Content-Type": "audio/mpeg",
+      // Deterministic narration is immutable-cacheable; unique dialogue lines
+      // (and fallback-voice clips) must not be stored.
+      "Cache-Control": cacheable
+        ? "public, max-age=31536000, immutable"
+        : "no-store",
+    },
+  });
 }

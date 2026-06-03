@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import { itemIcon, prettyItem } from "@/data/items";
 
 interface Props {
+  /** Story whose item catalog resolves names/icons. */
+  storyId: string;
   /** Batch of item ids received on scene entry (null/empty → nothing). */
   items: string[] | null;
   onDismiss: () => void;
@@ -24,7 +26,7 @@ function countItems(ids: string[]): { id: string; count: number }[] {
  * MedalToast (same top edge + an offset) so an item drop and a medal never
  * overlap when a scene grants both.
  */
-export function ItemToast({ items, onDismiss }: Props) {
+export function ItemToast({ storyId, items, onDismiss }: Props) {
   const has = !!items && items.length > 0;
   useEffect(() => {
     if (!has) return;
@@ -58,8 +60,8 @@ export function ItemToast({ items, onDismiss }: Props) {
                 key={id}
                 className="inline-flex items-center gap-1 rounded-pill bg-paper-deep/70 px-2 py-0.5 text-xs font-semibold text-ink ring-1 ring-ink-soft/15"
               >
-                <span aria-hidden>{itemIcon(id)}</span>
-                <span>{prettyItem(id)}</span>
+                <span aria-hidden>{itemIcon(storyId, id)}</span>
+                <span>{prettyItem(storyId, id)}</span>
                 {count > 1 && <span className="text-ink-soft">×{count}</span>}
               </span>
             ))}

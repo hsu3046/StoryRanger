@@ -10,7 +10,7 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import type { BranchT } from "@/data/schemas";
-import { MONSTERS } from "@/data/monsters";
+import { monstersFor } from "@/data/monsters";
 import { commonAssetPath } from "@/lib/asset-paths";
 import { AssetThumb } from "../AssetThumb";
 
@@ -270,7 +270,7 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                     {/* Capped so a big pool doesn't overflow. */}
                     {enc.monsters.slice(0, 4).map(({ id: mid, count }) => {
                       const base =
-                        MONSTERS[mid]?.image ??
+                        monstersFor(storyId)[mid]?.image ??
                         `/stories/${storyId}/monsters/${mid}`;
                       return (
                       <span key={mid} className="flex items-center gap-0.5">

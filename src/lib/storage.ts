@@ -1,6 +1,6 @@
 import type { PlayState } from "@/types/story";
 import { DEFAULT_HERO } from "./narrative";
-import { ENCOUNTERS } from "@/data/encounters";
+import { encountersFor } from "@/data/encounters";
 import { MEDALS } from "@/data/medals";
 import { checkMedals } from "@/lib/medals-engine";
 
@@ -106,7 +106,7 @@ export function loadState(
         // Drop queued encounter ids that no longer exist in the catalog —
         // happens after a data-side rename or deletion. If everything
         // drops we clear the overlay so the player resumes on the scene.
-        const validIds = new Set(ENCOUNTERS.map((e) => e.id));
+        const validIds = new Set(encountersFor(storyId).map((e) => e.id));
         const enc = parsed.interaction as {
           kind: "encounter";
           queue: string[];

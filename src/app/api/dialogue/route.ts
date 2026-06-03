@@ -197,7 +197,7 @@ export async function POST(req: Request) {
       !body.alreadyGifted &&
       nextMood >= GIFT_MOOD_THRESHOLD &&
       giftable.includes(proposed) &&
-      getItem(proposed)
+      getItem(body.storyId, proposed)
         ? proposed
         : null;
 

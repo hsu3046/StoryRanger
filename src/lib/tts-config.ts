@@ -11,6 +11,11 @@
  *  cached, so latency doesn't matter; quality does.) */
 export const TTS_MODEL = "eleven_multilingual_v2";
 
+/** Safe fallback voice (ElevenLabs "Storyteller", warm female) used by the TTS
+ *  route when a character's configured voice id is invalid/unavailable — so a
+ *  line still speaks instead of going silent. Must be a real workspace voice. */
+export const DEFAULT_TTS_VOICE = "21m00Tcm4TlvDq8ikWAM";
+
 /** Global voice settings. Per-character overrides can come later; for now only
  *  `speed` varies (from each character's `voiceSpeed`). */
 export const TTS_VOICE_SETTINGS = {

@@ -18,6 +18,12 @@ export default function AdminDashboard() {
             {storyIds.length} stor{storyIds.length === 1 ? "y" : "ies"}
           </span>
         </div>
+        <Link
+          href="/admin/generate"
+          className="inline-flex items-center rounded-pill bg-accent-deep px-3 py-1 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+        >
+          ✨ Generate new story →
+        </Link>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
