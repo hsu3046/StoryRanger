@@ -47,6 +47,14 @@ export function Typewriter({
     onDoneRef.current = onDone;
   }, [onDone]);
 
+  // Completion fires exactly once per text. The terminal-breath delay below can
+  // re-enter the effect (instant flips, re-render) before onDone fires, so this
+  // guards against a double signal. Re-armed on each new text.
+  const doneFiredRef = useRef(false);
+  useEffect(() => {
+    doneFiredRef.current = false;
+  }, [text]);
+
   // Reset on text change — to 0 to retype, or straight to the end when instant
   // (already-revealed narration re-showing after a dialogue closes).
   useEffect(() => {
@@ -54,30 +62,49 @@ export function Typewriter({
     setCount(instant ? text.length : 0);
   }, [text, instant]);
 
-  // Advance one character per tick.
+  // Advance one character per tick. Pause AFTER a breathing point: each delay is
+  // keyed off the char we JUST revealed (text[count-1]), so the gap lands after
+  // the period / comma / line break — the way you breathe reading aloud —
+  // rather than stalling just before the punctuation appears.
   useEffect(() => {
+    // The breath that should follow `ch` once it has been revealed.
+    const breathAfter = (ch: string | undefined) => {
+      if (!punctuationPause || !ch) return speed;
+      if (ch === "\n") return speed * 10; // line break — longest breath
+      if (ch === "." || ch === "!" || ch === "?" || ch === "—") return speed * 7;
+      if (ch === "," || ch === ";" || ch === ":") return speed * 3;
+      return speed;
+    };
+
     if (count >= text.length) {
-      onDoneRef.current?.();
-      return;
-    }
-    // Pause AFTER a breathing point: the delay until we reveal text[count] is
-    // keyed off the char we JUST revealed (text[count-1]), so the gap lands
-    // after the period / comma / line-break — the way you breathe reading
-    // aloud — rather than stalling just before the punctuation appears.
-    let delay = speed;
-    if (punctuationPause) {
-      const prev = text[count - 1];
-      if (prev === "\n") {
-        delay = speed * 10; // line break — longest breath (new paragraph)
-      } else if (prev === "." || prev === "!" || prev === "?" || prev === "—") {
-        delay = speed * 7; // sentence end
-      } else if (prev === "," || prev === ";" || prev === ":") {
-        delay = speed * 3; // clause
+      if (doneFiredRef.current) return;
+      const fire = () => {
+        if (doneFiredRef.current) return;
+        doneFiredRef.current = true;
+        onDoneRef.current?.();
+      };
+      // Let a terminal breathing point land before signalling completion —
+      // onDone reveals the choices / ending UI, so a line ending in '.', '!',
+      // '?', '—' or a line break gets its final breath first. An instant
+      // re-show wasn't typed, so it completes immediately.
+      const tail =
+        !instant && text.length > 0
+          ? breathAfter(text[text.length - 1])
+          : speed;
+      if (tail <= speed) {
+        fire();
+        return;
       }
+      const id = setTimeout(fire, tail);
+      return () => clearTimeout(id);
     }
-    const id = setTimeout(() => setCount((c) => c + 1), delay);
+
+    const id = setTimeout(
+      () => setCount((c) => c + 1),
+      breathAfter(text[count - 1]),
+    );
     return () => clearTimeout(id);
-  }, [count, text, speed, punctuationPause]);
+  }, [count, text, speed, punctuationPause, instant]);
 
   function skip() {
     if (!skipOnClick) return;
