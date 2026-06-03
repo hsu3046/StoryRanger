@@ -22,13 +22,15 @@ export const STEP_SEQUENCES: { task: string; steps: string[] }[] = [
 /** if-then-else rules (for the "conditional" drill). `cond` is a short
  *  condition; `then`/`els` are the two branch actions. */
 export const CONDITIONAL_RULES: { cond: string; then: string; els: string }[] = [
-  { cond: "it is raining ☔", then: "take an umbrella", els: "wear sunglasses" },
-  { cond: "the light is green 🟢", then: "go", els: "stop" },
-  { cond: "it is night 🌙", then: "go to sleep", els: "go play" },
-  { cond: "it is cold 🥶", then: "wear a coat", els: "wear a t-shirt" },
-  { cond: "the bell rings 🔔", then: "go to class", els: "keep playing" },
-  { cond: "the door is locked 🔒", then: "use the key", els: "walk in" },
-  { cond: "you are hungry 🍽️", then: "eat a snack", els: "keep working" },
+  // `cond` uses the emoji ALONE (no redundant English word beside it). The
+  // branch actions stay in words — they're the answer choices, not duplicated.
+  { cond: "it is ☔", then: "take an umbrella", els: "wear sunglasses" },
+  { cond: "the light is 🟢", then: "go", els: "stop" },
+  { cond: "it is 🌙", then: "go to sleep", els: "go play" },
+  { cond: "it is 🥶", then: "wear a coat", els: "wear a t-shirt" },
+  { cond: "the 🔔 rings", then: "go to class", els: "keep playing" },
+  { cond: "the door is 🔒", then: "use the key", els: "walk in" },
+  { cond: "you are 🍽️", then: "eat a snack", els: "keep working" },
   { cond: "the cup is empty", then: "fill it", els: "drink it" },
 ];
 
@@ -43,5 +45,6 @@ export const LOOP_GLYPHS = ["⬆️", "⬇️", "👏", "⭐", "🔵", "🦶"];
 export const BOOLEAN_TOKENS = ["🔑", "🪪", "🎫", "⭐"];
 
 /** Compass directions in CLOCKWISE order — a right turn is +1, left is −1
- *  (mod 4). Used by the "trace" drill (which way are you facing?). */
-export const DIRECTIONS = ["⬆️ up", "➡️ right", "⬇️ down", "⬅️ left"];
+ *  (mod 4). Used by the "trace" drill (which way are you facing?). Emoji-only:
+ *  the arrow IS the answer, so an English word beside it just reads redundant. */
+export const DIRECTIONS = ["⬆️", "➡️", "⬇️", "⬅️"];

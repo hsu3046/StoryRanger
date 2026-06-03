@@ -40,6 +40,7 @@ export type ChallengeCategory = z.infer<typeof ChallengeCategorySchema>;
 export type ChallengeVisual =
   | { kind: "glyphs"; glyphs: string[]; layout: "row" | "single" }
   | { kind: "polygon"; sides: number }
+  | { kind: "shape"; shape: "circle" | "oval" | "star" | "heart" }
   | { kind: "rect"; w: number; h: number; showDims: boolean }
   | { kind: "triangle"; base: number; height: number }
   | { kind: "bar"; den: number; shaded: number };
@@ -383,19 +384,33 @@ const POLY_NAMES: Record<number, string> = {
   7: "heptagon", 8: "octagon", 9: "nonagon", 10: "decagon",
 };
 
+const SPECIAL_SHAPES = ["circle", "oval", "star", "heart"] as const;
+
 function makeShape(): Challenge {
-  const sides = pick([3, 4, 5, 6]) ?? 4;
-  const target = POLY_NAMES[sides];
+  // Distractor name pool mixes polygons + round/special shapes so a circle
+  // question can offer "square"/"oval"/"triangle" etc.
+  const pool = [...Object.values(POLY_NAMES), ...SPECIAL_SHAPES];
+  const special = Math.random() < 0.45;
+  const target = special
+    ? (pick(SPECIAL_SHAPES) ?? "circle")
+    : POLY_NAMES[pick([3, 4, 5, 6]) ?? 4];
   const names = new Set<string>([target]);
-  const pool = Object.values(POLY_NAMES);
   for (let t = 0; names.size < 4 && t < 200; t++) names.add(pick(pool)!);
   const choices = shuffle([...names]);
+  // Re-derive the polygon's side count from the chosen name when not special.
+  const sides = special
+    ? 0
+    : Number(
+        Object.keys(POLY_NAMES).find((k) => POLY_NAMES[Number(k)] === target),
+      );
   return {
     category: "shape",
     prompt: "What shape is this?",
     choices,
     correctIndex: choices.indexOf(target),
-    visual: { kind: "polygon", sides },
+    visual: special
+      ? { kind: "shape", shape: target as (typeof SPECIAL_SHAPES)[number] }
+      : { kind: "polygon", sides },
   };
 }
 
@@ -450,7 +465,9 @@ function makeMeasure(age: number): Challenge {
     };
   }
   return {
-    ...numericChallenge("measure", `Area of this rectangle? (${w} × ${h})`, w * h, spreadFor(w * h)),
+    // No "(w × h)" hint — the kid reads the two side lengths off the labeled
+    // rectangle and works out the area from the shape alone.
+    ...numericChallenge("measure", "Area of this rectangle?", w * h, spreadFor(w * h)),
     visual: { kind: "rect", w, h, showDims: true },
   };
 }
@@ -1077,15 +1094,23 @@ function makePlural(age: number): Challenge {
 function makeCompound(age: number): Challenge {
   void age;
   const e = pick(COMPOUND_WORDS) ?? COMPOUND_WORDS[0];
-  const others = COMPOUND_WORDS.filter((c) => c.whole !== e.whole).map(
-    (c) => c.whole,
-  );
-  return stringChallenge(
-    "compound",
-    `${e.a} + ${e.b} = ___?`,
-    e.whole,
-    () => pick(others),
-  );
+  // Distractors that SHARE one half with the answer (e.g. "sunset" / "sunshine"
+  // for "sun + flower") come first, so the child must combine BOTH parts rather
+  // than just pick the only familiar-looking word. Fill the rest at random.
+  const sharers = COMPOUND_WORDS.filter(
+    (c) => c.whole !== e.whole && (c.a === e.a || c.b === e.b),
+  ).map((c) => c.whole);
+  const rest = COMPOUND_WORDS.filter(
+    (c) => c.whole !== e.whole && c.a !== e.a && c.b !== e.b,
+  ).map((c) => c.whole);
+  const distractors = [...shuffle(sharers), ...shuffle(rest)].slice(0, 3);
+  const choices = shuffle([e.whole, ...distractors]);
+  return {
+    category: "compound",
+    prompt: `${e.a} + ${e.b} = ___?`,
+    choices,
+    correctIndex: choices.indexOf(e.whole),
+  };
 }
 
 /** Homophone groups at this age's tier: ≤G4 simple sounds, ≥G5 spelling-aware. */
@@ -1169,20 +1194,35 @@ function makeCommands(age: number): Challenge {
   };
 }
 
-/** Loop — expand a repeat (iteration). */
+/** Loop — expand a repeat (iteration). The loop BODY is a short sequence (1–2
+ *  glyphs for older kids), so the answer is that whole body repeated, not just
+ *  one symbol stamped N times — the point of a loop is "repeat this body". */
 function makeLoop(age: number): Challenge {
-  const g = pick(LOOP_GLYPHS) ?? "⬆️";
+  const bodyLen = age <= 6 ? 1 : (pick([1, 2]) ?? 2);
+  const body = shuffle([...LOOP_GLYPHS]).slice(0, bodyLen);
+  const bodyStr = body.join("");
   const n = randInt(2, age <= 6 ? 3 : 4);
-  const correct = g.repeat(n);
+  const correct = bodyStr.repeat(n);
+  const shown = bodyLen > 1 ? `(${bodyStr})` : bodyStr;
   return stringChallenge(
     "loop",
-    `What does "repeat ${g} ${n} times" make?`,
+    `What does "repeat ${shown} ${n} times" make?`,
     correct,
     () => {
-      const useOther = Math.random() < 0.5;
-      const glyph = useOther ? pick(LOOP_GLYPHS) ?? g : g;
-      const cand = glyph.repeat(randInt(2, 5));
-      return cand !== correct ? cand : undefined;
+      const r = Math.random();
+      // Wrong order inside each repeat (body reversed) — only meaningful for a
+      // 2-glyph body; same length as the answer so it isn't given away.
+      if (bodyLen > 1 && r < 0.4) {
+        return [...body].reverse().join("").repeat(n);
+      }
+      // Wrong number of repeats.
+      if (r < 0.75) {
+        const m = randInt(2, 5);
+        return bodyStr.repeat(m === n ? m + 1 : m);
+      }
+      // A single glyph stamped out — the "not actually looping the body" guess.
+      const g = pick(body) ?? bodyStr;
+      return g.repeat(randInt(2, bodyLen * n + 1));
     },
   );
 }
@@ -1224,18 +1264,25 @@ function makeTrace(age: number): Challenge {
   };
 }
 
-/** Debug — every step should match, but one is wrong: which one? */
+/** Debug — a real how-to procedure with ONE step that doesn't belong (an alien
+ *  step borrowed from another task). The child reads the algorithm and spots
+ *  the buggy step — genuine debugging, not "find the odd symbol". */
 function makeDebug(age: number): Challenge {
-  const n = age <= 8 ? 4 : 5;
-  const good = pick(["➡️", "⬆️"]) ?? "➡️";
-  const bad = good === "➡️" ? "⬅️" : "⬇️";
-  const bugPos = randInt(0, n - 1);
-  const seq = Array.from({ length: n }, (_, i) => (i === bugPos ? bad : good));
-  const ORD = ["First", "Second", "Third", "Fourth", "Fifth"];
+  void age;
+  const task = pick(STEP_SEQUENCES) ?? STEP_SEQUENCES[0];
+  // A step from a DIFFERENT task that isn't already part of this one.
+  const alienPool = STEP_SEQUENCES.filter((t) => t.task !== task.task)
+    .flatMap((t) => t.steps)
+    .filter((s) => !task.steps.includes(s));
+  const alien = pick(alienPool) ?? alienPool[0];
+  const bugPos = randInt(0, task.steps.length - 1);
+  const steps = task.steps.map((s, i) => (i === bugPos ? alien : s));
+  const numbered = steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
   return {
     category: "debug",
-    prompt: `Every step should be ${good}, but one is wrong:\n${seq.join("  ")}\nWhich step is the bug?`,
-    choices: ORD.slice(0, n),
+    // Choices ARE the steps — tap the one that doesn't belong in the procedure.
+    prompt: `Here are the steps to ${task.task}, but one is WRONG:\n${numbered}\nWhich step is the bug?`,
+    choices: steps,
     correctIndex: bugPos,
   };
 }
