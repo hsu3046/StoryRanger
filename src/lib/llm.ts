@@ -3,9 +3,13 @@
  * resilient fallback chain.
  *
  * The active provider + model are picked from environment variables:
- *   LLM_PROVIDER=openai | gemini | anthropic    (default: openai)
+ *   LLM_PROVIDER=openai | gemini | anthropic | openrouter  (default: openai)
  *   LLM_MODEL=<provider-specific id>            (provider-specific default)
- *   LLM_FALLBACK=gemini,anthropic               (optional ordered fallbacks)
+ *   LLM_FALLBACK=openrouter,gemini,anthropic    (optional ordered fallbacks)
+ *
+ * OpenRouter is OpenAI-compatible (one key → many models). Set
+ * OPENROUTER_API_KEY + OPENROUTER_MODEL (e.g. "google/gemini-3-flash"), with
+ * optional OPENROUTER_SITE_URL / OPENROUTER_SITE_NAME attribution headers.
  *
  * Resilience (so a single transient hiccup doesn't surface as a canned
  * dialogue reply / failed generation):
@@ -31,7 +35,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { GoogleGenAI } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
 
-export type LLMProvider = "openai" | "gemini" | "anthropic";
+export type LLMProvider = "openai" | "gemini" | "anthropic" | "openrouter";
 
 export type LLMMessage = { role: "user" | "assistant"; content: string };
 
@@ -50,13 +54,20 @@ export interface ChatOptions<T> {
 let _openai: OpenAI | null = null;
 let _gemini: GoogleGenAI | null = null;
 let _anthropic: Anthropic | null = null;
+let _openrouter: OpenAI | null = null;
+
+/** OpenRouter is OpenAI-compatible — we drive it through the OpenAI SDK pointed
+ *  at its base URL, reusing the same structured-output (json_schema) path. */
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 function envTrim(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
 }
 
 function isProvider(v: string): v is LLMProvider {
-  return v === "openai" || v === "gemini" || v === "anthropic";
+  return (
+    v === "openai" || v === "gemini" || v === "anthropic" || v === "openrouter"
+  );
 }
 
 export function activeProvider(): LLMProvider {
@@ -75,6 +86,11 @@ function defaultModelFor(p: LLMProvider): string {
       return "gemini-3-flash-preview";
     case "anthropic":
       return "claude-sonnet-4-6";
+    case "openrouter":
+      // OpenRouter model id (provider/model). `OPENROUTER_MODEL` overrides;
+      // pick a structured-output-capable default. Set whatever you like, e.g.
+      // "google/gemini-3-flash", "deepseek/deepseek-v4", "anthropic/claude-sonnet-4.6".
+      return envTrim("OPENROUTER_MODEL") ?? "openai/gpt-5-mini";
   }
 }
 
@@ -91,6 +107,8 @@ function providerHasKey(p: LLMProvider): boolean {
       return !!envTrim("GEMINI_API_KEY") || !!envTrim("GOOGLE_API_KEY");
     case "anthropic":
       return !!envTrim("ANTHROPIC_API_KEY");
+    case "openrouter":
+      return !!envTrim("OPENROUTER_API_KEY");
   }
 }
 
@@ -107,9 +125,9 @@ function fallbackProviders(active: LLMProvider): LLMProvider[] {
         .split(",")
         .map((s) => s.trim().toLowerCase())
         .filter(isProvider)
-    : (["openai", "gemini", "anthropic"] as LLMProvider[]).filter(
-        (p) => p !== active,
-      );
+    : (
+        ["openrouter", "openai", "gemini", "anthropic"] as LLMProvider[]
+      ).filter((p) => p !== active);
   // dedupe + drop active + keep only key-bearing providers
   const seen = new Set<LLMProvider>([active]);
   const out: LLMProvider[] = [];
@@ -228,6 +246,8 @@ function chatOnce<T>(
       return chatGemini(opts, model);
     case "anthropic":
       return chatAnthropic(opts, model);
+    case "openrouter":
+      return chatOpenRouter(opts, model);
   }
 }
 
@@ -235,17 +255,17 @@ function chatOnce<T>(
 // OpenAI
 // ─────────────────────────────────────────────────────────────
 
-async function chatOpenAI<T>(opts: ChatOptions<T>, model: string): Promise<T> {
-  if (!_openai) {
-    const apiKey = envTrim("OPENAI_API_KEY");
-    if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
-    // maxRetries: 0 — our chat() layer owns retry/backoff + cross-provider
-    // fallback, so the SDK's own retries don't stack (and delay the fallback).
-    _openai = new OpenAI({ apiKey, maxRetries: 0 });
-  }
-
-  // OpenAI accepts a zod schema natively via the helper.
-  const completion = await _openai.chat.completions.parse({
+/** Shared OpenAI-compatible structured-output call (OpenAI + OpenRouter). */
+async function runOpenAICompatible<T>(
+  client: OpenAI,
+  opts: ChatOptions<T>,
+  model: string,
+  label: string,
+): Promise<T> {
+  // Both OpenAI and OpenRouter accept a zod schema natively via the helper
+  // (json_schema response_format). The model chosen on OpenRouter must support
+  // structured outputs; if it doesn't, the error routes into the fallback chain.
+  const completion = await client.chat.completions.parse({
     model,
     messages: [
       { role: "system", content: opts.system },
@@ -256,9 +276,48 @@ async function chatOpenAI<T>(opts: ChatOptions<T>, model: string): Promise<T> {
 
   const parsed = completion.choices[0]?.message?.parsed;
   if (parsed === null || parsed === undefined) {
-    throw new Error("[llm:openai] no parsed message");
+    throw new Error(`[llm:${label}] no parsed message`);
   }
   return parsed as T;
+}
+
+async function chatOpenAI<T>(opts: ChatOptions<T>, model: string): Promise<T> {
+  if (!_openai) {
+    const apiKey = envTrim("OPENAI_API_KEY");
+    if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
+    // maxRetries: 0 — our chat() layer owns retry/backoff + cross-provider
+    // fallback, so the SDK's own retries don't stack (and delay the fallback).
+    _openai = new OpenAI({ apiKey, maxRetries: 0 });
+  }
+  return runOpenAICompatible(_openai, opts, model, "openai");
+}
+
+// ─────────────────────────────────────────────────────────────
+// OpenRouter (OpenAI-compatible — one key, many models)
+// ─────────────────────────────────────────────────────────────
+
+async function chatOpenRouter<T>(
+  opts: ChatOptions<T>,
+  model: string,
+): Promise<T> {
+  if (!_openrouter) {
+    const apiKey = envTrim("OPENROUTER_API_KEY");
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+    // Optional attribution headers (OpenRouter rankings) — sent only when set.
+    const defaultHeaders: Record<string, string> = {};
+    const referer = envTrim("OPENROUTER_SITE_URL");
+    if (referer) defaultHeaders["HTTP-Referer"] = referer;
+    const title = envTrim("OPENROUTER_SITE_NAME");
+    if (title) defaultHeaders["X-Title"] = title;
+    _openrouter = new OpenAI({
+      apiKey,
+      baseURL: OPENROUTER_BASE_URL,
+      maxRetries: 0,
+      defaultHeaders:
+        Object.keys(defaultHeaders).length > 0 ? defaultHeaders : undefined,
+    });
+  }
+  return runOpenAICompatible(_openrouter, opts, model, "openrouter");
 }
 
 // ─────────────────────────────────────────────────────────────
