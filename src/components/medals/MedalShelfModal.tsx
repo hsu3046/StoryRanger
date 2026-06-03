@@ -2,8 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Backpack, Trophy, X } from "@phosphor-icons/react";
+import { useState } from "react";
 import type { MedalsFile } from "@/types/story";
-import { itemIcon, prettyItem } from "@/data/items";
+import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { MedalShelf } from "./MedalShelf";
 
 interface Props {
@@ -30,6 +31,17 @@ export function MedalShelfModal({
   onClose,
 }: Props) {
   const itemCounts = countItems(inventory);
+  // Which item's description is expanded — tap a pill to toggle. One open at a
+  // time; the panel renders once below the grid (not per-pill) to avoid shift.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Resolve only when the id is STILL in the current bag. A stale openId (the
+  // shelf stays mounted across open/close, and the item may have been consumed
+  // since it was tapped) must not keep showing a description for an item no
+  // longer held — guard against the catalog (which always resolves). (Codex P3)
+  const openItem =
+    openId && itemCounts.some((c) => c.id === openId)
+      ? getItem(storyId, openId)
+      : null;
   return (
     <AnimatePresence>
       {open && (
@@ -80,24 +92,63 @@ export function MedalShelfModal({
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {itemCounts.map(({ id, count }) => (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1.5 rounded-pill bg-paper-deep/70 px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-ink-soft/10"
-                      >
-                        <span className="text-base leading-none" aria-hidden>
-                          {itemIcon(storyId, id)}
-                        </span>
-                        <span>{prettyItem(storyId, id)}</span>
-                        {count > 1 && (
-                          <span className="rounded-pill bg-accent/20 px-1.5 text-xs text-accent-deep">
-                            ×{count}
+                    {itemCounts.map(({ id, count }) => {
+                      const isOpen = openId === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setOpenId(isOpen ? null : id)}
+                          aria-expanded={isOpen}
+                          className={`inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-sm font-semibold text-ink ring-1 transition-colors ${
+                            isOpen
+                              ? "bg-paper-deep ring-accent/40"
+                              : "bg-paper-deep/70 ring-ink-soft/10 hover:bg-paper-deep"
+                          }`}
+                        >
+                          <span className="text-base leading-none" aria-hidden>
+                            {itemIcon(storyId, id)}
                           </span>
-                        )}
-                      </span>
-                    ))}
+                          <span>{prettyItem(storyId, id)}</span>
+                          {count > 1 && (
+                            <span className="rounded-pill bg-accent/20 px-1.5 text-xs text-accent-deep">
+                              ×{count > 99 ? "99+" : count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
+                {/* Description of the tapped item — one panel below the grid
+                    (keyed by openId) so expanding doesn't shift the pills. Tap
+                    the same pill again to close. Description is authored in the
+                    item catalog (always present). */}
+                <AnimatePresence initial={false}>
+                  {openItem && (
+                    <motion.div
+                      key={openItem.id}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex items-start gap-2 rounded-card bg-paper-deep/50 px-3 py-2 text-sm text-ink-soft ring-1 ring-ink-soft/10">
+                        <span className="text-base leading-none" aria-hidden>
+                          {itemIcon(storyId, openItem.id)}
+                        </span>
+                        <span>
+                          <span className="font-semibold text-ink">
+                            {prettyItem(storyId, openItem.id)}
+                          </span>
+                          {" — "}
+                          {openItem.description}
+                        </span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </section>
 
               {/* Medals section */}

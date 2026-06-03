@@ -18,7 +18,6 @@ import type {
   CompanionId,
   DialogueResponse,
   InteractionState,
-  Medal,
   MedalsFile,
   PlayState,
   Scene,
@@ -52,8 +51,11 @@ import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
 import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
 import { SettingsModal } from "./SettingsModal";
-import { MedalToast } from "../medals/MedalToast";
-import { ItemToast } from "./ItemToast";
+import {
+  NotificationStack,
+  itemChips,
+} from "./notifications/NotificationStack";
+import { useNotifications } from "./notifications/useNotifications";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
 import { SpeechAudio } from "../audio/SpeechAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
@@ -167,10 +169,15 @@ export function StoryPlayer({
     }
     return fresh;
   });
-  const [medalQueue, setMedalQueue] = useState<Medal[]>([]);
-  // Items received on the most recent scene entry — shown as a toast (below
-  // the medal toast) once the destination scene is reached.
-  const [itemToast, setItemToast] = useState<string[] | null>(null);
+  // One in-memory queue for ALL top notifications (medal / item / companion).
+  // Replaces three separate toast states + their hardcoded stack offsets.
+  // push/dismiss/clear are stable (useCallback) — safe as effect deps.
+  const {
+    queue: notifQueue,
+    push: pushNotif,
+    dismiss: dismissNotif,
+    clear: clearNotifs,
+  } = useNotifications();
   const [hydrated, setHydrated] = useState(false);
   // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
   // narration TTS, music is BGM, effects are SFX. Seeded from the historic mix
@@ -397,7 +404,17 @@ export function StoryPlayer({
       // Dialogues counter changed → award any metric medals now reached.
       const earned = checkMedals(medals, nextState);
       if (earned.length > 0) {
-        setMedalQueue((q) => [...q, ...earned]);
+        earned.forEach((m) =>
+          pushNotif({
+            kind: "medal",
+            accent: "accent",
+            id: `medal:${m.id}`,
+            icon: m.icon,
+            eyebrow: "New medal!",
+            title: m.name,
+            durationMs: 2000,
+          }),
+        );
         getAudio().playSfx(SFX.MEDAL);
         return {
           ...nextState,
@@ -652,6 +669,35 @@ export function StoryPlayer({
     // delegated listener below). Here we only add the event-specific cue.
     if (branch.addsCompanions?.length) audio.playSfx(SFX.COMPANION);
 
+    // Announce a REAL party change as a banner. Filter against the current
+    // party so a no-op re-join (already present) or an absent removal — which
+    // takeBranch silently dedupes — doesn't flash a banner. Names resolve from
+    // the character catalog (companion id === character id), falling back to
+    // the raw id. Single-slot: a join wins if a branch somehow does both.
+    const joined = (branch.addsCompanions ?? []).filter(
+      (id) => !state.companions.includes(id),
+    );
+    const left = (branch.removesCompanions ?? []).filter((id) =>
+      state.companions.includes(id),
+    );
+    if (joined.length > 0) {
+      const names = joined.map((id) => characterMap[id]?.name ?? id);
+      pushNotif({
+        kind: "companion",
+        replace: true,
+        icon: "🎉",
+        title: `${names.join(", ")} joined the party!`,
+      });
+    } else if (left.length > 0) {
+      const names = left.map((id) => characterMap[id]?.name ?? id);
+      pushNotif({
+        kind: "companion",
+        replace: true,
+        icon: "👋",
+        title: `${names.join(", ")} left the party`,
+      });
+    }
+
     const prevSceneId = state.currentSceneId;
 
     const result = takeBranch(state, branch, story, medals, opts);
@@ -660,7 +706,17 @@ export function StoryPlayer({
     // shown as a toast once the player lands on the destination scene (see the
     // scene-reward arrival effect), never on the bridge page.
     if (result.earnedMedals.length > 0) {
-      setMedalQueue((q) => [...q, ...result.earnedMedals]);
+      result.earnedMedals.forEach((m) =>
+        pushNotif({
+          kind: "medal",
+          accent: "accent",
+          id: `medal:${m.id}`,
+          icon: m.icon,
+          eyebrow: "New medal!",
+          title: m.name,
+          durationMs: 2000,
+        }),
+      );
       audio.playSfx(SFX.MEDAL);
     }
     // Stage the scene reward's arrival toast IN PlayState (persisted) so a
@@ -844,13 +900,13 @@ export function StoryPlayer({
           );
         }
       }
-      // All encounters are battles now → partyHp always returned.
-      const partyHp = res.partyHp;
-      const fallenAttackers = res.fallenAttackers.length
-        ? Array.from(
-            new Set([...(prev.fallenAttackers ?? []), ...res.fallenAttackers]),
-          )
-        : prev.fallenAttackers;
+      // A completed battle (victory or flee) FULLY HEALS the whole party and
+      // revives any KO'd member — HP no longer carries between battles. Mirror
+      // the defeat branch / retryEncounter idiom: reset partyHp to partyMaxHp
+      // and clear fallenAttackers so setupBattle benches no one next time.
+      // (res.partyHp / res.fallenAttackers are intentionally ignored here.)
+      const partyHp = { ...(prev.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }) };
+      const fallenAttackers: typeof res.fallenAttackers = [];
 
       // Pop the head of the queue. Reset `battle` so the next battle
       // re-plays its alert splash and starts fresh. Clear interaction
@@ -880,7 +936,17 @@ export function StoryPlayer({
       // Battles-cleared counter changed → award any metric medals now reached.
       const earned = checkMedals(medals, base);
       if (earned.length > 0) {
-        setMedalQueue((q) => [...q, ...earned]);
+        earned.forEach((m) =>
+          pushNotif({
+            kind: "medal",
+            accent: "accent",
+            id: `medal:${m.id}`,
+            icon: m.icon,
+            eyebrow: "New medal!",
+            title: m.name,
+            durationMs: 2000,
+          }),
+        );
         getAudio().playSfx(SFX.MEDAL);
         return {
           ...base,
@@ -894,8 +960,7 @@ export function StoryPlayer({
   function handleReset() {
     clearState(story.id, slot);
     setState(newPlayState(story));
-    setMedalQueue([]);
-    setItemToast(null);
+    clearNotifs();
   }
 
   // Demo "skip battles" auto-resolve. When a battle would mount and
@@ -987,14 +1052,22 @@ export function StoryPlayer({
     const r = state.pendingRewardToast;
     if (!r || r.sceneId !== state.currentSceneId) return;
     if (showingOutcome || pendingEncounter) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; cleared below
-    if (r.items.length > 0) setItemToast(r.items);
+    if (r.items.length > 0)
+      pushNotif({
+        kind: "item",
+        replace: true,
+        eyebrow: "Received",
+        chips: itemChips(story.id, r.items),
+      });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; clears the persisted pending toast
     setState((s) => ({ ...s, pendingRewardToast: undefined }));
   }, [
     state.pendingRewardToast,
     state.currentSceneId,
     showingOutcome,
     pendingEncounter,
+    pushNotif,
+    story.id,
   ]);
 
   const outcomePrevScene = pendingOutcome
@@ -1039,6 +1112,19 @@ export function StoryPlayer({
   // being placed inside body's content area (which an outer layer was
   // insetting). Fixed positioning sees the viewport directly — no
   // ambiguity, no math, no per-browser quirks.
+  // Until the one-shot localStorage hydration completes, render a neutral
+  // black cover instead of the player. This avoids painting the START scene on
+  // the first frame before the saved scene is restored: `setState(saved)` and
+  // `setHydrated(true)` live in the same effect, so React batches them and the
+  // very first PLAYER render already shows the saved scene — no flash, and no
+  // 2.4s cross-fade jump (the scene mounts directly at the saved key). It's
+  // also SSR-safe: the server and the first client render both emit this same
+  // cover, so there's no hydration mismatch. Preview mode has its scene from
+  // the initializer and no save to load, so it skips the gate (unchanged).
+  if (!previewMode && !hydrated) {
+    return <div className="fixed inset-0 z-0 bg-ink" aria-hidden />;
+  }
+
   return (
     <div className="fixed inset-0 z-0 overflow-hidden bg-ink">
       {/* Full-bleed scene image as background — both old & new in DOM at
@@ -1319,11 +1405,7 @@ export function StoryPlayer({
         />
       )}
 
-      <MedalToast
-        medal={medalQueue[0] ?? null}
-        onDismiss={() => setMedalQueue((q) => q.slice(1))}
-      />
-      <ItemToast storyId={story.id} items={itemToast} onDismiss={() => setItemToast(null)} />
+      <NotificationStack queue={notifQueue} onDismiss={dismissNotif} />
 
       {/* In-scene dialogue — left-edge portrait rail. Suppressed while
           a battle encounter is active so the rail doesn't sit on top of
