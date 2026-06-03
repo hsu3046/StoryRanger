@@ -333,11 +333,16 @@ export function chooseHeroAction(
     if (state.phase !== "hero-choose") return state;
     return applyItemEffect(state, action.itemId, action.targetId);
   }
-  // Attack → begin the ally round: every living member takes one attack puzzle
-  // in a freshly shuffled order, each auto-targeting the frontmost monster.
+  // Attack → begin the ally round: every WILLING member (alive + not sulking)
+  // takes one attack puzzle in a freshly shuffled order, each auto-targeting the
+  // frontmost monster. canAttackerAct gates on the mood (<4 = hangs back), the
+  // same gate as tap-to-switch — so a sulking companion sits the round out
+  // consistently. Fall back to the full living party if nobody is willing
+  // (e.g. hero down + all companions sulking) so the round can never stall.
   const targetIdx = firstAliveMonsterIdx(state.monsters);
   if (targetIdx === undefined) return state;
-  const order = shuffle(livingParty(state));
+  const willing = livingParty(state).filter((a) => canAttackerAct(a, state));
+  const order = shuffle(willing.length ? willing : livingParty(state));
   const first = order[0] ?? state.activeAttacker;
   return {
     ...withActive(state, first),
