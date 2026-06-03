@@ -41,6 +41,23 @@
   --shadow-button-pressed: 1px 1px 3px -1px rgba(43, 29, 16, 0.18);
 }
 
+/* Fluid type — scale continuously with the viewport width (not stepped at
+   breakpoints) for the three reading surfaces. font-size only; each call site
+   keeps its own leading-* so line-height is unaffected. "Aggressive" curve:
+   noticeably smaller on phones, larger on wide screens. */
+@utility text-fluid-narration {
+  /* 16px @360 → 26px @768 → 36px cap on wide screens */
+  font-size: clamp(1rem, calc(0.45rem + 2.45vw), 2.25rem);
+}
+@utility text-fluid-choice {
+  /* 14px @360 → 18px @768 → 22px cap */
+  font-size: clamp(0.875rem, calc(0.65rem + 1vw), 1.375rem);
+}
+@utility text-fluid-question {
+  /* 16px @360 → 22px @768 → 28px cap */
+  font-size: clamp(1rem, calc(0.65rem + 1.5vw), 1.75rem);
+}
+
 html,
 body {
   background: var(--color-ink);

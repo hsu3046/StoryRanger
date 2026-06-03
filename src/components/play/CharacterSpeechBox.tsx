@@ -56,7 +56,7 @@ export function CharacterSpeechBox({
     // across mid-animation content changes.
     return (
       <p
-        className="text-2xl sm:text-3xl leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-center"
+        className="text-fluid-narration leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-center"
         style={OVERLAY_TEXT_STYLE}
       >
         <Typewriter
