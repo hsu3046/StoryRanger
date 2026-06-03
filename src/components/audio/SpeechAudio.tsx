@@ -52,6 +52,11 @@ export function SpeechAudio({
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
   const urlRef = useRef<string | null>(null);
+  // The playKey we've already loaded+played. A line plays AT MOST ONCE per key;
+  // re-runs of the load effect (mute↔unmute crossing the volume-0 boundary, a
+  // settings open/close, any parent re-render that flips `enabled`) must never
+  // restart a line the player already heard.
+  const playedKeyRef = useRef<string | null>(null);
   const enabled = volume > 0 && !!voiceId;
 
   function dispose() {
@@ -78,6 +83,14 @@ export function SpeechAudio({
       setError(null);
       dispose();
       if (!enabled) return;
+      // Already played this exact line — do NOT reload/replay. This guard is
+      // what makes narration play exactly once per scene: muting then unmuting
+      // (or any effect re-run with the same playKey) re-enters here and bails.
+      // A genuinely new line carries a new playKey and plays once. The key is
+      // recorded only AFTER playback actually starts (below), so a cancelled
+      // setup (React StrictMode's setup→cleanup→setup) or a transient fetch
+      // failure never burns the key without any audio having played.
+      if (playedKeyRef.current === playKey) return;
 
       try {
         let blob: Blob | null = null;
@@ -124,6 +137,16 @@ export function SpeechAudio({
           format: ["mp3"], // blob URL has no extension → tell Howler the codec
           html5: false, // Web Audio → mixes with the BGM instead of stopping it
           volume: clamp(volume),
+          // Record the key only when Howler CONFIRMS playback has actually
+          // started — not when we merely request it via play(). If the blob
+          // fails to load/decode or autoplay is blocked (onplayerror), onplay
+          // never fires, so the key stays unset and a later unmute / re-render
+          // of the same scene legitimately retries instead of being silenced
+          // forever by the guard above. Skip if the effect was already
+          // cancelled (StrictMode / rapid scene change).
+          onplay: () => {
+            if (!cancelled) playedKeyRef.current = playKey;
+          },
           onloaderror: (_id, e) =>
             console.warn("[speech] load error", String(e)),
           onplayerror: (_id, e) =>
