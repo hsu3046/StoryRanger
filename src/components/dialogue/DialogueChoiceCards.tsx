@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowCircleRight,
@@ -9,6 +9,7 @@ import {
   PencilSimple,
 } from "@phosphor-icons/react";
 import type { Branch } from "@/types/story";
+import { assetUrl } from "@/lib/asset-paths";
 import { choiceButtonClass, choiceButtonAccentClass } from "../play/ChoiceButton";
 
 /** Up to this many scene branches sit alongside the LLM reply suggestions
@@ -33,6 +34,11 @@ interface Props {
   onEnd: () => void;
   /** Show typing input on init (collapsed by default to keep UI calm). */
   loading?: boolean;
+  /** Portrait asset base (+ sprite fallback) of the dialogue partner — shown
+   *  pinned on each reply card, mirroring the Ask chip portrait so the player
+   *  sees who they're talking to. */
+  iconBase?: string;
+  iconFallbackBase?: string;
 }
 
 const MAX_INPUT = 240;
@@ -49,6 +55,8 @@ export function DialogueChoiceCards({
   onTakeBranch,
   onEnd,
   loading,
+  iconBase,
+  iconFallbackBase,
 }: Props) {
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
@@ -153,6 +161,15 @@ export function DialogueChoiceCards({
                   className={choiceButtonClass}
                 >
                   <span>{s}</span>
+                  {iconBase && (
+                    <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+                      <DialogueAvatar
+                        base={iconBase}
+                        fallbackBase={iconFallbackBase}
+                        alt=""
+                      />
+                    </span>
+                  )}
                 </button>
               </div>
             ))}
@@ -177,5 +194,51 @@ export function DialogueChoiceCards({
         </>
       )}
     </motion.div>
+  );
+}
+
+const AVATAR_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
+
+/** Tiny partner portrait for a reply card — tries each extension of `base`,
+ *  then of `fallbackBase` (the in-scene sprite). Mirrors the Ask chip avatar. */
+function DialogueAvatar({
+  base,
+  fallbackBase,
+  alt,
+}: {
+  base: string;
+  fallbackBase?: string;
+  alt: string;
+}) {
+  const list = useMemo(
+    () => [
+      ...AVATAR_EXTS.map((e) => base + e),
+      ...(fallbackBase ? AVATAR_EXTS.map((e) => fallbackBase + e) : []),
+    ],
+    [base, fallbackBase],
+  );
+  const [idx, setIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on path change
+    setIdx(0);
+    setFailed(false);
+  }, [base, fallbackBase]);
+
+  if (failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- extension fallback
+    <img
+      src={assetUrl(list[idx])}
+      alt={alt}
+      draggable={false}
+      aria-hidden
+      className="block h-full w-full object-cover object-top"
+      onError={() => {
+        if (idx + 1 < list.length) setIdx(idx + 1);
+        else setFailed(true);
+      }}
+    />
   );
 }

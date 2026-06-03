@@ -204,6 +204,11 @@ export function StoryPlayer({
    *  narration typewriter finishes (or user taps to skip), and resets
    *  whenever the displayed narration changes (new scene / outcome). */
   const [narrationDone, setNarrationDone] = useState(false);
+  // The last narrationKey whose typewriter fully revealed. When the narration
+  // block remounts for the SAME key (e.g. a dialogue closed without changing
+  // scene), we render it instantly instead of retyping — the typewriter is for
+  // genuine scene entry only.
+  const revealedNarrationKeyRef = useRef<string | null>(null);
   // All overlay state (puzzle / outcome / encounter+battle) now lives in
   // `state.interaction` so a page refresh resumes on the exact same
   // overlay rather than skipping past. Helpers below re-derive the rich
@@ -1256,7 +1261,11 @@ export function StoryPlayer({
                   characterColor={displayedSpeaker?.color ?? "#5a4128"}
                   narration={displayedNarration}
                   variant="overlay"
-                  onTypingDone={() => setNarrationDone(true)}
+                  instant={revealedNarrationKeyRef.current === narrationKey}
+                  onTypingDone={() => {
+                    revealedNarrationKeyRef.current = narrationKey;
+                    setNarrationDone(true);
+                  }}
                 />
               </motion.div>
             )}

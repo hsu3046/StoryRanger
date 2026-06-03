@@ -497,6 +497,8 @@ export function SceneDialogueLayer({
             suggestions={latestReply.suggestions}
             branches={branches}
             loading={loading}
+            iconBase={portraitBase(active)}
+            iconFallbackBase={portraitFallbackBase?.(active)}
             onSend={(t) => sendTurn(active, t)}
             onTakeBranch={(b) => {
               // Navigate FIRST (commitBranch's direct setState), THEN close

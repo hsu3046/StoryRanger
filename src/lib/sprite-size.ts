@@ -38,6 +38,34 @@ export function sizeScale(size: SpriteSize | undefined): number | undefined {
 }
 
 /**
+ * Adds a small, DETERMINISTIC size variation on top of a tier scale so sprites
+ * of the same tier don't all render at the exact same height — two wolves in
+ * one fight read as slightly different. The factor is hashed from `seed`
+ * (e.g. `monsterId:slot`) so it's stable across re-renders (no flicker) yet
+ * differs per instance.
+ *
+ * Bounded to ±8%, which always stays well inside the tier's band — the result
+ * never reaches the midpoint to a neighbouring tier, so a `large` monster never
+ * reads as `huge` (the tier gaps are ≥0.15 and the nearest midpoint is ≥11%
+ * away from every tier value). Returns undefined unchanged (no size set).
+ */
+export function jitterScale(
+  scale: number | undefined,
+  seed: string,
+): number | undefined {
+  if (scale === undefined) return undefined;
+  // FNV-1a → a stable pseudo-random in [0, 1) for this seed.
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const t = ((h >>> 0) % 1000) / 1000;
+  const factor = 0.92 + t * 0.16; // [0.92, 1.08)
+  return scale * factor;
+}
+
+/**
  * Per-character sprite size lives in each story's `characters.json` —
  * see CharacterSchema (`size` field). This helper looks it up from a
  * characters lookup the caller provides, falling back to "medium" when

@@ -10,6 +10,9 @@ interface Props {
   /** Fires when the typewriter finishes (or the user taps to skip). The
    *  parent uses this to gate revealing the choice buttons. */
   onTypingDone?: () => void;
+  /** Render the narration instantly (no typing) — for already-revealed text
+   *  re-shown after a dialogue closes. */
+  instant?: boolean;
 }
 
 /**
@@ -40,6 +43,7 @@ export function CharacterSpeechBox({
   narration,
   variant = "page",
   onTypingDone,
+  instant,
 }: Props) {
   const isNarrator = speaker === "narrator";
   const isOverlay = variant === "overlay";
@@ -55,7 +59,12 @@ export function CharacterSpeechBox({
         className="text-2xl sm:text-3xl leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-center"
         style={OVERLAY_TEXT_STYLE}
       >
-        <Typewriter text={narration} skipOnClick onDone={onTypingDone} />
+        <Typewriter
+          text={narration}
+          skipOnClick
+          instant={instant}
+          onDone={onTypingDone}
+        />
       </p>
     );
   }
@@ -79,7 +88,12 @@ export function CharacterSpeechBox({
         </div>
       )}
       <p className="text-xl sm:text-2xl leading-relaxed text-ink whitespace-pre-line">
-        <Typewriter text={narration} skipOnClick onDone={onTypingDone} />
+        <Typewriter
+          text={narration}
+          skipOnClick
+          instant={instant}
+          onDone={onTypingDone}
+        />
       </p>
     </div>
   );

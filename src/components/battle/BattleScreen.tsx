@@ -26,7 +26,7 @@ import { assetUrl } from "@/lib/asset-paths";
 import { monstersFor } from "@/data/monsters";
 import { getItem, itemIcon, prettyItem } from "@/data/items";
 import { effectLabel, itemUsableIn } from "@/data/item-effects";
-import { characterSize, sizeScale } from "@/lib/sprite-size";
+import { characterSize, jitterScale, sizeScale } from "@/lib/sprite-size";
 import {
   generateChallenge,
   type Challenge,
@@ -485,6 +485,20 @@ export function BattleScreen({
     dodging: id === activeHeroSlot && dodgingHero,
   }));
 
+  // Floating "+N" heal sparkle over a healed member's stage slot. Reuses the
+  // existing FloatingEffect system (the "heal" kind is already green + "+N").
+  function spawnHealFx(memberId: AttackerId, amount: number) {
+    const slotId = memberId === "hero" ? heroId : memberId;
+    const pos = heroLayers.find((l) => l.id === slotId)?.position ?? "far-left";
+    effectIdRef.current += 1;
+    const fxId = effectIdRef.current;
+    setEffects((prev) => [...prev, { id: fxId, anchor: pos, amount, kind: "heal" }]);
+    setTimeout(
+      () => setEffects((cur) => cur.filter((x) => x.id !== fxId)),
+      1500,
+    );
+  }
+
   const monsterLayers = state.monsters.map((m, i) => ({
     monsterId: m.monsterId,
     base:
@@ -494,7 +508,9 @@ export function BattleScreen({
     flip: false,
     defeated: m.defeated,
     airborne: monsters[m.monsterId]?.airborne,
-    scale: sizeScale(monsters[m.monsterId]?.size),
+    // Deterministic ±8% per-instance variety so same-tier monsters don't all
+    // render identical — never crosses a size tier (see jitterScale).
+    scale: jitterScale(sizeScale(monsters[m.monsterId]?.size), `${m.monsterId}:${i}`),
     attacking:
       attackingMonsterIdx === i ? ("left" as const) : undefined,
     hurting: hurtingMonsterIdx === i,
@@ -595,14 +611,19 @@ export function BattleScreen({
             onHeal={(id) => {
               const itemId = pendingHealItemId;
               setPendingHealItemId(null);
-              if (itemId)
-                setState((s) =>
-                  chooseHeroAction(s, {
-                    kind: "useItem",
-                    itemId,
-                    targetId: id,
-                  }),
-                );
+              if (!itemId) return;
+              // Green "+N" sparkle over the healed member (the actual recovered
+              // amount, capped at their max).
+              const item = getItem(storyId, itemId);
+              if (item?.effect.kind === "heal") {
+                const before = state.partyLives[id] ?? 0;
+                const max = state.partyMaxLives[id] ?? before;
+                const healed = Math.min(max, before + item.effect.amount) - before;
+                if (healed > 0) spawnHealFx(id, healed);
+              }
+              setState((s) =>
+                chooseHeroAction(s, { kind: "useItem", itemId, targetId: id }),
+              );
             }}
             onSwitch={(to) =>
               setState((s) => chooseHeroAction(s, { kind: "switch", to }))
