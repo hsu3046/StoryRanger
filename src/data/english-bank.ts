@@ -285,6 +285,18 @@ export const COMPOUND_WORDS: { whole: string; a: string; b: string }[] = [
   { whole: "doghouse", a: "dog", b: "house" },
   { whole: "sandcastle", a: "sand", b: "castle" },
   { whole: "fireman", a: "fire", b: "man" },
+  // Entries below deliberately SHARE a part with another so the "compound"
+  // drill can offer distractors that match one half (e.g. sunset vs sunflower)
+  // — forcing the child to combine BOTH parts, not just spot a familiar word.
+  { whole: "sunshine", a: "sun", b: "shine" },
+  { whole: "sunset", a: "sun", b: "set" },
+  { whole: "flowerpot", a: "flower", b: "pot" },
+  { whole: "firefly", a: "fire", b: "fly" },
+  { whole: "firewood", a: "fire", b: "wood" },
+  { whole: "seashell", a: "sea", b: "shell" },
+  { whole: "bedtime", a: "bed", b: "time" },
+  { whole: "basketball", a: "basket", b: "ball" },
+  { whole: "goldfish", a: "gold", b: "fish" },
 ];
 
 /** Homophone groups — words within a group SOUND the same; words from other

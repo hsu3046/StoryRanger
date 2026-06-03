@@ -55,6 +55,51 @@ export function ChallengeVisualView({
     );
   }
 
+  if (visual.kind === "shape") {
+    const cx = px / 2;
+    const cy = px / 2;
+    if (visual.shape === "circle") {
+      return (
+        <svg width={px} height={px} viewBox={`0 0 ${px} ${px}`} aria-hidden>
+          <circle cx={cx} cy={cy} r={px * 0.4} fill={FILL} stroke={STROKE} strokeWidth={2.5} />
+        </svg>
+      );
+    }
+    if (visual.shape === "oval") {
+      return (
+        <svg width={px} height={px} viewBox={`0 0 ${px} ${px}`} aria-hidden>
+          <ellipse cx={cx} cy={cy} rx={px * 0.43} ry={px * 0.3} fill={FILL} stroke={STROKE} strokeWidth={2.5} />
+        </svg>
+      );
+    }
+    if (visual.shape === "star") {
+      const R = px * 0.43;
+      const rin = R * 0.4;
+      const pts = Array.from({ length: 10 }, (_, i) => {
+        const ang = -Math.PI / 2 + (Math.PI * i) / 5;
+        const rad = i % 2 === 0 ? R : rin;
+        return `${(cx + rad * Math.cos(ang)).toFixed(1)},${(cy + rad * Math.sin(ang)).toFixed(1)}`;
+      }).join(" ");
+      return (
+        <svg width={px} height={px} viewBox={`0 0 ${px} ${px}`} aria-hidden>
+          <polygon points={pts} fill={FILL} stroke={STROKE} strokeWidth={2.5} strokeLinejoin="round" />
+        </svg>
+      );
+    }
+    // heart — drawn in a fixed 32×29 path space, scaled to px.
+    return (
+      <svg width={px} height={px} viewBox="0 0 32 29" aria-hidden>
+        <path
+          d="M23.6,0c-3.4,0-6.3,2.7-7.6,5.6C14.7,2.7,11.8,0,8.4,0C3.8,0,0,3.8,0,8.4c0,9.4,9.5,11.9,16,20.6c6.5-8.7,16-11.2,16-20.6C32,3.8,28.2,0,23.6,0z"
+          fill={FILL}
+          stroke={STROKE}
+          strokeWidth={0.6}
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   if (visual.kind === "rect") {
     const pad = size === "lg" ? 26 : 16;
     const maxSide = px - pad * 2;
