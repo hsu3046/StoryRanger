@@ -22,7 +22,7 @@ import type {
 import { monstersFor, type MonsterStats } from "@/data/monsters";
 import { getItem } from "@/data/items";
 import type { ItemDefT } from "@/data/schemas";
-import { rollD20, type RollResult } from "./dice";
+import type { RollResult } from "./dice";
 import type { StagePosition } from "@/components/scene/ComposedScene";
 
 export type BattlePhase =
@@ -86,8 +86,19 @@ export interface BattleState {
   pendingTargetIdx?: number;
   /** Monster index currently lunging at the hero (during hero-defending). */
   defendingMonsterIdx?: number;
-  /** Who is the active attacker for the current/next puzzle. */
+  /** Who is the active attacker for the current/next puzzle. Cycles through
+   *  `actingOrder` during the ally attack phase; restored to `leadAttacker`
+   *  before the enemy phase. */
   activeAttacker: AttackerId;
+  /** The designated frontline/tank — who the enemy targets during the enemy
+   *  phase. Player-chosen via tap-to-switch at hero-choose; defaults to the
+   *  first living member, and follows "steps up" when the front falls. */
+  leadAttacker: AttackerId;
+  /** This round's ally attack order — a shuffled list of living members, each
+   *  taking one attack puzzle. Rebuilt when the round's Attack begins. */
+  actingOrder: AttackerId[];
+  /** Cursor into `actingOrder` for the ally currently attacking. */
+  allyIdx: number;
   /** Consecutive correct puzzle answers across the party. */
   streak: number;
   monsterIdxThisRound: number;
@@ -105,9 +116,9 @@ export interface BattleState {
 }
 
 export type HeroAction =
-  | { kind: "attack"; targetIdx: number }
+  | { kind: "attack" }
   | { kind: "switch"; to: AttackerId }
-  | { kind: "useItem"; itemId: string };
+  | { kind: "useItem"; itemId: string; targetId?: AttackerId };
 
 export interface PuzzleOutcome {
   correct: boolean;
@@ -139,6 +150,81 @@ const MONSTER_SLOTS: StagePosition[][] = [
   ["right-center", "right", "far-right"],
   ["center", "right-center", "right", "far-right"],
 ];
+
+// ─────────────────────────────────────────────────────────────────
+// Turn helpers
+// ─────────────────────────────────────────────────────────────────
+
+/** Index of the frontmost still-standing monster (auto-target), or undefined. */
+function firstAliveMonsterIdx(
+  monsters: BattleMonsterInstance[],
+): number | undefined {
+  const i = monsters.findIndex((m) => !m.defeated);
+  return i === -1 ? undefined : i;
+}
+
+/** Living party members in fixed roster order (hero first). */
+function livingParty(state: BattleState): AttackerId[] {
+  const order: AttackerId[] = ["hero", ...state.companions];
+  return order.filter((a) => !state.fallenAttackers.includes(a));
+}
+
+/** The lead/tank if still standing, else the first living member. */
+function livingLead(state: BattleState): AttackerId {
+  if (!state.fallenAttackers.includes(state.leadAttacker)) {
+    return state.leadAttacker;
+  }
+  return livingParty(state)[0] ?? state.activeAttacker;
+}
+
+/** Fisher–Yates shuffle (non-mutating) — randomises the ally attack order each
+ *  round so the turn flow doesn't feel scripted. */
+function shuffle<T>(arr: readonly T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** Switch the active attacker to `to`, keeping the mirrored HP fields in sync. */
+function withActive(state: BattleState, to: AttackerId): BattleState {
+  return {
+    ...state,
+    activeAttacker: to,
+    heroLives: state.partyLives[to] ?? state.heroLives,
+    maxLives: state.partyMaxLives[to] ?? state.maxLives,
+  };
+}
+
+/** After an ally's attack resolves, advance to the next living ally's puzzle;
+ *  once every ally has acted, restore the lead to the front (the enemy's
+ *  target) and hand the round to the monsters. Assumes at least one monster is
+ *  still alive (the victory check runs before this). */
+function advanceAlly(state: BattleState): BattleState {
+  const order = state.actingOrder ?? [];
+  let ni = state.allyIdx + 1;
+  while (ni < order.length && state.fallenAttackers.includes(order[ni])) ni++;
+  const targetIdx = firstAliveMonsterIdx(state.monsters);
+
+  if (ni < order.length && targetIdx !== undefined) {
+    return {
+      ...withActive(state, order[ni]),
+      allyIdx: ni,
+      pendingTargetIdx: targetIdx,
+      phase: "hero-puzzle",
+    };
+  }
+
+  // Ally phase done → the lead steps to the front to face the monsters.
+  return {
+    ...withActive(state, livingLead(state)),
+    pendingTargetIdx: undefined,
+    monsterIdxThisRound: 0,
+    phase: "monster-rolling",
+  };
+}
 
 export function setupBattle(args: SetupArgs): BattleState {
   const catalog = monstersFor(args.storyId);
@@ -212,6 +298,9 @@ export function setupBattle(args: SetupArgs): BattleState {
     bg: args.bg,
     log: [],
     activeAttacker: firstActive,
+    leadAttacker: firstActive,
+    actingOrder: [],
+    allyIdx: 0,
     streak: 0,
     monsterIdxThisRound: 0,
     companionIdxThisRound: 0,
@@ -230,22 +319,27 @@ export function chooseHeroAction(
 ): BattleState {
   if (action.kind === "switch") {
     if (state.fallenAttackers.includes(action.to)) return state;
-    return {
-      ...state,
-      activeAttacker: action.to,
-      heroLives: state.partyLives[action.to] ?? state.heroLives,
-      maxLives: state.partyMaxLives[action.to] ?? state.maxLives,
-    };
+    // Tap-to-switch picks the LEAD (the tank the enemy targets) as well as the
+    // shown frontline, so the choice persists into the enemy phase.
+    return { ...withActive(state, action.to), leadAttacker: action.to };
   }
   if (action.kind === "useItem") {
-    // Stays in hero-choose — using an item is a free action, the player
-    // still gets to attack/switch afterwards.
-    return applyItemEffect(state, action.itemId);
+    // A free action, but ONLY at the hero-choose decision point — never let an
+    // armed heal fire mid-puzzle or mid-defense.
+    if (state.phase !== "hero-choose") return state;
+    return applyItemEffect(state, action.itemId, action.targetId);
   }
-  // Attack
+  // Attack → begin the ally round: every living member takes one attack puzzle
+  // in a freshly shuffled order, each auto-targeting the frontmost monster.
+  const targetIdx = firstAliveMonsterIdx(state.monsters);
+  if (targetIdx === undefined) return state;
+  const order = shuffle(livingParty(state));
+  const first = order[0] ?? state.activeAttacker;
   return {
-    ...state,
-    pendingTargetIdx: action.targetIdx,
+    ...withActive(state, first),
+    actingOrder: order,
+    allyIdx: 0,
+    pendingTargetIdx: targetIdx,
     phase: "hero-puzzle",
   };
 }
@@ -257,10 +351,10 @@ export function chooseHeroAction(
 export function canUseItem(state: BattleState, item: ItemDefT): boolean {
   switch (item.effect.kind) {
     case "heal":
-      // No point healing the active attacker at full HP.
-      return (
-        state.partyLives[state.activeAttacker] <
-        state.partyMaxLives[state.activeAttacker]
+      // Usable if ANY living member is below full HP (the player picks which
+      // one to heal). No point if the whole standing party is topped up.
+      return livingParty(state).some(
+        (a) => state.partyLives[a] < state.partyMaxLives[a],
       );
     case "stop-time":
       // No stacking — pointless to re-freeze while a freeze is already active.
@@ -292,23 +386,36 @@ export function timerFrozen(
 export function applyItemEffect(
   state: BattleState,
   itemId: string,
+  targetId?: AttackerId,
 ): BattleState {
   const item = getItem(state.storyId, itemId);
   if (!item || !canUseItem(state, item)) return state;
   const effect = item.effect;
   switch (effect.kind) {
     case "heal": {
-      const a = state.activeAttacker;
+      // Heal the chosen target (a living member); fall back to the active
+      // attacker if none/invalid was passed.
+      const a =
+        targetId && !state.fallenAttackers.includes(targetId)
+          ? targetId
+          : state.activeAttacker;
       const max = state.partyMaxLives[a];
+      // Already full → no-op (don't waste the item).
+      if (state.partyLives[a] >= max) return state;
       const healed = Math.min(max, state.partyLives[a] + effect.amount);
       return {
         ...state,
         partyLives: { ...state.partyLives, [a]: healed },
-        heroLives: healed,
+        // heroLives mirrors the ACTIVE attacker only — update it just when the
+        // healed member is the one currently fronting.
+        heroLives: a === state.activeAttacker ? healed : state.heroLives,
         itemsConsumed: [...state.itemsConsumed, itemId],
         log: [
           ...state.log,
-          { text: `Used ${item.name} — healed to ${healed}/${max}.`, tone: "neutral" },
+          {
+            text: `Used ${item.name} — ${attackerName(a)} healed to ${healed}/${max}.`,
+            tone: "neutral",
+          },
         ],
       };
     }
@@ -351,17 +458,12 @@ export function resolvePuzzleAttack(
   const log = [...state.log];
 
   if (targetIdx === undefined) {
-    return { ...state, phase: "companion-rolling", companionIdxThisRound: 0 };
+    return advanceAlly(state);
   }
 
   const target = state.monsters[targetIdx];
   if (!target || target.defeated) {
-    return {
-      ...state,
-      phase: "companion-rolling",
-      companionIdxThisRound: 0,
-      pendingTargetIdx: undefined,
-    };
+    return advanceAlly({ ...state, pendingTargetIdx: undefined });
   }
 
   let monsters = state.monsters;
@@ -434,91 +536,22 @@ export function resolvePuzzleAttack(
     };
   }
 
-  return {
+  return advanceAlly({
     ...state,
     monsters,
     log,
-    phase: "companion-rolling",
-    companionIdxThisRound: 0,
     pendingTargetIdx: undefined,
     streak,
     timeFreeze: nextFreeze,
-  };
+  });
 }
 
 export function stepCompanionTurn(state: BattleState): BattleState {
-  if (state.companionIdxThisRound >= state.companions.length) {
-    return { ...state, phase: "monster-rolling", monsterIdxThisRound: 0 };
-  }
-
-  const compId = state.companions[state.companionIdxThisRound];
-  const mood = state.companionMoods[compId] ?? 5;
-  const log = [...state.log];
-  let monsters = state.monsters;
-
-  if (state.fallenAttackers.includes(compId)) {
-    // skip — companion is down for the count
-  } else if (compId === state.activeAttacker) {
-    // skip — they did the puzzle hit
-  } else if (mood < 4) {
-    log.push({
-      text: `${prettyComp(compId)} hangs back, looking unsure.`,
-      tone: "neutral",
-    });
-  } else {
-    const targetIdx = monsters.findIndex((m) => !m.defeated);
-    if (targetIdx !== -1) {
-      const target = monsters[targetIdx];
-      const supportRoll = rollD20(mood >= 8 ? 4 : 1);
-      if (supportRoll.total >= 14) {
-        monsters = monsters.map((mi, i) =>
-          i === targetIdx
-            ? {
-                ...mi,
-                hitsRemaining: Math.max(0, mi.hitsRemaining - 1),
-                defeated: mi.hitsRemaining - 1 <= 0,
-              }
-            : mi,
-        );
-        log.push({
-          text: `${prettyComp(compId)} ${compFlavor(compId)} — ${target.name} takes another hit!`,
-          tone: "hit",
-        });
-      } else {
-        log.push({
-          text: `${prettyComp(compId)} tries to help but ${target.name} dodges.`,
-          tone: "miss",
-        });
-      }
-    }
-  }
-
-  const next: BattleState = {
-    ...state,
-    monsters,
-    log,
-    companionIdxThisRound: state.companionIdxThisRound + 1,
-  };
-
-  const allDead = monsters.every((m) => m.defeated);
-  if (allDead) {
-    const catalog = monstersFor(state.storyId);
-    const rewards = monsters.flatMap((m) => {
-      const meta = catalog[m.monsterId];
-      return meta?.drops ?? [];
-    });
-    return {
-      ...next,
-      rewards,
-      phase: "victory",
-      log: [...log, { text: "Victory!", tone: "victory" }],
-    };
-  }
-
-  if (next.companionIdxThisRound >= state.companions.length) {
-    return { ...next, phase: "monster-rolling", monsterIdxThisRound: 0 };
-  }
-  return next;
+  // Companions now take full attack turns in the ally loop (resolvePuzzleAttack
+  // → advanceAlly), so there is no separate auto-assist phase. New battles never
+  // enter 'companion-rolling'; this remains only to resolve a pre-refactor save
+  // persisted mid that phase — hand it straight to the monster phase.
+  return { ...state, phase: "monster-rolling", monsterIdxThisRound: 0 };
 }
 
 /**
@@ -637,19 +670,34 @@ export function resolveDefense(
     });
 
     const newActiveHp = partyLives[nextActive] ?? state.partyMaxLives[nextActive] ?? 3;
-    return {
+    const base: BattleState = {
       ...state,
       log,
       partyLives,
       fallenAttackers,
       activeAttacker: nextActive,
+      // The new front also becomes the lead/tank the enemy keeps targeting.
+      leadAttacker: nextActive,
       heroLives: newActiveHp,
-      maxLives:
-        state.partyMaxLives[nextActive] ?? state.maxLives,
+      maxLives: state.partyMaxLives[nextActive] ?? state.maxLives,
       monsterIdxThisRound: state.monsterIdxThisRound + 1,
       defendingMonsterIdx: undefined,
       phase: "monster-rolling",
     };
+    // If that was the round's last monster, go straight to the next round's
+    // hero-choose (mirror the non-KO branch below) — otherwise the UI shows an
+    // empty ~900ms monster beat with no attacker before the round flips.
+    const aliveAfter = state.monsters.filter((m) => !m.defeated);
+    if (base.monsterIdxThisRound >= aliveAfter.length) {
+      return {
+        ...base,
+        phase: "hero-choose",
+        round: state.round + 1,
+        monsterIdxThisRound: 0,
+        companionIdxThisRound: 0,
+      };
+    }
+    return base;
   }
 
   const next: BattleState = {
@@ -688,17 +736,6 @@ export function stepMonsterTurn(state: BattleState): BattleState {
 // ─────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────
-
-function compFlavor(id: CompanionId): string {
-  switch (id) {
-    case "lion":
-      return "pounces with a roar";
-    case "scarecrow":
-      return "flails with surprising strength";
-    case "tinman":
-      return "swings his axe carefully";
-  }
-}
 
 function prettyComp(id: CompanionId): string {
   switch (id) {

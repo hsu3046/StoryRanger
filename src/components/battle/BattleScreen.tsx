@@ -119,8 +119,14 @@ export function BattleScreen({
 }: Props) {
   const [state, setState] = useState<BattleState>(() =>
     initialState
-      ? // Guard pre-refactor saves that predate BattleState.storyId.
-        { ...initialState, storyId: initialState.storyId ?? storyId }
+      ? {
+          // Guard pre-refactor saves that predate these fields.
+          ...initialState,
+          storyId: initialState.storyId ?? storyId,
+          leadAttacker: initialState.leadAttacker ?? initialState.activeAttacker,
+          actingOrder: initialState.actingOrder ?? [],
+          allyIdx: initialState.allyIdx ?? 0,
+        }
       : setupBattle(setup),
   );
   // Per-story monster catalog (stats / sprite / airborne / size). Stable per
@@ -157,6 +163,12 @@ export function BattleScreen({
   const [hurtingMonsterIdx, setHurtingMonsterIdx] = useState<number | null>(
     null,
   );
+  // Heal-item targeting: when set, the bag has "armed" a heal item and the
+  // party HP row becomes a target picker — tap a hurt friend to heal them, or
+  // tap anywhere else to cancel.
+  const [pendingHealItemId, setPendingHealItemId] = useState<string | null>(
+    null,
+  );
 
   // Lunge animation only — recoil is wired in the hits/lives diff effect.
   function triggerAttackerLunge(attacker: AttackerId) {
@@ -165,26 +177,63 @@ export function BattleScreen({
   }
 
   /** Tracks who was the active attacker on the previous render so we can
-   *  distinguish a real combat update from a free `switch` action. */
+   *  distinguish a real combat update from a free `switch` / ally hand-off. */
   const prevActiveRef = useRef<AttackerId>(state.activeAttacker);
+  /** Log length on the previous render — a grown log means combat happened
+   *  this update (used to tell a real hit from a bare attacker swap). */
+  const prevLogLenRef = useRef<number>(state.log.length);
+  /** Fallen-member count on the previous render — a jump means the front took a
+   *  KO blow this update (whose hurt FX the active-swap guard would otherwise
+   *  eat, since the active attacker swaps to the member who steps up). */
+  const prevFallenLenRef = useRef<number>(state.fallenAttackers.length);
 
   // Diff the engine state vs the previous render to spawn floating
   // numbers above the target whose HP/hits changed.
   useEffect(() => {
-    // A character-switch shouldn't trigger damage / DODGE / hurt FX —
-    // the heroLives change is purely because we swapped to a different
-    // attacker's HP, not because someone took damage. Reset refs to the
-    // new active's baseline and bail out.
-    if (prevActiveRef.current !== state.activeAttacker) {
+    // The active attacker now CYCLES through the party during the ally attack
+    // loop, so an active change alone is no longer proof nothing happened.
+    // Count it as a real combat update only when something actually changed: a
+    // log line was added, monster hits dropped, or the SAME attacker lost HP.
+    // A bare switch / ally hand-off (heroLives just mirrors a different member)
+    // resets the baselines and spawns no FX.
+    const activeChanged = prevActiveRef.current !== state.activeAttacker;
+    const livesBefore = prevLivesRef.current;
+    const logGrew = state.log.length > prevLogLenRef.current;
+    const hitsChanged = state.monsters.some(
+      (m, i) =>
+        prevHitsRef.current[i] !== undefined &&
+        prevHitsRef.current[i] !== m.hitsRemaining,
+    );
+    // Hero hurt FX only when the CURRENT attacker took a hit — if the active
+    // attacker changed, the heroLives delta is a mirror swap, not damage.
+    const heroTookDamage = !activeChanged && state.heroLives < livesBefore;
+    // The front member just dropped (KO blow): the active swaps to whoever
+    // steps up, so heroTookDamage misses it — flag it so the hit FX still shows
+    // over the (outgoing) front slot.
+    const leadFell =
+      activeChanged && state.fallenAttackers.length > prevFallenLenRef.current;
+
+    if (!logGrew && !hitsChanged && !heroTookDamage) {
       prevActiveRef.current = state.activeAttacker;
       prevLivesRef.current = state.heroLives;
       prevHitsRef.current = state.monsters.map((m) => m.hitsRemaining);
+      prevLogLenRef.current = state.log.length;
+      prevFallenLenRef.current = state.fallenAttackers.length;
       return;
     }
 
     const newEffects: FloatingEffect[] = [];
     const prev = prevHitsRef.current;
     const lastTone = state.log[state.log.length - 1]?.tone;
+    // For damage-number styling, use the last ATTACK-result tone, not the very
+    // last line — a killing blow appends a "victory" line after the crit/hit,
+    // which would otherwise downgrade a crit kill's number to a plain "hit".
+    const fxTone =
+      [...state.log]
+        .reverse()
+        .find(
+          (e) => e.tone === "crit" || e.tone === "hit" || e.tone === "miss",
+        )?.tone ?? lastTone;
 
     // The active attacker sits in the right-most party slot (frontline).
     // Damage / DODGE / MISS markers anchor on their actual stage position
@@ -205,19 +254,19 @@ export function BattleScreen({
           anchor: m.position,
           airborne: !!monsters[m.monsterId]?.airborne,
           amount: delta,
-          kind: lastTone === "crit" ? "crit" : "hit",
+          kind: fxTone === "crit" ? "crit" : "hit",
         });
       }
     });
 
-    // Hero damage
-    const livesBefore = prevLivesRef.current;
-    if (state.heroLives < livesBefore) {
+    // Hero damage (the current attacker took a hit) OR the front member just
+    // fell to a KO blow (the lethal defense blow is always −1).
+    if (heroTookDamage || leadFell) {
       effectIdRef.current += 1;
       newEffects.push({
         id: effectIdRef.current,
         anchor: activePos,
-        amount: livesBefore - state.heroLives,
+        amount: heroTookDamage ? livesBefore - state.heroLives : 1,
         kind: "hit",
       });
       // Recoil the hero — same gentle bounce as the monster recoil.
@@ -278,6 +327,9 @@ export function BattleScreen({
 
     prevHitsRef.current = state.monsters.map((m) => m.hitsRemaining);
     prevLivesRef.current = state.heroLives;
+    prevActiveRef.current = state.activeAttacker;
+    prevLogLenRef.current = state.log.length;
+    prevFallenLenRef.current = state.fallenAttackers.length;
 
     if (newEffects.length > 0) {
       setEffects((prevList) => [...prevList, ...newEffects]);
@@ -295,6 +347,7 @@ export function BattleScreen({
     state.pendingTargetIdx,
     state.companions,
     state.activeAttacker,
+    state.fallenAttackers,
     monsters,
   ]);
 
@@ -369,6 +422,17 @@ export function BattleScreen({
     return () => clearTimeout(t);
   }, [state.phase]);
 
+  // Disarm an armed heal whenever we leave the hero-choose decision point
+  // (e.g. the player taps Attack to start the round). Together with the engine
+  // guard (useItem only at hero-choose) this prevents a heal lingering — or
+  // firing — mid-puzzle / mid-defense.
+  useEffect(() => {
+    if (state.phase !== "hero-choose" && pendingHealItemId !== null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot disarm when the decision point ends
+      setPendingHealItemId(null);
+    }
+  }, [state.phase, pendingHealItemId]);
+
   const heroPartyIds: (SpeakerId | CompanionId)[] = useMemo(
     () => [heroId, ...state.companions],
     [heroId, state.companions],
@@ -436,10 +500,6 @@ export function BattleScreen({
     hurting: hurtingMonsterIdx === i,
   }));
 
-  const aliveMonsters = state.monsters
-    .map((m, i) => ({ ...m, index: i }))
-    .filter((m) => !m.defeated);
-
   const isTerminal = state.phase === "victory" || state.phase === "defeat";
 
   // Hold the Victory/Defeat panel back ~0.5s after the battle resolves so the
@@ -501,6 +561,16 @@ export function BattleScreen({
 
       {/* Top bar — Party HP (left) | Monster chips | Settings (right).
           One row, justify-between so monsters bunch near the gear. */}
+      {/* Heal-targeting cancel backdrop — while a heal item is armed, tapping
+          anywhere except the party HP row (z-50 header, above this) cancels.
+          iOS-safe: a transparent interactive layer + React onClick. */}
+      {pendingHealItemId && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setPendingHealItemId(null)}
+          aria-hidden
+        />
+      )}
       <header
         className="absolute inset-x-0 top-0 z-50 flex items-start justify-between gap-3 px-4 sm:px-6"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
@@ -517,6 +587,23 @@ export function BattleScreen({
             partyLives={state.partyLives}
             partyMaxLives={state.partyMaxLives}
             fallenAttackers={state.fallenAttackers}
+            healMode={!!pendingHealItemId}
+            canHeal={(id) =>
+              !state.fallenAttackers.includes(id) &&
+              state.partyLives[id] < state.partyMaxLives[id]
+            }
+            onHeal={(id) => {
+              const itemId = pendingHealItemId;
+              setPendingHealItemId(null);
+              if (itemId)
+                setState((s) =>
+                  chooseHeroAction(s, {
+                    kind: "useItem",
+                    itemId,
+                    targetId: id,
+                  }),
+                );
+            }}
             onSwitch={(to) =>
               setState((s) => chooseHeroAction(s, { kind: "switch", to }))
             }
@@ -524,11 +611,17 @@ export function BattleScreen({
           <BattleBag
             inventory={inventory}
             state={state}
-            onUse={(itemId) =>
-              setState((s) =>
-                chooseHeroAction(s, { kind: "useItem", itemId }),
-              )
-            }
+            onUse={(itemId) => {
+              // Heal items need a target → arm the party-row picker. Other
+              // battle items (stop-time) have no target → use immediately.
+              if (getItem(storyId, itemId)?.effect.kind === "heal") {
+                setPendingHealItemId(itemId);
+              } else {
+                setState((s) =>
+                  chooseHeroAction(s, { kind: "useItem", itemId }),
+                );
+              }
+            }}
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-start justify-end gap-2">
@@ -548,7 +641,12 @@ export function BattleScreen({
           {onOpenSettings && (
             <button
               type="button"
-              onClick={onOpenSettings}
+              onClick={() => {
+                // Cancel any armed heal so the picker isn't left stuck behind
+                // the Settings overlay.
+                setPendingHealItemId(null);
+                onOpenSettings();
+              }}
               aria-label="Open settings"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-paper/15 text-ink-soft/80 ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper/40 hover:text-ink active:scale-90"
             >
@@ -571,10 +669,7 @@ export function BattleScreen({
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {state.phase === "hero-choose" && (
-          <ActionRow
-            monsters={aliveMonsters}
-            onAction={(a) => setState((s) => chooseHeroAction(s, a))}
-          />
+          <ActionRow onAction={(a) => setState((s) => chooseHeroAction(s, a))} />
         )}
 
         {isTerminal && showTerminal && (
@@ -623,6 +718,11 @@ export function BattleScreen({
         )}
         {activePuzzle && activeChallenge && activePuzzle.mode === "attack" && (
           <EducationalChallenge
+            // Remount per ally turn. Consecutive allies share the 'hero-puzzle'
+            // phase (no intervening phase unmounts the overlay), so without a
+            // changing key the same instance — and its internal solved/answer
+            // state — would be reused and freeze the next ally's puzzle.
+            key={`atk-${state.round}-${state.allyIdx}`}
             mode="attack"
             withTimer={!timerFrozen(state, "attack")}
             challenge={activeChallenge}
@@ -686,6 +786,9 @@ function PartyHpRow({
   partyMaxLives,
   fallenAttackers,
   onSwitch,
+  healMode,
+  canHeal,
+  onHeal,
 }: {
   party: AttackerId[];
   active: AttackerId;
@@ -697,15 +800,20 @@ function PartyHpRow({
   partyMaxLives: Record<AttackerId, number>;
   fallenAttackers: AttackerId[];
   onSwitch: (to: AttackerId) => void;
+  /** When true, the row is a heal-target picker, not a switcher. */
+  healMode: boolean;
+  /** Whether a member is a valid heal target (living + below full HP). */
+  canHeal: (id: AttackerId) => boolean;
+  onHeal: (id: AttackerId) => void;
 }) {
   // Show "Tap to switch" hint under the row whenever any other party
   // member is selectable — i.e. we're in hero-choose, the player has
   // companions, and at least one of them is clickable.
   const hasSwitchTarget =
+    !healMode &&
     canSwap &&
     party.some(
-      (id) =>
-        id !== active && !fallenAttackers.includes(id) && canAct(id),
+      (id) => id !== active && !fallenAttackers.includes(id) && canAct(id),
     );
   return (
     <div className="flex flex-col items-start gap-1">
@@ -713,7 +821,10 @@ function PartyHpRow({
         {party.map((id) => {
           const fallen = fallenAttackers.includes(id);
           const selected = id === active;
-          const clickable = canSwap && !fallen && canAct(id) && !selected;
+          const healable = healMode && !fallen && canHeal(id);
+          const clickable = healMode
+            ? healable
+            : canSwap && !fallen && canAct(id) && !selected;
           const imageBase =
             id === "hero" ? characterImageBase(heroId) : characterImageBase(id);
           const hp = partyLives[id] ?? 0;
@@ -723,13 +834,17 @@ function PartyHpRow({
               key={id}
               type="button"
               disabled={!clickable}
-              onClick={() => onSwitch(id)}
+              onClick={() => (healMode ? onHeal(id) : onSwitch(id))}
               className={`flex h-11 items-center gap-1.5 rounded-pill px-1.5 ring-1 backdrop-blur transition-all active:scale-95 ${
-                selected
-                  ? "bg-accent-deep text-paper ring-accent shadow-button"
-                  : fallen
-                    ? "bg-paper-deep/40 text-ink-soft/30 ring-ink-soft/10 opacity-60 grayscale"
-                    : "bg-paper/85 text-ink ring-ink-soft/10 hover:bg-paper"
+                healable
+                  ? "bg-emerald/25 text-ink ring-emerald shadow-button animate-pulse"
+                  : selected && !healMode
+                    ? "bg-accent-deep text-paper ring-accent shadow-button"
+                    : fallen
+                      ? "bg-paper-deep/40 text-ink-soft/30 ring-ink-soft/10 opacity-60 grayscale"
+                      : `bg-paper/85 text-ink ring-ink-soft/10 ${
+                          healMode ? "opacity-50" : "hover:bg-paper"
+                        }`
               } ${!clickable ? "cursor-default" : ""}`}
             >
               <span className="relative">
@@ -777,7 +892,7 @@ function PartyHpRow({
           );
         })}
       </div>
-      {hasSwitchTarget && (
+      {(hasSwitchTarget || healMode) && (
         <span
           className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-paper"
           style={{
@@ -786,45 +901,24 @@ function PartyHpRow({
           }}
           aria-hidden
         >
-          Tap to switch
+          {healMode ? "💚 Tap a friend to heal" : "Tap to switch"}
         </span>
       )}
     </div>
   );
 }
 
-function ActionRow({
-  monsters,
-  onAction,
-}: {
-  monsters: { monsterId: string; name: string; index: number }[];
-  onAction: (a: HeroAction) => void;
-}) {
-  // Single target → one big "Attack" button. Multiple targets → render
-  // one "Attack <name>" button per monster so the player picks in one tap.
-  if (monsters.length === 1) {
-    return (
-      <div className="flex justify-center">
-        <BattleActionButton
-          icon={<Sword size={22} weight="duotone" />}
-          label="Attack"
-          onClick={() =>
-            onAction({ kind: "attack", targetIdx: monsters[0].index })
-          }
-        />
-      </div>
-    );
-  }
+function ActionRow({ onAction }: { onAction: (a: HeroAction) => void }) {
+  // One "Attack" button — the whole living party attacks this round, each
+  // member auto-targeting the frontmost monster (order is shuffled per round
+  // in the engine), so the player just taps once to start the round.
   return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {monsters.map((m) => (
-        <BattleActionButton
-          key={`${m.monsterId}-${m.index}`}
-          icon={<Sword size={22} weight="duotone" />}
-          label={`Attack ${m.name}`}
-          onClick={() => onAction({ kind: "attack", targetIdx: m.index })}
-        />
-      ))}
+    <div className="flex justify-center">
+      <BattleActionButton
+        icon={<Sword size={22} weight="duotone" />}
+        label="Attack"
+        onClick={() => onAction({ kind: "attack" })}
+      />
     </div>
   );
 }
