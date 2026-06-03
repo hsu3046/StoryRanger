@@ -34,7 +34,14 @@ export function MedalShelfModal({
   // Which item's description is expanded — tap a pill to toggle. One open at a
   // time; the panel renders once below the grid (not per-pill) to avoid shift.
   const [openId, setOpenId] = useState<string | null>(null);
-  const openItem = openId ? getItem(storyId, openId) : null;
+  // Resolve only when the id is STILL in the current bag. A stale openId (the
+  // shelf stays mounted across open/close, and the item may have been consumed
+  // since it was tapped) must not keep showing a description for an item no
+  // longer held — guard against the catalog (which always resolves). (Codex P3)
+  const openItem =
+    openId && itemCounts.some((c) => c.id === openId)
+      ? getItem(storyId, openId)
+      : null;
   return (
     <AnimatePresence>
       {open && (
