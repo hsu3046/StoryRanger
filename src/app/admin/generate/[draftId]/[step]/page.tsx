@@ -12,6 +12,7 @@ import {
   readStoryboard,
 } from "../../../_lib/draftStore";
 import { validateStory } from "../../../_lib/validateStory";
+import { slugify } from "../../../_lib/slugify";
 import { StepRail } from "../../../_components/generate/shared";
 import { ConceptStep } from "../../../_components/generate/ConceptStep";
 import { StoryboardStep } from "../../../_components/generate/StoryboardStep";
@@ -96,9 +97,12 @@ export default async function WizardStepPage({
     if (!storyboard) redirect(`${base}/storyboard`);
     const scenes = await readDraftScenes(draftId);
     // Only treat as "assembled" when the scene keys match the storyboard beats.
+    // Scene keys are the SLUGGED beat ids (see ScenesStep.assemble), so probe by
+    // slug — a raw-id probe would mark an assembled draft as unassembled, and a
+    // re-assemble would then wipe the already-authored narration.
     const assembled =
       scenes &&
-      storyboard.beats.every((b) => scenes.scenes[b.id]) &&
+      storyboard.beats.every((b) => scenes.scenes[slugify(b.id)]) &&
       Object.keys(scenes.scenes).length >= storyboard.beats.length
         ? scenes
         : null;
