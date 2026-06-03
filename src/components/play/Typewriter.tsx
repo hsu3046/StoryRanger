@@ -60,13 +60,19 @@ export function Typewriter({
       onDoneRef.current?.();
       return;
     }
-    const ch = text[count];
+    // Pause AFTER a breathing point: the delay until we reveal text[count] is
+    // keyed off the char we JUST revealed (text[count-1]), so the gap lands
+    // after the period / comma / line-break — the way you breathe reading
+    // aloud — rather than stalling just before the punctuation appears.
     let delay = speed;
     if (punctuationPause) {
-      if (ch === "." || ch === "!" || ch === "?" || ch === "—") {
-        delay = speed * 7;
-      } else if (ch === "," || ch === ";" || ch === ":") {
-        delay = speed * 3;
+      const prev = text[count - 1];
+      if (prev === "\n") {
+        delay = speed * 10; // line break — longest breath (new paragraph)
+      } else if (prev === "." || prev === "!" || prev === "?" || prev === "—") {
+        delay = speed * 7; // sentence end
+      } else if (prev === "," || prev === ";" || prev === ":") {
+        delay = speed * 3; // clause
       }
     }
     const id = setTimeout(() => setCount((c) => c + 1), delay);
