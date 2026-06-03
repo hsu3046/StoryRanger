@@ -52,6 +52,11 @@ export function SpeechAudio({
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
   const urlRef = useRef<string | null>(null);
+  // The playKey we've already loaded+played. A line plays AT MOST ONCE per key;
+  // re-runs of the load effect (mute↔unmute crossing the volume-0 boundary, a
+  // settings open/close, any parent re-render that flips `enabled`) must never
+  // restart a line the player already heard.
+  const playedKeyRef = useRef<string | null>(null);
   const enabled = volume > 0 && !!voiceId;
 
   function dispose() {
@@ -78,6 +83,13 @@ export function SpeechAudio({
       setError(null);
       dispose();
       if (!enabled) return;
+      // Already played this exact line — do NOT reload/replay. This is the
+      // guard that makes narration play exactly once per scene: muting then
+      // unmuting (or any effect re-run) re-enters here with the same playKey and
+      // bails. A genuinely new line carries a new playKey and plays once. Set
+      // before the async fetch so concurrent re-runs can't double-fire it.
+      if (playedKeyRef.current === playKey) return;
+      playedKeyRef.current = playKey;
 
       try {
         let blob: Blob | null = null;
