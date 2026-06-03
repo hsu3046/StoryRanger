@@ -25,6 +25,13 @@ function lint(sb: StoryboardT): { errors: string[]; warnings: string[] } {
   const warnings: string[] = [];
   const ids = sb.beats.map((b) => b.id);
   const idSet = new Set(ids);
+  // Duplicate beat ids collapse to one scene key in assembly (one scene
+  // overwrites the other) — block save, matching the API-side storyboard lint.
+  const seenBeat = new Set<string>();
+  for (const id of ids) {
+    if (seenBeat.has(id)) errors.push(`duplicate beat id "${id}"`);
+    seenBeat.add(id);
+  }
   if (!idSet.has(sb.startSceneId)) errors.push(`startSceneId "${sb.startSceneId}" is not a beat`);
   for (const beat of sb.beats) {
     const seenBranch = new Set<string>();

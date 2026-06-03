@@ -11,12 +11,25 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { STORY_ID_RE } from "./contentFs";
 
-/** kebab/underscore story id → a safe JS identifier (camelCase). */
+/** JS reserved words — a story id slugifying to one of these (e.g. "default",
+ *  "class") would emit `import * as default from …`, a syntax error that breaks
+ *  the whole build. We prefix `_` to escape them. */
+const RESERVED_WORDS = new Set([
+  "break", "case", "catch", "class", "const", "continue", "debugger", "default",
+  "delete", "do", "else", "export", "extends", "false", "finally", "for",
+  "function", "if", "import", "in", "instanceof", "new", "null", "return",
+  "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void",
+  "while", "with", "let", "static", "yield", "await", "enum", "implements",
+  "interface", "package", "private", "protected", "public",
+]);
+
+/** kebab/underscore story id → a safe, non-reserved JS identifier (camelCase). */
 function toIdent(id: string): string {
   const camel = id.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) =>
     c ? c.toUpperCase() : "",
   );
-  return /^[a-zA-Z_$]/.test(camel) ? camel : `_${camel}`;
+  const safe = /^[a-zA-Z_$]/.test(camel) ? camel : `_${camel}`;
+  return RESERVED_WORDS.has(safe) ? `_${safe}` : safe;
 }
 
 /** All story dirs under src/stories that have an `index.ts` (i.e. are

@@ -79,6 +79,11 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
       id = "hero";
       isHero = true;
       heroAssigned = true;
+    } else if (id === "hero") {
+      // Reserve the "hero" id for the protagonist — otherwise an NPC whose name
+      // slugifies to "hero" collides with the fallback hero appended below
+      // (two characters with id "hero" → mis-bound art/persona).
+      id = "hero-npc";
     }
     if (usedIds.has(id)) continue; // dedupe
     usedIds.add(id);

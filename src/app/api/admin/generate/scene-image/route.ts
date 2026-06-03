@@ -5,6 +5,7 @@ import { generateImageResilient, hasImageKey, type ReferenceImage } from "@/lib/
 import { processFullBleed } from "@/lib/image-post";
 import { scenePrompt } from "@/lib/image-prompts";
 import { characterAssetSlug } from "@/lib/narrative";
+import { slugify } from "@/app/admin/_lib/slugify";
 import {
   readConcept,
   readDraftCharacters,
@@ -48,7 +49,12 @@ export async function POST(req: Request) {
     readDraftCharacters(body.storyId),
   ]);
 
-  const beat = storyboard?.beats.find((b) => b.id === body.sceneId);
+  // Scene keys are slugified beat ids (see ScenesStep.assemble), so match the
+  // beat by its slug — a raw-id compare misses any beat whose id wasn't already
+  // a clean slug, losing the setting/synopsis for the image prompt.
+  const beat = storyboard?.beats.find(
+    (b) => slugify(b.id) === body.sceneId || b.id === body.sceneId,
+  );
   const scene = scenesFile?.scenes[body.sceneId];
   const setting = beat?.setting ?? "";
   const synopsis = beat?.synopsis ?? "";

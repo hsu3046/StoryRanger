@@ -68,7 +68,7 @@ export function NewDraftForm() {
       </Field>
       {err && <ErrorNote>{err}</ErrorNote>}
       <div className="flex justify-end">
-        <PrimaryButton onClick={submit} disabled={pending || !title.trim()}>
+        <PrimaryButton onClick={submit} disabled={pending || !title.trim() || !brief.trim()}>
           {pending ? "Creating…" : "Create draft →"}
         </PrimaryButton>
       </div>
