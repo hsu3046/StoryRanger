@@ -3,9 +3,20 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import { itemIcon, prettyItem } from "@/data/items";
-import type { Notif, NotifChip } from "./types";
+import type { Notif, NotifChip, NotifKind } from "./types";
 
 const DEFAULT_DURATION_MS = 3800;
+
+// Visual priority — the stack always renders medal → item → companion
+// top-to-bottom, regardless of enqueue order. Items are pushed LATER (on scene
+// arrival) than the medal/companion pushed at branch-commit, so insertion order
+// alone would misorder them (and a companion recruited alongside a medal would
+// sit above it). A stable sort by this priority restores the intended order.
+const KIND_ORDER: Record<NotifKind, number> = {
+  medal: 0,
+  item: 1,
+  companion: 2,
+};
 
 /** Build the "icon + name ×N" chips for an item notification from raw ids. */
 export function itemChips(storyId: string, ids: string[]): NotifChip[] {
@@ -157,9 +168,14 @@ export function NotificationStack({
       style={{ top: "max(0.625rem, env(safe-area-inset-top))" }}
     >
       <AnimatePresence initial={false}>
-        {queue.slice(0, max).map((n) => (
-          <NotificationCard key={n.id} notif={n} onDismiss={onDismiss} />
-        ))}
+        {/* Stable sort (Array.sort is stable) → medal → item → companion,
+            preserving insertion order within a kind (e.g. multiple medals). */}
+        {[...queue]
+          .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
+          .slice(0, max)
+          .map((n) => (
+            <NotificationCard key={n.id} notif={n} onDismiss={onDismiss} />
+          ))}
       </AnimatePresence>
     </div>
   );
