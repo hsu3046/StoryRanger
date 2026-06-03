@@ -54,6 +54,7 @@ import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
 import { SettingsModal } from "./SettingsModal";
 import { MedalToast } from "../medals/MedalToast";
 import { ItemToast } from "./ItemToast";
+import { CompanionBanner, type CompanionEvent } from "./CompanionBanner";
 import { MedalShelfModal } from "../medals/MedalShelfModal";
 import { SpeechAudio } from "../audio/SpeechAudio";
 import { SceneDialogueLayer } from "../dialogue/SceneDialogueLayer";
@@ -171,6 +172,11 @@ export function StoryPlayer({
   // Items received on the most recent scene entry — shown as a toast (below
   // the medal toast) once the destination scene is reached.
   const [itemToast, setItemToast] = useState<string[] | null>(null);
+  // Party-change banner (a companion joined or left) — shown one slot below the
+  // item toast. Single-slot: the latest party change supersedes a prior one.
+  const [companionEvent, setCompanionEvent] = useState<CompanionEvent | null>(
+    null,
+  );
   const [hydrated, setHydrated] = useState(false);
   // Per-channel volumes (0–1) — adjusted by the Settings sliders. Voice is the
   // narration TTS, music is BGM, effects are SFX. Seeded from the historic mix
@@ -652,6 +658,29 @@ export function StoryPlayer({
     // delegated listener below). Here we only add the event-specific cue.
     if (branch.addsCompanions?.length) audio.playSfx(SFX.COMPANION);
 
+    // Announce a REAL party change as a banner. Filter against the current
+    // party so a no-op re-join (already present) or an absent removal — which
+    // takeBranch silently dedupes — doesn't flash a banner. Names resolve from
+    // the character catalog (companion id === character id), falling back to
+    // the raw id. Single-slot: a join wins if a branch somehow does both.
+    const joined = (branch.addsCompanions ?? []).filter(
+      (id) => !state.companions.includes(id),
+    );
+    const left = (branch.removesCompanions ?? []).filter((id) =>
+      state.companions.includes(id),
+    );
+    if (joined.length > 0) {
+      setCompanionEvent({
+        kind: "join",
+        names: joined.map((id) => characterMap[id]?.name ?? id),
+      });
+    } else if (left.length > 0) {
+      setCompanionEvent({
+        kind: "leave",
+        names: left.map((id) => characterMap[id]?.name ?? id),
+      });
+    }
+
     const prevSceneId = state.currentSceneId;
 
     const result = takeBranch(state, branch, story, medals, opts);
@@ -844,13 +873,13 @@ export function StoryPlayer({
           );
         }
       }
-      // All encounters are battles now → partyHp always returned.
-      const partyHp = res.partyHp;
-      const fallenAttackers = res.fallenAttackers.length
-        ? Array.from(
-            new Set([...(prev.fallenAttackers ?? []), ...res.fallenAttackers]),
-          )
-        : prev.fallenAttackers;
+      // A completed battle (victory or flee) FULLY HEALS the whole party and
+      // revives any KO'd member — HP no longer carries between battles. Mirror
+      // the defeat branch / retryEncounter idiom: reset partyHp to partyMaxHp
+      // and clear fallenAttackers so setupBattle benches no one next time.
+      // (res.partyHp / res.fallenAttackers are intentionally ignored here.)
+      const partyHp = { ...(prev.partyMaxHp ?? { hero: DEFAULT_MAX_HP.hero }) };
+      const fallenAttackers: typeof res.fallenAttackers = [];
 
       // Pop the head of the queue. Reset `battle` so the next battle
       // re-plays its alert splash and starts fresh. Clear interaction
@@ -896,6 +925,7 @@ export function StoryPlayer({
     setState(newPlayState(story));
     setMedalQueue([]);
     setItemToast(null);
+    setCompanionEvent(null);
   }
 
   // Demo "skip battles" auto-resolve. When a battle would mount and
@@ -1039,6 +1069,19 @@ export function StoryPlayer({
   // being placed inside body's content area (which an outer layer was
   // insetting). Fixed positioning sees the viewport directly — no
   // ambiguity, no math, no per-browser quirks.
+  // Until the one-shot localStorage hydration completes, render a neutral
+  // black cover instead of the player. This avoids painting the START scene on
+  // the first frame before the saved scene is restored: `setState(saved)` and
+  // `setHydrated(true)` live in the same effect, so React batches them and the
+  // very first PLAYER render already shows the saved scene — no flash, and no
+  // 2.4s cross-fade jump (the scene mounts directly at the saved key). It's
+  // also SSR-safe: the server and the first client render both emit this same
+  // cover, so there's no hydration mismatch. Preview mode has its scene from
+  // the initializer and no save to load, so it skips the gate (unchanged).
+  if (!previewMode && !hydrated) {
+    return <div className="fixed inset-0 z-0 bg-ink" aria-hidden />;
+  }
+
   return (
     <div className="fixed inset-0 z-0 overflow-hidden bg-ink">
       {/* Full-bleed scene image as background — both old & new in DOM at
@@ -1324,6 +1367,10 @@ export function StoryPlayer({
         onDismiss={() => setMedalQueue((q) => q.slice(1))}
       />
       <ItemToast storyId={story.id} items={itemToast} onDismiss={() => setItemToast(null)} />
+      <CompanionBanner
+        event={companionEvent}
+        onDismiss={() => setCompanionEvent(null)}
+      />
 
       {/* In-scene dialogue — left-edge portrait rail. Suppressed while
           a battle encounter is active so the rail doesn't sit on top of

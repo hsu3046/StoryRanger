@@ -118,9 +118,8 @@ export function DialogueChoiceCards({
       ) : (
         <>
           {/* Action buttons sit ABOVE the suggestion cards. "End conversation"
-              is normally unnecessary — a branch choice always advances and
-              closes the chat — so it only appears as a fallback exit on
-              scenes with no branches (e.g. endings). */}
+              is always available so the player can leave a chat at any time
+              (it returns to the current scene without advancing the story). */}
           <div className="flex items-center justify-center gap-2">
             <button
               type="button"
@@ -131,16 +130,14 @@ export function DialogueChoiceCards({
               <PencilSimple size={14} />
               Type your own
             </button>
-            {branches.length === 0 && (
-              <button
-                type="button"
-                onClick={onEnd}
-                className="inline-flex items-center gap-1.5 rounded-pill bg-paper-deep/70 px-4 py-2 text-sm text-ink-soft shadow-soft ring-1 ring-ink-soft/10 transition-colors hover:bg-paper-deep"
-              >
-                <HandWaving size={14} />
-                End conversation
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onEnd}
+              className="inline-flex items-center gap-1.5 rounded-pill bg-paper-deep/70 px-4 py-2 text-sm text-ink-soft shadow-soft ring-1 ring-ink-soft/10 transition-colors hover:bg-paper-deep"
+            >
+              <HandWaving size={14} />
+              End conversation
+            </button>
           </div>
           {/* Reply suggestions (continue talking) + scene branches (advance
               the story) share one left-right row — same layout as the main
