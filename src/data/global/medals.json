@@ -3,7 +3,7 @@
     {
       "id": "first_friend",
       "name": "First Friend",
-      "icon": "🤝",
+      "icon": "🤝🏻",
       "description": "You made your very first companion on the journey.",
       "metric": "friends",
       "threshold": 1
@@ -11,7 +11,7 @@
     {
       "id": "fellowship",
       "name": "Fellowship",
-      "icon": "👥",
+      "icon": "🎉",
       "description": "Three friends now travel at your side.",
       "metric": "friends",
       "threshold": 3
@@ -26,7 +26,7 @@
     },
     {
       "id": "creative_hero",
-      "name": "Creative Hero",
+      "name": "Creative Speaker",
       "icon": "✨",
       "description": "You told the story your own way, again and again.",
       "metric": "dialogues",
