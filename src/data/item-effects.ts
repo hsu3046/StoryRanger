@@ -38,6 +38,11 @@ export const EFFECT_META: Record<ItemEffectKind, EffectMeta> = {
         : "Stop time",
     contexts: ["battle"],
   },
+  "attack-boost": {
+    label: (e) =>
+      e.kind === "attack-boost" ? `Attack +${e.amount}` : "Attack boost",
+    contexts: ["battle"],
+  },
   // [+EXT] hint: { label: () => "Hint", contexts: ["puzzle"] },
   // [+EXT] "extra-time": { label: (e) => `+${e.seconds}s`, contexts: ["puzzle"] },
   // [+EXT] "skip-monster": { label: () => "Skip monster", contexts: ["battle"] },

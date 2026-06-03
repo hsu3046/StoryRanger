@@ -113,6 +113,10 @@ export interface BattleState {
    *  as each attack resolves; a one-attack item sets 1). Crit is suppressed
    *  while an attack is frozen. */
   timeFreeze?: "whole-battle" | number;
+  /** Pending "attack-boost" from an item: the next SUCCESSFUL attack deals this
+   *  many extra hits (added on top of crit/streak). A miss leaves it intact;
+   *  a landed hit consumes it. undefined = none. */
+  attackBoost?: number;
 }
 
 export type HeroAction =
@@ -359,6 +363,9 @@ export function canUseItem(state: BattleState, item: ItemDefT): boolean {
     case "stop-time":
       // No stacking — pointless to re-freeze while a freeze is already active.
       return state.timeFreeze === undefined;
+    case "attack-boost":
+      // No stacking — one pending boost at a time.
+      return state.attackBoost === undefined;
     default:
       return false;
   }
@@ -437,6 +444,20 @@ export function applyItemEffect(
         ],
       };
     }
+    case "attack-boost": {
+      return {
+        ...state,
+        attackBoost: effect.amount,
+        itemsConsumed: [...state.itemsConsumed, itemId],
+        log: [
+          ...state.log,
+          {
+            text: `Used ${item.name} — your next hit lands +${effect.amount}!`,
+            tone: "neutral",
+          },
+        ],
+      };
+    }
     default:
       // [+EXT] handle new battle effect kinds here.
       return state;
@@ -476,11 +497,15 @@ export function resolvePuzzleAttack(
     wasFrozen && typeof state.timeFreeze === "number"
       ? state.timeFreeze - 1 || undefined
       : state.timeFreeze;
+  // An attack-boost is consumed only by a LANDED hit (a miss keeps it pending).
+  const nextBoost = outcome.correct ? undefined : state.attackBoost;
 
   if (outcome.correct) {
     streak += 1;
     const isCrit = !wasFrozen && outcome.durationMs <= 3000;
-    let hitsDone = 1 + (isCrit ? 1 : 0) + (streak >= 3 ? 1 : 0);
+    // +X from an attack-boost item, on top of crit/streak (crit damage + X).
+    let hitsDone =
+      1 + (isCrit ? 1 : 0) + (streak >= 3 ? 1 : 0) + (state.attackBoost ?? 0);
     hitsDone = Math.max(1, Math.min(hitsDone, target.hitsRemaining));
 
     monsters = monsters.map((m, i) =>
@@ -533,6 +558,7 @@ export function resolvePuzzleAttack(
       pendingTargetIdx: undefined,
       streak,
       timeFreeze: nextFreeze,
+      attackBoost: nextBoost,
     };
   }
 
@@ -543,6 +569,7 @@ export function resolvePuzzleAttack(
     pendingTargetIdx: undefined,
     streak,
     timeFreeze: nextFreeze,
+    attackBoost: nextBoost,
   });
 }
 

@@ -737,6 +737,17 @@ export function BattleScreen({
             ⏸️ Time stopped — no limit!
           </motion.div>
         )}
+        {state.attackBoost !== undefined && (
+          <motion.div
+            key="attack-boost"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none fixed left-1/2 top-16 z-[61] -translate-x-1/2 rounded-pill bg-accent-deep/85 px-4 py-1.5 text-sm font-semibold text-paper backdrop-blur"
+          >
+            ⚔️ Attack +{state.attackBoost} — next hit!
+          </motion.div>
+        )}
         {activePuzzle && activeChallenge && activePuzzle.mode === "attack" && (
           <EducationalChallenge
             // Remount per ally turn. Consecutive allies share the 'hero-puzzle'
