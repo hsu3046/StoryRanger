@@ -137,6 +137,16 @@ export function SpeechAudio({
           format: ["mp3"], // blob URL has no extension → tell Howler the codec
           html5: false, // Web Audio → mixes with the BGM instead of stopping it
           volume: clamp(volume),
+          // Record the key only when Howler CONFIRMS playback has actually
+          // started — not when we merely request it via play(). If the blob
+          // fails to load/decode or autoplay is blocked (onplayerror), onplay
+          // never fires, so the key stays unset and a later unmute / re-render
+          // of the same scene legitimately retries instead of being silenced
+          // forever by the guard above. Skip if the effect was already
+          // cancelled (StrictMode / rapid scene change).
+          onplay: () => {
+            if (!cancelled) playedKeyRef.current = playKey;
+          },
           onloaderror: (_id, e) =>
             console.warn("[speech] load error", String(e)),
           onplayerror: (_id, e) =>
@@ -144,9 +154,6 @@ export function SpeechAudio({
         });
         soundRef.current = sound;
         sound.play();
-        // Mark played only now that audio has actually started (see guard
-        // above) — never before the fetch, so a cancel/failure can't burn it.
-        playedKeyRef.current = playKey;
       } catch (err) {
         if (!cancelled) {
           console.warn("[speech] threw:", err);
