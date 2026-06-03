@@ -161,12 +161,17 @@ function sleep(ms: number): Promise<void> {
 /** Soft per-attempt timeout — the underlying request may keep running, but we
  *  stop awaiting it and treat it as a (retryable) failure. */
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`[llm] ${label} timed out after ${ms}ms`)), ms),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`[llm] ${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  // clearTimeout in finally so a call that resolves before the deadline doesn't
+  // leave a dangling 30s timer keeping the event loop / serverless invocation
+  // alive (it accumulates under fan-out generation).
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
