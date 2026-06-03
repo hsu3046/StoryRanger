@@ -1,14 +1,150 @@
 {
   "voices": [
-    { "id": "21m00Tcm4TlvDq8ikWAM", "label": "Storyteller (warm, female)" },
-    { "id": "EXAVITQu4vr4xnSDxMaL", "label": "Young Hero (female)" },
-    { "id": "ErXwobaYiN019PkySvjV", "label": "Cheerful Friend (male)" },
-    { "id": "pNInz6obpgDQGcFmaJgB", "label": "Gentle Giant (male)" },
-    { "id": "VR6AewLTigWG4xSOukaG", "label": "Big Softie (male)" },
-    { "id": "AZnzlk1XvdvUeBnXmlld", "label": "Sly Villain (female)" },
-    { "id": "MF3mGyEYCl7XYWbV9V6O", "label": "Kind Fairy (female)" },
-    { "id": "TxGEqnHWrfWFTfGW9XjX", "label": "Grand Wizard (male)" },
-    { "id": "RILOU7YmBhvwJGDGjNmP", "label": "Caring Grown-up (female)" },
-    { "id": "yoZ06aMxZJJ28mfd3POQ", "label": "Playful Sidekick" }
+    {
+      "id": "uju3wxzG5OhpWcoi3SMy",
+      "name": "Narrator (Male)",
+      "tags": [
+        "adult",
+        "calm",
+        "male"
+      ]
+    },
+    {
+      "id": "lxYfHSkYm1EzQzGhdbfc",
+      "name": "Narrator (Female)",
+      "tags": [
+        "adult",
+        "warm",
+        "female"
+      ]
+    },
+    {
+      "id": "RILOU7YmBhvwJGDGjNmP",
+      "name": "Kind Witch",
+      "tags": [
+        "adult",
+        "warm",
+        "female"
+      ]
+    },
+    {
+      "id": "EXAVITQu4vr4xnSDxMaL",
+      "name": "Career Woman",
+      "tags": [
+        "adult",
+        "calm",
+        "female"
+      ]
+    },
+    {
+      "id": "ErXwobaYiN019PkySvjV",
+      "name": "Clever Hobbit",
+      "tags": [
+        "adult",
+        "bright",
+        "male"
+      ]
+    },
+    {
+      "id": "ktrGUw7rURIQyMrQZqCu",
+      "name": "Ancient Wizard",
+      "tags": [
+        "adult",
+        "warm",
+        "male"
+      ]
+    },
+    {
+      "id": "IRHApOXLvnW57QJPQH2P",
+      "name": "Brave Hero",
+      "tags": [
+        "adult",
+        "warm",
+        "male"
+      ]
+    },
+    {
+      "id": "AZnzlk1XvdvUeBnXmlld",
+      "name": "Charming Woman",
+      "tags": [
+        "adult",
+        "warm",
+        "female"
+      ]
+    },
+    {
+      "id": "BlgEcC0TfWpBak7FmvHW",
+      "name": "Funny Girl",
+      "tags": [
+        "young",
+        "bright",
+        "female"
+      ]
+    },
+    {
+      "id": "6sFKzaJr574YWVu4UuJF",
+      "name": "Secret Wisdom",
+      "tags": [
+        "elder",
+        "calm",
+        "male"
+      ]
+    },
+    {
+      "id": "yoZ06aMxZJJ28mfd3POQ",
+      "name": "Playful Sidekick",
+      "tags": [
+        "young",
+        "bright",
+        "neutral"
+      ]
+    },
+    {
+      "id": "7cOBG34AiHrAzs842Rdi",
+      "name": "British Gentleman",
+      "tags": [
+        "adult",
+        "calm",
+        "male"
+      ]
+    },
+    {
+      "id": "eppqEXVumQ3CfdndcIBd",
+      "name": "Kind Grandma",
+      "tags": [
+        "elder",
+        "warm",
+        "female"
+      ]
+    },
+    {
+      "id": "Bj9UqZbhQsanLzgalpEG",
+      "name": "Captain America",
+      "tags": [
+        "adult",
+        "trustful",
+        "male"
+      ]
+    },
+    {
+      "id": "xYWUvKNK6zWCgsdAK7Wi",
+      "name": "Evil Enemy",
+      "tags": [
+        "elder",
+        "dark",
+        "male",
+        "evil"
+      ]
+    },
+    {
+      "id": "rHWSYoq8UlV0YIBKMryp",
+      "name": "Funny Bob",
+      "tags": [
+        "adult",
+        "bright",
+        "male",
+        "funny"
+      ]
+    }
   ]
 }

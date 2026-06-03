@@ -91,5 +91,13 @@ export const ChallengeCategorySchema = z.enum([
 ]);
 
 /** ElevenLabs voice id (e.g. "21m00Tcm4TlvDq8ikWAM"). Free-form because the
- *  Voice Library has thousands; authors pick one per character in the admin. */
-export const TtsVoiceSchema = z.string().min(1);
+ *  Voice Library has thousands; authors pick one per character in the admin.
+ *
+ *  Empty string "" is an INTENTIONAL sentinel meaning "no voice" — the
+ *  character never speaks via TTS (e.g. a dog). Every runtime trigger already
+ *  short-circuits on a falsy voice (SpeechAudio's `!!voiceId` gate, the
+ *  SceneDialogueLayer mount guard, prefetchNarration), so "" cleanly skips
+ *  audio while dialogue/narration TEXT still shows. We spell the union out
+ *  (rather than dropping `.min(1)`) so "" reads as an allowed, deliberate
+ *  value while other blank/garbage input is still rejected. */
+export const TtsVoiceSchema = z.literal("").or(z.string().min(1));
