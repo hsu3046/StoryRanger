@@ -7,6 +7,7 @@ import type { ConceptT, DraftMetaT, StoryboardT } from "@/data/schemas";
 import type { Scene, Story } from "@/types/story";
 import { saveDraftMetaAction, saveDraftScenesAction } from "../../_actions/generateDraft";
 import { slugify } from "../../_lib/slugify";
+import { buildBeatKeyMap } from "../../_lib/sceneKeys";
 import { advanceMeta, Card, ErrorNote, PrimaryButton } from "./shared";
 
 interface Props {
@@ -30,14 +31,7 @@ export function ScenesStep({ draftId, concept, storyboard, meta, initialScenes }
     // to a slug that satisfies the image-save NAME_RE. Build one raw→slug map
     // first (deduping collisions) so scene keys, image paths, branch.next, and
     // startScene all resolve to the SAME slug.
-    const idMap = new Map<string, string>();
-    const used = new Set<string>();
-    storyboard.beats.forEach((beat, i) => {
-      let slug = slugify(beat.id) || `scene-${i + 1}`;
-      while (used.has(slug)) slug = `${slug}-2`;
-      used.add(slug);
-      idMap.set(beat.id, slug);
-    });
+    const idMap = buildBeatKeyMap(storyboard.beats);
     const resolve = (id: string): string => idMap.get(id) ?? slugify(id);
 
     // Preserve any narration / bgm / reward already authored for a beat that
