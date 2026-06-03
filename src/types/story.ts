@@ -102,8 +102,9 @@ export interface Scene {
     items?: string[];
     moodBoost?: { companionId: CompanionId; delta: number }[];
   };
-  /** Extra dialogue-able characters present in this scene (added to
-   *  the dialogue rail on top of party companions + the scene speaker). */
+  /** The scene's Interactive Characters — the dialogue rail roster (alongside a
+   *  dialogue-able scene speaker). Party companions are NOT auto-added; list
+   *  them here per scene if they should be talkable. */
   dialogueCharacters?: SpeakerId[];
   /** Authored "ask" questions surfaced as secondary chips in the choice
    *  area. Tapping one opens a seeded in-character conversation with the

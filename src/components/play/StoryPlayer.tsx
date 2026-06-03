@@ -1431,7 +1431,6 @@ export function StoryPlayer({
           key={state.currentSceneId}
           storyId={story.id}
           sceneId={state.currentSceneId}
-          sceneSpeaker={currentScene.speaker}
           sceneNarration={displayedNarration}
           hero={state.hero}
           voiceVolume={voiceVolume}

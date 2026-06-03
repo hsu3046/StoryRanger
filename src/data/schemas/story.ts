@@ -121,10 +121,10 @@ export const SceneSchema = z.object({
   ending: SceneEndingSchema.optional(),
   /** One-shot reward granted on first entry to this scene. */
   reward: RewardSchema.optional(),
-  /** Extra dialogue-able characters present in this scene (in addition
-   *  to the party companions and the scene speaker). Use this to expose
-   *  NPCs like Aunt Em on the first scene before they'd otherwise show
-   *  up on the dialogue rail. */
+  /** The scene's Interactive Characters — the authoritative dialogue-rail
+   *  roster (alongside a dialogue-able scene speaker). Party companions are NOT
+   *  auto-added to the rail; list a companion (or an NPC like Aunt Em) here to
+   *  make them talkable on this scene. */
   dialogueCharacters: z.array(SpeakerIdSchema).optional(),
   /** Authored "ask" questions surfaced as chips in the choice area. */
   asks: z.array(SceneAskSchema).optional(),
