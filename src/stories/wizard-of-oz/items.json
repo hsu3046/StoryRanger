@@ -83,6 +83,16 @@
       "effect": {
         "kind": "event"
       }
+    },
+    {
+      "id": "four-leaf-clover",
+      "name": "Four Leaf Clover",
+      "icon": "🍀",
+      "description": "A four-leaf clover that brings good luck. Something good might happen when you use it!",
+      "effect": {
+        "kind": "attack-boost",
+        "amount": 1
+      }
     }
   ]
 }

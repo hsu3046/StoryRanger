@@ -134,7 +134,7 @@ export function MedalShelfModal({
                       transition={{ duration: 0.18 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex items-start gap-2 rounded-card bg-paper-deep/50 px-3 py-2 text-sm text-ink-soft ring-1 ring-ink-soft/10">
+                      <div className="flex items-start gap-2 px-3 py-2 text-sm text-ink-soft">
                         <span className="text-base leading-none" aria-hidden>
                           {itemIcon(storyId, openItem.id)}
                         </span>

@@ -16,7 +16,8 @@
           "goblin-scout"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "orchard-tree",
@@ -34,7 +35,8 @@
           "fighting-tree"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "wolf-pack-alt__oil_tinman",
@@ -57,7 +59,8 @@
         "items": [
           "oil"
         ]
-      }
+      },
+      "challengeType": "mixed"
     },
     {
       "id": "hammerhead-toll",
@@ -74,7 +77,8 @@
           "hammerhead"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s01_kansas__rescue_toto-battle",
@@ -91,7 +95,8 @@
           "crow-flock"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s06_after_tinman_2__branch_ofjda-battle",
@@ -113,7 +118,8 @@
         "items": [
           "oil"
         ]
-      }
+      },
+      "challengeType": "mixed"
     },
     {
       "id": "s05_orchard_2__branch_yaubu-battle",
@@ -132,7 +138,8 @@
           "wolf"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s05_scarecrow__branch_m12es-battle",
@@ -151,7 +158,8 @@
           "crow-flock"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s06_after_tinman__branch_ehnfb-battle",
@@ -171,7 +179,8 @@
           "crow-scout"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s09a_firefly_trial__branch_snljc-battle",
@@ -190,7 +199,8 @@
           "wisp"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s08_party__branch_vlupn-battle",
@@ -209,7 +219,8 @@
           "goblin-scout"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s09a_firefly_trial__branch_ryj36-battle",
@@ -226,7 +237,8 @@
           "kalidah"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "09b-mouse-king-chase__branch_wdern-battle",
@@ -243,7 +255,8 @@
           "cat"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "12b-past-poppies-sleep__branch_ryy1s-battle",
@@ -260,7 +273,8 @@
           "hammerhead"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "wizard-faces__branch_87ksp-battle",
@@ -279,7 +293,8 @@
           "wolf-alpha"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "monkey-ambush__branch_1zgqx-battle",
@@ -301,7 +316,8 @@
           "winged-monkey"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s08_party_2__branch_3c8xm-battle",
@@ -319,22 +335,8 @@
           "bat-swarm"
         ]
       },
-      "rewards": {}
-    },
-    {
-      "id": "monkey-ambush__branch_1zgqx-battle-1",
-      "trigger": {
-        "sceneId": "monkey-ambush",
-        "branchId": "branch_1zgqx"
-      },
-      "intro": {
-        "bg": "forest-clearing"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": []
-      },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "s08_party_2__branch_3c8xm-battle-1",
@@ -353,7 +355,8 @@
           "cave-spider"
         ]
       },
-      "rewards": {}
+      "rewards": {},
+      "challengeType": "mixed"
     },
     {
       "id": "16b-castle-battle__branch_ytp8l-battle",
@@ -374,7 +377,8 @@
         "items": [
           "broomstick-of-the-wicked-witch"
         ]
-      }
+      },
+      "challengeType": "mixed"
     }
   ]
 }

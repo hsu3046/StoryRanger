@@ -23,12 +23,14 @@ const EFFECT_KINDS = [
   "heal",
   "event",
   "stop-time",
+  "attack-boost",
 ] as const satisfies readonly ItemEffectKind[];
 
 const EFFECT_KIND_LABEL: Record<ItemEffectKind, string> = {
   heal: "Restore HP",
   event: "Event",
   "stop-time": "Stop time",
+  "attack-boost": "Attack boost",
 };
 
 /** Default-shaped effect when switching the kind dropdown. */
@@ -40,6 +42,8 @@ function defaultEffect(kind: ItemEffectKind): ItemEffectT {
       return { kind: "event" };
     case "stop-time":
       return { kind: "stop-time", scope: "one-attack" };
+    case "attack-boost":
+      return { kind: "attack-boost", amount: 1 };
   }
 }
 
@@ -427,6 +431,35 @@ function ItemForm({
               <option value="one-attack">One attack</option>
               <option value="whole-battle">Whole battle</option>
             </StyledSelect>
+          </Field>
+        )}
+        {/* Attack-boost amount — shown only for attack-boost items. The next
+            successful hit deals +X extra hits. */}
+        {item.effect.kind === "attack-boost" && (
+          <Field label="Attack +X (extra hits)">
+            <input
+              type="number"
+              min={1}
+              max={5}
+              value={item.effect.amount}
+              onChange={(e) =>
+                onChange((it) =>
+                  it.effect.kind === "attack-boost"
+                    ? {
+                        ...it,
+                        effect: {
+                          kind: "attack-boost",
+                          amount: Math.max(
+                            1,
+                            Math.min(5, Math.floor(Number(e.target.value) || 1)),
+                          ),
+                        },
+                      }
+                    : it,
+                )
+              }
+              className={inputCls}
+            />
           </Field>
         )}
       </div>

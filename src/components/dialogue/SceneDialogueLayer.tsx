@@ -21,15 +21,16 @@ import { DialogueChoiceCards } from "./DialogueChoiceCards";
 interface Props {
   storyId: string;
   sceneId: string;
-  sceneSpeaker: SpeakerId;
   sceneNarration: string;
   hero: Hero;
   /** Voice volume (0–1) — character replies are spoken via ElevenLabs TTS on
    *  this channel, same as scene narration. */
   voiceVolume: number;
+  /** Party companions — used as dialogue CONTEXT for the LLM (not auto-added
+   *  to the rail; the rail is the scene's opted-in Interactive Characters). */
   companions: CompanionId[];
-  /** Extra dialogue-able characters declared on the current Scene —
-   *  added to the rail on top of companions + scene speaker. */
+  /** The scene's Interactive Characters (`Scene.dialogueCharacters`) — the
+   *  authoritative rail roster alongside a dialogue-able scene speaker. */
   extraDialogueCharacters: SpeakerId[];
   characters: CharactersFile;
   /** Resolve a portrait base path (no extension) for the rail thumbnails.
@@ -87,16 +88,15 @@ interface Props {
 const IMAGE_EXTS = [".webp", ".png", ".jpeg", ".jpg"];
 
 /**
- * Dialogue affordances + bubble. All dialogue-able characters present
- * in the current scene (companions + dialogue-able scene speaker) are
- * pinned as portrait chips down the left edge of the screen. Tap a
- * portrait → a speech bubble blooms to its right. Only one active at a
- * time.
+ * Dialogue affordances + bubble. The characters the author opted into THIS
+ * scene (the dialogue-able scene speaker + the scene's Interactive Characters)
+ * are pinned as portrait chips down the left edge of the screen — party
+ * companions are NOT auto-included. Tap a portrait → a speech bubble blooms to
+ * its right. Only one active at a time.
  */
 export function SceneDialogueLayer({
   storyId,
   sceneId,
-  sceneSpeaker,
   sceneNarration,
   hero,
   voiceVolume,
@@ -182,18 +182,18 @@ export function SceneDialogueLayer({
     return m;
   }, [characters]);
 
-  /** Dialogue-able characters present in the scene:
-   *    - companions in the party
-   *    - scene.speaker if dialogue-able (NPCs like Wizard, Glinda)
-   *    - extras declared on the scene (e.g. Aunt Em on s01_kansas) */
+  /** Dialogue-able characters on THIS scene — ONLY what the author opted in,
+   *  NOT the whole party:
+   *  ONLY the characters the author set as Interactive on the scene
+   *  (`dialogueCharacters` → `extraDialogueCharacters`). NEITHER the party
+   *  companions NOR the scene speaker are auto-included — a scene with no
+   *  Interactive Character set shows an empty rail. To make the speaker (an NPC
+   *  like the Wizard) or a companion talkable on a scene, add them as an
+   *  Interactive Character in the admin. */
   const railIds = useMemo<SpeakerId[]>(() => {
     const ids = new Set<SpeakerId>();
     // Availability is derived from persona presence (single source of
     // truth), so a character with no persona never shows a dead button.
-    for (const c of companions) {
-      if (canTalkTo(characterMap[c])) ids.add(c as SpeakerId);
-    }
-    if (canTalkTo(characterMap[sceneSpeaker])) ids.add(sceneSpeaker);
     for (const id of extraDialogueCharacters) {
       if (canTalkTo(characterMap[id])) ids.add(id);
     }
@@ -202,7 +202,7 @@ export function SceneDialogueLayer({
     // (gated on rail membership) anchors, and the player sees who answers.
     if (active && canTalkTo(characterMap[active])) ids.add(active);
     return Array.from(ids);
-  }, [companions, sceneSpeaker, extraDialogueCharacters, characterMap, active]);
+  }, [extraDialogueCharacters, characterMap, active]);
 
   const activeRailIdx = useMemo(
     () => (active ? railIds.indexOf(active) : -1),
@@ -497,6 +497,8 @@ export function SceneDialogueLayer({
             suggestions={latestReply.suggestions}
             branches={branches}
             loading={loading}
+            iconBase={portraitBase(active)}
+            iconFallbackBase={portraitFallbackBase?.(active)}
             onSend={(t) => sendTurn(active, t)}
             onTakeBranch={(b) => {
               // Navigate FIRST (commitBranch's direct setState), THEN close

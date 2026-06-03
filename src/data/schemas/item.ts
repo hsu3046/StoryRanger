@@ -22,6 +22,13 @@ export const ItemEffectSchema = z.discriminatedUnion("kind", [
     kind: z.literal("stop-time"),
     scope: z.enum(["one-attack", "whole-battle"]),
   }),
+  /** Buff the NEXT successful attack: it deals `amount` extra hits (added on
+   *  top of a critical too). A miss does not consume it — the boost waits for
+   *  the next landed hit. Battle only. */
+  z.object({
+    kind: z.literal("attack-boost"),
+    amount: z.number().int().min(1).max(5),
+  }),
   // [+EXT] add future kinds here, e.g.:
   // z.object({ kind: z.literal("hint") }),                            // quiz: dim 2 wrong answers
   // z.object({ kind: z.literal("extra-time"), seconds: z.number().int() }), // quiz: extend timer

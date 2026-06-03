@@ -13,6 +13,10 @@ interface Props {
   onDone?: () => void;
   /** Tap-to-skip: clicking the typewriter region finishes instantly. */
   skipOnClick?: boolean;
+  /** Render the full text immediately, no typing — used when re-showing
+   *  narration that was already revealed for this scene (e.g. after closing a
+   *  dialogue). The typing animation is reserved for genuine scene entry. */
+  instant?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -31,10 +35,11 @@ export function Typewriter({
   punctuationPause = true,
   onDone,
   skipOnClick,
+  instant,
   className,
   style,
 }: Props) {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(instant ? text.length : 0);
   // Latch onDone in a ref so parents passing inline arrows don't re-trigger
   // the typing effect on every render (same pattern as MathPuzzle timer).
   const onDoneRef = useRef(onDone);
@@ -42,11 +47,12 @@ export function Typewriter({
     onDoneRef.current = onDone;
   }, [onDone]);
 
-  // Reset on text change.
+  // Reset on text change — to 0 to retype, or straight to the end when instant
+  // (already-revealed narration re-showing after a dialogue closes).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: external `text` prop drives the animation reset
-    setCount(0);
-  }, [text]);
+    setCount(instant ? text.length : 0);
+  }, [text, instant]);
 
   // Advance one character per tick.
   useEffect(() => {
