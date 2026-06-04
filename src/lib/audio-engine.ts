@@ -152,12 +152,24 @@ class AudioEngine {
       return;
     }
 
-    // Different track requested — crossfade the previous one out.
+    // Different track requested — retire the previous one.
     if (this.currentBgm) {
       const old = this.currentBgm;
-      const startVol = old.volume();
-      old.fade(startVol, 0, CROSSFADE_MS);
-      this.scheduleStop(old, CROSSFADE_MS + 50);
+      if (old.playing()) {
+        // Audible → smooth crossfade out.
+        const startVol = old.volume();
+        old.fade(startVol, 0, CROSSFADE_MS);
+        this.scheduleStop(old, CROSSFADE_MS + 50);
+      } else {
+        // Still loading, with a queued play() (e.g. the admin preview's
+        // branch→battle auto-advance fires before the outgoing scene's first
+        // load settles). A fade + scheduleStop here RACES that queued play: it
+        // can fire AFTER the stop window and leave the track running at full
+        // volume with no owner (currentBgm now points at the incoming track),
+        // so stopBgm can't reach it later. Cancel the queued play outright.
+        this.cancelPendingStop(old);
+        old.stop();
+      }
     }
 
     // Fade in next. If it was mid-fadeout (same Howl reused soon after
@@ -174,11 +186,24 @@ class AudioEngine {
   }
 
   stopBgm(): void {
-    if (!this.currentBgm) return;
-    const old = this.currentBgm;
-    const startVol = old.volume();
-    old.fade(startVol, 0, FADE_OUT_MS);
-    this.scheduleStop(old, FADE_OUT_MS + 50);
+    // Fade the active track out gracefully…
+    const active = this.currentBgm;
+    if (active) {
+      const startVol = active.volume();
+      active.fade(startVol, 0, FADE_OUT_MS);
+      this.scheduleStop(active, FADE_OUT_MS + 50);
+    }
+    // …then HARD-stop every OTHER cached BGM Howl now. The old code only
+    // touched currentBgm, so a crossfade leftover (an outgoing track still on
+    // its own scheduleStop) or a still-loading track with a queued play() could
+    // outlive a StoryPlayer unmount and keep sounding — the admin-preview
+    // "scene BGM won't stop after closing" bug. Cancel their pending stops and
+    // stop them outright so nothing survives the player.
+    for (const howl of this.bgmCache.values()) {
+      if (howl === active) continue;
+      this.cancelPendingStop(howl);
+      howl.stop();
+    }
     this.currentBgm = null;
     this.currentBgmKey = null;
   }
