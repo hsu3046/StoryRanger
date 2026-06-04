@@ -775,7 +775,11 @@ export function StoryPlayer({
       ...result.state,
       interaction:
         queue.length > 0
-          ? { kind: "encounter", queue: queue.map((e) => e.id) }
+          ? {
+              kind: "encounter",
+              sourceSceneId: prevSceneId,
+              queue: queue.map((e) => e.id),
+            }
           : undefined,
       pendingRewardToast,
       updatedAt: new Date().toISOString(),
@@ -793,7 +797,11 @@ export function StoryPlayer({
     const queue = buildEncounterQueue(story.id, sourceSceneId, branch.id, state);
     setInteraction(
       queue.length > 0
-        ? { kind: "encounter", queue: queue.map((e) => e.id) }
+        ? {
+            kind: "encounter",
+            sourceSceneId,
+            queue: queue.map((e) => e.id),
+          }
         : undefined,
     );
   }
@@ -943,7 +951,11 @@ export function StoryPlayer({
         const nextQueue = prev.interaction.queue.slice(1);
         nextInteraction =
           nextQueue.length > 0
-            ? { kind: "encounter", queue: nextQueue }
+            ? {
+                kind: "encounter",
+                sourceSceneId: prev.interaction.sourceSceneId,
+                queue: nextQueue,
+              }
             : undefined;
       }
 
@@ -1113,12 +1125,23 @@ export function StoryPlayer({
   const displayedSpeakerId: SpeakerId = showingOutcome
     ? outcomePrevScene?.speaker ?? currentScene.speaker
     : currentScene.speaker;
+  // During a battle the engine has already advanced currentSceneId to the
+  // destination (so the post-battle zoom-reveal lands on the right scene). But
+  // the encounter intro dims/blurs whatever scene is painted behind it — if
+  // that's the destination, it flashes through before combat. Pin the backdrop
+  // to the scene the battle launched FROM until the encounter clears.
+  const encounterSourceSceneId =
+    state.interaction?.kind === "encounter"
+      ? state.interaction.sourceSceneId
+      : null;
   const displayedImage = showingOutcome
     ? outcomePrevScene?.image ?? currentScene.image
-    : currentScene.image;
+    : encounterSourceSceneId
+      ? story.scenes[encounterSourceSceneId]?.image ?? currentScene.image
+      : currentScene.image;
   const displayedSceneKey = showingOutcome
     ? `outcome:${pendingOutcome.branch.id}`
-    : state.currentSceneId;
+    : encounterSourceSceneId ?? state.currentSceneId;
 
   // If the speaker is the hero, swap in the player's chosen name (the hero's
   // catalogued name is only a default).
