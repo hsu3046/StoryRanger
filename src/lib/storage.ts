@@ -109,9 +109,15 @@ export function loadState(
         const validIds = new Set(encountersFor(storyId).map((e) => e.id));
         const enc = parsed.interaction as {
           kind: "encounter";
+          sourceSceneId?: string;
           queue: string[];
           battle?: unknown;
         };
+        // sourceSceneId was added later — older saves mid-battle lack it. Pin
+        // it to the persisted currentSceneId so the backdrop derivation has a
+        // valid scene (the engine is already at the destination, but for a
+        // resumed battle that's an acceptable, non-flashing fallback).
+        if (!enc.sourceSceneId) enc.sourceSceneId = parsed.currentSceneId;
         enc.queue = enc.queue.filter((id) => validIds.has(id));
         // Sanity-check the persisted battle blob. We can't validate the
         // full BattleState shape without a circular import, but we can at
