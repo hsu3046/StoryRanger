@@ -202,6 +202,15 @@ export function StoryPlayer({
    *  narration typewriter finishes (or user taps to skip), and resets
    *  whenever the displayed narration changes (new scene / outcome). */
   const [narrationDone, setNarrationDone] = useState(false);
+  // The narrationKey whose entrance animation has settled on screen. Gates the
+  // scene-reward toast: "Received …" must appear once the DESTINATION scene is
+  // actually visible, not the instant the overlay (battle/outcome) clears —
+  // at that point the scene is still cross-fading / zoom-revealing in, so the
+  // toast would pop over the OUTGOING scene (most visible right after a battle,
+  // where the reveal is slow). Set by the narration block's onAnimationComplete.
+  const [enteredNarrationKey, setEnteredNarrationKey] = useState<string | null>(
+    null,
+  );
   // The last narrationKey whose typewriter fully revealed. When the narration
   // block remounts for the SAME key (e.g. a dialogue closed without changing
   // scene), we render it instantly instead of retyping — the typewriter is for
@@ -552,8 +561,8 @@ export function StoryPlayer({
     },
     [bgmKeys, commonBgmKeys, story.id],
   );
-  // Battle / puzzle BGM variant pools — every file named `battle`, `battle_1`,
-  // `battle_2`, … (and likewise `puzzle*`), from EITHER the story or common
+  // Battle / challenge BGM variant pools — every file named `battle`,
+  // `battle_1`, … (and likewise `challenge*`), from EITHER the story or common
   // pool, is an interchangeable variant; one is picked at random per encounter.
   const allBgmKeys = useMemo(
     () => [...new Set([...bgmKeys, ...commonBgmKeys])],
@@ -563,8 +572,9 @@ export function StoryPlayer({
     () => allBgmKeys.filter((k) => k === "battle" || k.startsWith("battle_")),
     [allBgmKeys],
   );
-  const puzzleBgmVariants = useMemo(
-    () => allBgmKeys.filter((k) => k === "puzzle" || k.startsWith("puzzle_")),
+  const challengeBgmVariants = useMemo(
+    () =>
+      allBgmKeys.filter((k) => k === "challenge" || k.startsWith("challenge_")),
     [allBgmKeys],
   );
   // The variant chosen for the CURRENT interaction — kept stable while it lasts
@@ -587,7 +597,9 @@ export function StoryPlayer({
     // rather than cutting to silence.
     if (interactionKind === "encounter" || interactionKind === "challenge") {
       const pool =
-        interactionKind === "encounter" ? battleBgmVariants : puzzleBgmVariants;
+        interactionKind === "encounter"
+          ? battleBgmVariants
+          : challengeBgmVariants;
       if (pool.length > 0) {
         let cur = interactionBgmRef.current;
         if (!cur || cur.kind !== interactionKind) {
@@ -608,7 +620,7 @@ export function StoryPlayer({
     state.currentSceneId,
     interactionKind,
     battleBgmVariants,
-    puzzleBgmVariants,
+    challengeBgmVariants,
     playResolvedBgm,
   ]);
 
@@ -775,7 +787,11 @@ export function StoryPlayer({
       ...result.state,
       interaction:
         queue.length > 0
-          ? { kind: "encounter", queue: queue.map((e) => e.id) }
+          ? {
+              kind: "encounter",
+              sourceSceneId: prevSceneId,
+              queue: queue.map((e) => e.id),
+            }
           : undefined,
       pendingRewardToast,
       updatedAt: new Date().toISOString(),
@@ -793,7 +809,11 @@ export function StoryPlayer({
     const queue = buildEncounterQueue(story.id, sourceSceneId, branch.id, state);
     setInteraction(
       queue.length > 0
-        ? { kind: "encounter", queue: queue.map((e) => e.id) }
+        ? {
+            kind: "encounter",
+            sourceSceneId,
+            queue: queue.map((e) => e.id),
+          }
         : undefined,
     );
   }
@@ -943,7 +963,11 @@ export function StoryPlayer({
         const nextQueue = prev.interaction.queue.slice(1);
         nextInteraction =
           nextQueue.length > 0
-            ? { kind: "encounter", queue: nextQueue }
+            ? {
+                kind: "encounter",
+                sourceSceneId: prev.interaction.sourceSceneId,
+                queue: nextQueue,
+              }
             : undefined;
       }
 
@@ -1077,33 +1101,6 @@ export function StoryPlayer({
   // scene up by id from interaction (works even on refresh-resume).
   const showingOutcome = !!pendingOutcome;
 
-  // Scene reward arrival — show the item toast only once the player has
-  // actually LANDED on the rewarded scene (outcome bridge dismissed, no
-  // encounter overlay). Reads from the PERSISTED `pendingRewardToast`, so a
-  // refresh mid-overlay still surfaces it here; clearing it (in state) stops it
-  // re-firing. (Medals are earned from metrics, not scene rewards.)
-  useEffect(() => {
-    const r = state.pendingRewardToast;
-    if (!r || r.sceneId !== state.currentSceneId) return;
-    if (showingOutcome || pendingEncounter) return;
-    if (r.items.length > 0)
-      pushNotif({
-        kind: "item",
-        replace: true,
-        eyebrow: "Received",
-        chips: itemChips(story.id, r.items),
-      });
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; clears the persisted pending toast
-    setState((s) => ({ ...s, pendingRewardToast: undefined }));
-  }, [
-    state.pendingRewardToast,
-    state.currentSceneId,
-    showingOutcome,
-    pendingEncounter,
-    pushNotif,
-    story.id,
-  ]);
-
   const outcomePrevScene = pendingOutcome
     ? story.scenes[pendingOutcome.sourceSceneId]
     : null;
@@ -1113,12 +1110,23 @@ export function StoryPlayer({
   const displayedSpeakerId: SpeakerId = showingOutcome
     ? outcomePrevScene?.speaker ?? currentScene.speaker
     : currentScene.speaker;
+  // During a battle the engine has already advanced currentSceneId to the
+  // destination (so the post-battle zoom-reveal lands on the right scene). But
+  // the encounter intro dims/blurs whatever scene is painted behind it — if
+  // that's the destination, it flashes through before combat. Pin the backdrop
+  // to the scene the battle launched FROM until the encounter clears.
+  const encounterSourceSceneId =
+    state.interaction?.kind === "encounter"
+      ? state.interaction.sourceSceneId
+      : null;
   const displayedImage = showingOutcome
     ? outcomePrevScene?.image ?? currentScene.image
-    : currentScene.image;
+    : encounterSourceSceneId
+      ? story.scenes[encounterSourceSceneId]?.image ?? currentScene.image
+      : currentScene.image;
   const displayedSceneKey = showingOutcome
     ? `outcome:${pendingOutcome.branch.id}`
-    : state.currentSceneId;
+    : encounterSourceSceneId ?? state.currentSceneId;
 
   // If the speaker is the hero, swap in the player's chosen name (the hero's
   // catalogued name is only a default).
@@ -1136,6 +1144,37 @@ export function StoryPlayer({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: narrationKey transition drives the gate reset
     setNarrationDone(false);
   }, [narrationKey]);
+
+  // Scene reward arrival — show the item toast only once the player has actually
+  // LANDED on the rewarded scene: overlay (outcome/encounter) dismissed AND the
+  // destination narration has entered on screen (so it doesn't pop over the
+  // outgoing scene mid-transition — most visible right after a battle). Reads
+  // the PERSISTED `pendingRewardToast`, so a refresh mid-overlay still surfaces
+  // it; clearing it (in state) stops it re-firing. (Medals come from metrics.)
+  useEffect(() => {
+    const r = state.pendingRewardToast;
+    if (!r || r.sceneId !== state.currentSceneId) return;
+    if (showingOutcome || pendingEncounter) return;
+    if (enteredNarrationKey !== narrationKey) return;
+    if (r.items.length > 0)
+      pushNotif({
+        kind: "item",
+        replace: true,
+        eyebrow: "Received",
+        chips: itemChips(story.id, r.items),
+      });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on arrival; clears the persisted pending toast
+    setState((s) => ({ ...s, pendingRewardToast: undefined }));
+  }, [
+    state.pendingRewardToast,
+    state.currentSceneId,
+    showingOutcome,
+    pendingEncounter,
+    enteredNarrationKey,
+    narrationKey,
+    pushNotif,
+    story.id,
+  ]);
 
   // `fixed inset-0` (instead of `relative h-dvh w-dvw`) pins the player
   // root to the viewport edges directly, independent of any parent
@@ -1280,6 +1319,12 @@ export function StoryPlayer({
                 // vanishes"). The new scene's text then types in cleanly.
                 exit={{ opacity: 0, transition: { duration: 0.1 } }}
                 transition={{ duration: 0.25 }}
+                // Entrance settled → this scene's narration is on screen. Gates
+                // the scene-reward toast (see the pendingRewardToast effect) so
+                // "Received …" never pops over the outgoing scene mid-transition.
+                // The exiting old block fires this too, but with its own (stale)
+                // narrationKey, so the toast's `=== narrationKey` guard ignores it.
+                onAnimationComplete={() => setEnteredNarrationKey(narrationKey)}
                 // No fixed height cap — the narration block grows up
                 // from the bottom (parent is `absolute bottom-0 flex
                 // flex-col`), so longer text simply raises its top Y while
@@ -1698,9 +1743,12 @@ function AskChip({
 }) {
   return (
     <button type="button" onClick={onSelect} className={choiceButtonClass}>
-      <span>{label}</span>
+      {/* Text centers within the space LEFT of the portrait (flex-1), not the
+          whole button — keeps a long question from clipping under the avatar
+          while a wide gap sits empty on the left. */}
+      <span className="min-w-0 flex-1 text-center">{label}</span>
       {iconBase && (
-        <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}

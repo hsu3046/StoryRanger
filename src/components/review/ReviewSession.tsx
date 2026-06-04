@@ -10,6 +10,7 @@ import {
   type ReviewItem,
 } from "@/lib/review-store";
 import { EducationalChallenge } from "@/components/challenge/EducationalChallenge";
+import { getAudio, SFX } from "@/lib/audio-engine";
 
 interface Props {
   storyId: string;
@@ -54,10 +55,21 @@ export function ReviewSession({ storyId, storyTitle, onClose }: Props) {
     [],
   );
 
+  // Challenge BGM for the whole review session — the same track the in-story
+  // challenge gate uses. The home screen has no BGM of its own, so stopping on
+  // unmount simply returns to silence (nothing to restore). Story-scoped track.
+  useEffect(() => {
+    const audio = getAudio();
+    audio.playBgm("challenge", storyId);
+    return () => audio.stopBgm();
+  }, [storyId]);
+
   const current = queue[idx];
 
   function handleSolved(correct: boolean) {
     if (!current) return;
+    // Answer feedback cue — correct vs wrong.
+    getAudio().playSfx(correct ? SFX.CORRECT : SFX.WRONG);
     if (correct) {
       markMastered(storyId, current.key);
       setMasteredKeys((s) => new Set(s).add(current.key));

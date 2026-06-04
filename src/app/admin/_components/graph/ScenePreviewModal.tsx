@@ -18,6 +18,11 @@ interface Props {
   branchId?: string | null;
   /** Resolved map-image path (or null) — shows the map button in the preview. */
   mapImage?: string | null;
+  /** BGM keys by pool, forwarded to StoryPlayer. Without these the player's
+   *  battle/puzzle variant pools are empty, so battle BGM never plays in the
+   *  preview (scene BGM is kept instead) — the live /play page passes them. */
+  bgmKeys?: string[];
+  commonBgmKeys?: string[];
   onClose: () => void;
 }
 
@@ -34,6 +39,8 @@ export function ScenePreviewModal({
   sceneId,
   branchId,
   mapImage,
+  bgmKeys,
+  commonBgmKeys,
   onClose,
 }: Props) {
   // ESC closes; body scroll locked while open.
@@ -92,6 +99,8 @@ export function ScenePreviewModal({
           initialSceneId={sceneId}
           initialBranchId={branchId ?? undefined}
           mapImage={mapImage}
+          bgmKeys={bgmKeys}
+          commonBgmKeys={commonBgmKeys}
         />
       </div>
     </div>,

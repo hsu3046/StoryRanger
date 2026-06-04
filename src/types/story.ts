@@ -259,6 +259,11 @@ export type InteractionState =
     }
   | {
       kind: "encounter";
+      /** Scene the battle launched FROM. The engine advances currentSceneId to
+       *  the destination at branch-commit so the post-battle reveal is ready,
+       *  but the encounter intro must paint THIS scene as its backdrop — else
+       *  the destination flashes through the intro's blur/fade before combat. */
+      sourceSceneId: string;
       /** Remaining encounter ids; index 0 is the active one. */
       queue: string[];
       /** Persisted battle state — undefined during the alert splash.

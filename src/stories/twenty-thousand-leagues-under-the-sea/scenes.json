@@ -1,0 +1,17 @@
+{
+  "id": "twenty-thousand-leagues-under-the-sea",
+  "title": "Twenty Thousand Leagues Under the Sea",
+  "language": "English",
+  "estimatedMinutes": 10,
+  "coverImage": "/stories/twenty-thousand-leagues-under-the-sea/cover",
+  "startScene": "s1",
+  "scenes": {
+    "s1": {
+      "image": "",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "",
+      "branches": []
+    }
+  }
+}

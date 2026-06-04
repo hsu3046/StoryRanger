@@ -162,6 +162,11 @@ interface Props {
   sceneImages: { value: string; label: string }[];
   /** BGM track keys discovered under /public/stories/<id>/audio/bgm/. */
   bgmOptions: string[];
+  /** BGM keys split by pool — forwarded to the preview's StoryPlayer so battle
+   *  BGM (and per-track folder resolution) works the same as the live /play
+   *  page. `bgmKeys` = this story's pool, `commonBgmKeys` = shared pool. */
+  bgmKeys: string[];
+  commonBgmKeys: string[];
   /** Runtime types passed straight through to the preview modal's
    *  StoryPlayer (the editor uses schema types `StoryT` for editing; the
    *  player wants the runtime `Story`/`MedalsFile`/`CharactersFile`). */
@@ -198,6 +203,8 @@ function StoryGraphEditorInner({
   backgroundKeys,
   sceneImages,
   bgmOptions,
+  bgmKeys,
+  commonBgmKeys,
   runtimeStory,
   runtimeMedalsFile,
   runtimeCharactersFile,
@@ -1285,6 +1292,8 @@ function StoryGraphEditorInner({
         medals={runtimeMedalsFile}
         characters={runtimeCharactersFile}
         mapImage={mapImage}
+        bgmKeys={bgmKeys}
+        commonBgmKeys={commonBgmKeys}
         sceneId={previewSceneId}
         branchId={previewBranchId}
         onClose={() => {
