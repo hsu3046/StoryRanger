@@ -1,0 +1,21 @@
+{
+  "characters": [
+    {
+      "id": "narrator",
+      "name": "Narrator",
+      "voice": "21m00Tcm4TlvDq8ikWAM",
+      "voiceSpeed": 1,
+      "color": "#6b7280",
+      "size": "medium"
+    },
+    {
+      "id": "hero",
+      "name": "Hero",
+      "isHero": true,
+      "voice": "EXAVITQu4vr4xnSDxMaL",
+      "voiceSpeed": 1,
+      "color": "#c9a23a",
+      "size": "medium"
+    }
+  ]
+}

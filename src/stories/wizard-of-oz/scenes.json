@@ -61,9 +61,6 @@
           "next": "02c-tornado-inside",
           "outcome": "You clung to Toto with all your might as the farmhouse spiraled into the heart of the great, grey storm."
         }
-      ],
-      "dialogueCharacters": [
-        "toto"
       ]
     },
     "s03_munchkinland": {
@@ -276,7 +273,8 @@
             "enabled": true,
             "category": "logic",
             "count": 6
-          }
+          },
+          "outcome": "You walked along the riverbank until you spotted a place where the water rippled over the rocks."
         },
         {
           "id": "branch_rfwlo",
@@ -286,7 +284,8 @@
             "enabled": true,
             "category": "auto",
             "count": 6
-          }
+          },
+          "outcome": "You directed your friends to gather wood from the forest to help you cross the rushing water."
         }
       ],
       "dialogueCharacters": [
@@ -633,9 +632,6 @@
           "next": "s02c_tornado",
           "outcome": "You gripped the sturdy iron bedpost and braced yourself as the floor rose beneath you."
         }
-      ],
-      "dialogueCharacters": [
-        "toto"
       ]
     },
     "house-crashes": {
@@ -957,6 +953,9 @@
           "id": "branch_mz45i",
           "label": "Let's be friends!",
           "next": "s06_after_tinman",
+          "addsCompanions": [
+            "tinman"
+          ],
           "outcome": "You shook the Tin Woodman's shiny metal hand and invited him to join your journey."
         }
       ],
@@ -978,6 +977,9 @@
           "id": "branch_nkgv4",
           "label": "Let's find your brain!",
           "next": "s06_after_tinman_2",
+          "addsCompanions": [
+            "scarecrow"
+          ],
           "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road."
         }
       ],

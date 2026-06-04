@@ -175,8 +175,7 @@
         "monsterIds": [
           "crow-flock",
           "crow-flock",
-          "crow-flock",
-          "crow-scout"
+          "crow-flock"
         ]
       },
       "rewards": {},
@@ -283,14 +282,13 @@
         "branchId": "branch_87ksp"
       },
       "intro": {
-        "bg": "forest-clearing"
+        "bg": "greenthrone"
       },
       "body": {
         "kind": "battle",
         "monsterIds": [
           "kalidah",
-          "hammerhead",
-          "wolf-alpha"
+          "hammerhead"
         ]
       },
       "rewards": {},

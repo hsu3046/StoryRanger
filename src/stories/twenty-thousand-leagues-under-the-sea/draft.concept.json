@@ -1,0 +1,37 @@
+{
+  "title": "Nemo's Secret World",
+  "subtitle": "A Journey Twenty Thousand Leagues Under the Sea",
+  "premise": "When Professor Aronnax falls overboard, he discovers a wondrous metallic monster is actually a magnificent submarine called the Nautilus. Led by the mysterious Captain Nemo, the crew explores coral forests and battles giant squids in a breathtaking underwater odyssey. This adventure focuses on the awe of discovery and the importance of protecting the ocean's hidden wonders.",
+  "targetAge": {
+    "min": 8,
+    "max": 12
+  },
+  "themes": [
+    "Exploration",
+    "Marine Biology",
+    "Mystery",
+    "Technological Wonder"
+  ],
+  "language": "English",
+  "estimatedMinutes": 20,
+  "artStyleBible": {
+    "medium": "Digital watercolor with steampunk brass textures and glowing bioluminescent layers.",
+    "palette": "Deep oceanic blues, emerald greens, and warm polished brass with neon accents for sea life.",
+    "lineQuality": "Clean, architectural lines for the submarine contrasted with fluid, organic strokes for the creatures.",
+    "mood": "Wondrous, adventurous, and slightly mysterious but never truly frightening.",
+    "motifs": [
+      "Brass gears",
+      "Portholes",
+      "Giant squid silhouettes",
+      "Seashells",
+      "Victorian velvet"
+    ],
+    "negative": [
+      "Text or dialogue bubbles",
+      "Photorealistic gore",
+      "Blood",
+      "Horror-style monsters",
+      "Modern plastic technology"
+    ]
+  }
+}
