@@ -1740,9 +1740,12 @@ function AskChip({
 }) {
   return (
     <button type="button" onClick={onSelect} className={choiceButtonClass}>
-      <span>{label}</span>
+      {/* Text centers within the space LEFT of the portrait (flex-1), not the
+          whole button — keeps a long question from clipping under the avatar
+          while a wide gap sits empty on the left. */}
+      <span className="min-w-0 flex-1 text-center">{label}</span>
       {iconBase && (
-        <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}

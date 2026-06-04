@@ -160,9 +160,12 @@ export function DialogueChoiceCards({
                   onClick={() => onSend(s)}
                   className={choiceButtonClass}
                 >
-                  <span>{s}</span>
+                  {/* Text centers within the space LEFT of the avatar (flex-1),
+                      not the whole button — so the portrait doesn't overlap /
+                      clip a long label while a wide gap sits empty on the left. */}
+                  <span className="min-w-0 flex-1 text-center">{s}</span>
                   {iconBase && (
-                    <span className="absolute right-[15px] top-1/2 h-12 w-12 -translate-y-1/2 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+                    <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
                       <DialogueAvatar
                         base={iconBase}
                         fallbackBase={iconFallbackBase}
