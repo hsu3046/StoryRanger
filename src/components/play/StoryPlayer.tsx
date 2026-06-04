@@ -561,8 +561,8 @@ export function StoryPlayer({
     },
     [bgmKeys, commonBgmKeys, story.id],
   );
-  // Battle / puzzle BGM variant pools — every file named `battle`, `battle_1`,
-  // `battle_2`, … (and likewise `puzzle*`), from EITHER the story or common
+  // Battle / challenge BGM variant pools — every file named `battle`,
+  // `battle_1`, … (and likewise `challenge*`), from EITHER the story or common
   // pool, is an interchangeable variant; one is picked at random per encounter.
   const allBgmKeys = useMemo(
     () => [...new Set([...bgmKeys, ...commonBgmKeys])],
@@ -572,8 +572,9 @@ export function StoryPlayer({
     () => allBgmKeys.filter((k) => k === "battle" || k.startsWith("battle_")),
     [allBgmKeys],
   );
-  const puzzleBgmVariants = useMemo(
-    () => allBgmKeys.filter((k) => k === "puzzle" || k.startsWith("puzzle_")),
+  const challengeBgmVariants = useMemo(
+    () =>
+      allBgmKeys.filter((k) => k === "challenge" || k.startsWith("challenge_")),
     [allBgmKeys],
   );
   // The variant chosen for the CURRENT interaction — kept stable while it lasts
@@ -596,7 +597,9 @@ export function StoryPlayer({
     // rather than cutting to silence.
     if (interactionKind === "encounter" || interactionKind === "challenge") {
       const pool =
-        interactionKind === "encounter" ? battleBgmVariants : puzzleBgmVariants;
+        interactionKind === "encounter"
+          ? battleBgmVariants
+          : challengeBgmVariants;
       if (pool.length > 0) {
         let cur = interactionBgmRef.current;
         if (!cur || cur.kind !== interactionKind) {
@@ -617,7 +620,7 @@ export function StoryPlayer({
     state.currentSceneId,
     interactionKind,
     battleBgmVariants,
-    puzzleBgmVariants,
+    challengeBgmVariants,
     playResolvedBgm,
   ]);
 
