@@ -53,7 +53,7 @@
       "image": "/stories/wizard-of-oz/scenes/02c-tornado",
       "bgm": "tornado",
       "speaker": "narrator",
-      "narration": "The wind howls and the world spins! The house lifts off the prairie and tumbles through the cyclone. Shingles, fence rails, even a startled crow whirl past the window. Everything blurs green and grey — then, with a gentle thump, the spinning stops.",
+      "narration": "The wind howls and the house lifts off the prairie! Shingles, fence rails, even a crow whirl past the window — then, with a gentle thump, the spinning stops.",
       "branches": [
         {
           "id": "branch_61qod",
@@ -531,7 +531,8 @@
         {
           "id": "branch_ryj36",
           "label": "I think we should go right.",
-          "next": "s09_dark_forest"
+          "next": "s09_dark_forest",
+          "outcome": "You followed the fireflies' flickering glow to the right, stepping deeper into the shadows of the ancient trees."
         }
       ],
       "dialogueCharacters": [
@@ -550,7 +551,8 @@
         {
           "id": "branch_epnn8",
           "label": "Wow, there is a beautiful flower field!",
-          "next": "s11_poppies"
+          "next": "s11_poppies",
+          "outcome": "You stepped off the last stone and ran toward the sea of brilliant red flowers."
         }
       ],
       "dialogueCharacters": [
@@ -681,8 +683,8 @@
     "wizard-faces": {
       "image": "/stories/wizard-of-oz/scenes/14a-wizard-faces",
       "bgm": "emerald-city",
-      "speaker": "narrator",
-      "narration": "A voice booms from nowhere.\n\"Only those who overcome my trials are worthy of meeting me.\"",
+      "speaker": "wizard-of-oz",
+      "narration": "\"How brave of you to come alone. But if you want me to hear your wish — you must first pass my trial.\"",
       "branches": [
         {
           "id": "branch_rj3n9",
@@ -692,12 +694,14 @@
             "enabled": true,
             "category": "logic",
             "count": 10
-          }
+          },
+          "outcome": "\"Wisdom, you say? Then let us see how sharp your mind truly is.\""
         },
         {
           "id": "branch_87ksp",
           "label": "Trial of Bravery",
-          "next": "14b-wizard-faces-open_2_2"
+          "next": "14b-wizard-faces-open_2_2",
+          "outcome": "\"Bravery? Then show me your courage — if you dare.\""
         },
         {
           "id": "branch_ved9c",
@@ -707,7 +711,8 @@
             "enabled": true,
             "category": "auto",
             "count": 10
-          }
+          },
+          "outcome": "\"Truth? Then answer carefully. I will know if you lie.\""
         }
       ]
     },
@@ -720,7 +725,8 @@
         {
           "id": "branch_1zgqx",
           "label": "We fight back!",
-          "next": "s15_west_journey"
+          "next": "s15_west_journey",
+          "outcome": "You brandished your weapons and stood your ground as the screeching monkeys dived from the sky."
         },
         {
           "id": "branch_4bouz",
@@ -808,7 +814,8 @@
         {
           "id": "branch_ksvsv",
           "label": "Wow, there is a beautiful flower field!",
-          "next": "s11_poppies"
+          "next": "s11_poppies",
+          "outcome": "You stepped off the last stone and ran toward the sea of brilliant red flowers."
         }
       ],
       "dialogueCharacters": [
