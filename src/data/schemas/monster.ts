@@ -3,12 +3,27 @@ import { SpriteSizeSchema } from "./primitives";
 
 export const MonsterTypeSchema = z.enum(["hostile", "neutral", "friendly"]);
 
+/**
+ * A single drop. Back-compatible union:
+ *   - a plain item id string → always dropped (100%)
+ *   - `{ item, chance }`      → dropped with `chance` percent probability (1–100)
+ * Existing `drops: string[]` data needs no migration (plain string = 100%).
+ */
+export const MonsterDropSchema = z.union([
+  z.string().min(1),
+  z.object({
+    item: z.string().min(1),
+    /** Drop chance in percent, 1–100. */
+    chance: z.number().int().min(1).max(100),
+  }),
+]);
+
 export const MonsterStatsSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: MonsterTypeSchema,
   hits: z.number().min(0).max(20),
-  drops: z.array(z.string()).optional(),
+  drops: z.array(MonsterDropSchema).optional(),
   size: SpriteSizeSchema,
   airborne: z.boolean().optional(),
   notes: z.string().optional(),
@@ -21,5 +36,6 @@ export const MonstersFileSchema = z.object({
   monsters: z.array(MonsterStatsSchema),
 });
 
+export type MonsterDropT = z.infer<typeof MonsterDropSchema>;
 export type MonsterStatsT = z.infer<typeof MonsterStatsSchema>;
 export type MonstersFileT = z.infer<typeof MonstersFileSchema>;

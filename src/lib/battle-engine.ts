@@ -19,7 +19,7 @@ import type {
   CompanionMoods,
   PartyHp,
 } from "@/types/story";
-import { monstersFor, type MonsterStats } from "@/data/monsters";
+import { monstersFor, normalizeDrop, type MonsterStats } from "@/data/monsters";
 import { getItem } from "@/data/items";
 import type { ItemDefT } from "@/data/schemas";
 import type { RollResult } from "./dice";
@@ -550,9 +550,15 @@ export function resolvePuzzleAttack(
   const allDead = monsters.every((m) => m.defeated);
   if (allDead) {
     const catalog = monstersFor(state.storyId);
+    // Roll each drop by its chance (plain-string drops normalize to 100%).
+    // Computed once here at the victory transition and stored in state.rewards,
+    // so a re-render never re-rolls; a "Try again" re-mount rolls fresh.
     const rewards = monsters.flatMap((m) => {
       const meta = catalog[m.monsterId];
-      return meta?.drops ?? [];
+      return (meta?.drops ?? [])
+        .map(normalizeDrop)
+        .filter((d) => Math.random() * 100 < d.chance)
+        .map((d) => d.item);
     });
     return {
       ...state,

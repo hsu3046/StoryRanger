@@ -15,6 +15,7 @@ import type {
   MonsterStatsT,
 } from "@/data/schemas";
 import { getStory, listStoryIds, type LoadedStory } from "./stories";
+import { normalizeDrop } from "@/data/monsters";
 
 export interface ContentRepo {
   // Story
@@ -77,9 +78,10 @@ export function scanItemReferences(storyId: string): {
   const missing: Array<{ where: string; id: string }> = [];
 
   for (const m of repo.listMonsters(storyId)) {
-    for (const drop of m.drops ?? []) {
-      if (!known.has(drop)) {
-        missing.push({ where: `monster:${m.id}.drops`, id: drop });
+    for (const d of m.drops ?? []) {
+      const item = normalizeDrop(d).item;
+      if (!known.has(item)) {
+        missing.push({ where: `monster:${m.id}.drops`, id: item });
       }
     }
   }
