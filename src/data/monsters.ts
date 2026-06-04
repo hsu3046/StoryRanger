@@ -12,12 +12,9 @@ import { getStory } from "@/lib/stories";
 import type { MonsterStatsT } from "./schemas";
 import type { SpriteSize } from "@/lib/sprite-size";
 
-export type MonsterType = "hostile" | "neutral" | "friendly";
-
 export interface MonsterStats {
   id: string;
   name: string;
-  type: MonsterType;
   hits: number;
   drops?: string[];
   size: SpriteSize;

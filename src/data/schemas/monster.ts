@@ -1,12 +1,9 @@
 import { z } from "zod";
 import { SpriteSizeSchema } from "./primitives";
 
-export const MonsterTypeSchema = z.enum(["hostile", "neutral", "friendly"]);
-
 export const MonsterStatsSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: MonsterTypeSchema,
   hits: z.number().min(0).max(20),
   drops: z.array(z.string()).optional(),
   size: SpriteSizeSchema,
