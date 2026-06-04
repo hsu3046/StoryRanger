@@ -51,6 +51,10 @@ export const SFX = {
   DEFEAT: "defeat",
   /** Encounter alert splash — "ENCOUNTER!" sting. */
   ENCOUNTER: "encounter",
+  /** Review flashcard — correct answer. */
+  CORRECT: "correct",
+  /** Review flashcard — wrong answer. */
+  WRONG: "wrong",
 } as const;
 
 /**
