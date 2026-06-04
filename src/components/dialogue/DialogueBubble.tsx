@@ -74,12 +74,12 @@ export function DialogueBubble({
               <span className="animate-bounce [animation-delay:240ms]">·</span>
             </span>
           ) : (
-            // Fast typewriter — gives the bubble a "live" feel without
-            // the per-character drag of the narration pacing. Tap to skip
+            // Livelier than narration but still an easy read — keeps the
+            // bubble feeling "live" without per-character drag. Tap to skip
             // straight to the full reply.
             <Typewriter
               text={reply}
-              speed={14}
+              speed={20}
               skipOnClick
               onDone={onTypingDone}
             />

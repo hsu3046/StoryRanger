@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 interface Props {
   text: string;
-  /** Milliseconds between characters. Default 28 — quick but visibly typed. */
+  /** Milliseconds between characters. Default 38 — an unhurried read-aloud
+   *  pace (was 28; slowed for a calmer storybook rhythm). */
   speed?: number;
   /** When true (default), pause longer at sentence-ending punctuation so the
    *  rhythm feels like reading aloud, not stuttering. */
@@ -31,7 +32,7 @@ interface Props {
  */
 export function Typewriter({
   text,
-  speed = 28,
+  speed = 38,
   punctuationPause = true,
   onDone,
   skipOnClick,
@@ -70,9 +71,9 @@ export function Typewriter({
     // The breath that should follow `ch` once it has been revealed.
     const breathAfter = (ch: string | undefined) => {
       if (!punctuationPause || !ch) return speed;
-      if (ch === "\n") return speed * 10; // line break — longest breath
-      if (ch === "." || ch === "!" || ch === "?" || ch === "—") return speed * 7;
-      if (ch === "," || ch === ";" || ch === ":") return speed * 3;
+      if (ch === "\n") return speed * 13; // line break — longest breath
+      if (ch === "." || ch === "!" || ch === "?" || ch === "—") return speed * 9;
+      if (ch === "," || ch === ";" || ch === ":") return speed * 4.5;
       return speed;
     };
 
