@@ -35,6 +35,23 @@ const nextConfig: NextConfig = {
       "public/**/*.ogg",
       "public/**/*.m4a",
     ],
+    // The /api/admin/* route handlers (generate/cover-image, scene-image,
+    // character-image, …) import saveImage → contentFs, which read/write
+    // public/stories via a dynamic [storyId] — so they over-trace the media
+    // tree identically. The `/admin/**` key does NOT match them: the tracer
+    // matches the real route path (`/api/admin/…`, not `/admin/…`). Same drop,
+    // same trade-off — session/reference images live on ephemeral FS or R2, not
+    // the committed bundle.
+    "/api/admin/**": [
+      "public/**/*.jpeg",
+      "public/**/*.jpg",
+      "public/**/*.png",
+      "public/**/*.webp",
+      "public/**/*.mp3",
+      "public/**/*.wav",
+      "public/**/*.ogg",
+      "public/**/*.m4a",
+    ],
     // The play route fs-reads ONLY audio/bgm (readdir) + map (access) at runtime
     // for BGM/map detection; scene/background/character/monster art is served to
     // the browser via CDN/static URLs, never fs-read server-side. Its [storyId]
