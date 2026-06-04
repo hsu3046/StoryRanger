@@ -55,15 +55,24 @@ export default async function GraphPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
 
-  const [sceneStems, bgmOptions, backgroundKeys] = await Promise.all([
-    // Scenes are story-only; BGM + backgrounds merge the shared/common pool.
-    listStemsAt(IMAGE_EXTS, "stories", storyId, "scenes"),
-    listStems(storyId, "audio/bgm", "audio/bgm", AUDIO_EXTS),
-    // Battle background stems — this story's /backgrounds folder merged with the
-    // shared /public/backgrounds pool. Scanned from disk (no JSON catalog), the
-    // same way Scene Image is sourced.
-    listStems(storyId, "backgrounds", "backgrounds", IMAGE_EXTS),
-  ]);
+  const [sceneStems, storyBgmKeys, commonBgmKeys, backgroundKeys] =
+    await Promise.all([
+      // Scenes are story-only; BGM + backgrounds merge the shared/common pool.
+      listStemsAt(IMAGE_EXTS, "stories", storyId, "scenes"),
+      // BGM kept SPLIT by pool. The per-scene dropdown wants them merged
+      // (bgmOptions below), but the preview's StoryPlayer needs story vs common
+      // separate — to resolve each track to the right folder AND to fill the
+      // battle/puzzle variant pools. Passing them is what makes battle BGM play
+      // in the branch preview, matching the live /play page.
+      listStemsAt(AUDIO_EXTS, "stories", storyId, "audio", "bgm"),
+      listStemsAt(AUDIO_EXTS, "audio", "bgm"),
+      // Battle background stems — this story's /backgrounds folder merged with the
+      // shared /public/backgrounds pool. Scanned from disk (no JSON catalog), the
+      // same way Scene Image is sourced.
+      listStems(storyId, "backgrounds", "backgrounds", IMAGE_EXTS),
+    ]);
+  // Merged + sorted for the per-scene BGM dropdown (story overrides common).
+  const bgmOptions = [...new Set([...storyBgmKeys, ...commonBgmKeys])].sort();
 
   // Scene image dropdown stores the full path but displays only the
   // filename stem — keeps the data structure unchanged while shortening
@@ -83,6 +92,8 @@ export default async function GraphPage({
       backgroundKeys={backgroundKeys}
       sceneImages={sceneImages}
       bgmOptions={bgmOptions}
+      bgmKeys={storyBgmKeys}
+      commonBgmKeys={commonBgmKeys}
       runtimeStory={loaded.story}
       runtimeMedalsFile={MEDALS}
       runtimeCharactersFile={loaded.characters}
