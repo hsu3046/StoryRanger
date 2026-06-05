@@ -140,10 +140,13 @@ export async function POST(req: Request) {
   // Assemble the linear Story. Scene ids are random + stable (never shown to
   // the user, used only as scene keys / image filenames / branch targets) — a
   // sequential 1..N would wrongly imply a fixed order once pages are reordered.
+  // "s" prefix guarantees a non-digit first char: an all-hex-digit id (e.g.
+  // "12345678") would be an array-index-like key that Object.keys() hoists to
+  // the front, breaking the insertion-order the page list / relink rely on.
   const usedIds = new Set<string>();
   const freshId = (): string => {
-    let id = randomUUID().slice(0, 8);
-    while (usedIds.has(id)) id = randomUUID().slice(0, 8);
+    let id = `s${randomUUID().slice(0, 8)}`;
+    while (usedIds.has(id)) id = `s${randomUUID().slice(0, 8)}`;
     usedIds.add(id);
     return id;
   };
