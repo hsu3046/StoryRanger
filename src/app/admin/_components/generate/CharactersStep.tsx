@@ -111,11 +111,13 @@ export function CharactersStep({
   const draftData = useMemo(() => ({ chars, art }), [chars, art]);
   useAutosave(
     draftData,
-    (d) => {
-      if (!d.chars) return;
-      void saveDraftCharactersAction(draftId, d.chars);
-      void saveCharacterArtAction(draftId, d.art ?? { entries: [] });
-    },
+    (d) =>
+      d.chars
+        ? Promise.all([
+            saveDraftCharactersAction(draftId, d.chars),
+            saveCharacterArtAction(draftId, d.art ?? { entries: [] }),
+          ])
+        : undefined,
     { enabled: !!chars },
   );
   useStageVisit(draftId, meta, "characters");

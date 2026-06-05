@@ -26,11 +26,11 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
   const [busy, setBusy] = useState<"gen" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  useAutosave(concept, (c) => { if (c) void saveConceptAction(draftId, c); }, {
+  useAutosave(concept, (c) => (c ? saveConceptAction(draftId, c) : undefined), {
     enabled: !!concept,
   });
   // Persist the story idea (brief) to meta so it survives navigation.
-  useAutosave(briefText, (t) => { void saveDraftMetaAction(draftId, { ...meta, brief: t }); }, {
+  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { ...meta, brief: t }), {
     enabled: briefText !== brief,
   });
   useStageVisit(draftId, meta, "concept");

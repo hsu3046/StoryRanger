@@ -2,8 +2,10 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight } from "@phosphor-icons/react";
 import type { DraftMetaT, DraftStageT } from "@/data/schemas";
+import { flushPendingAutosaves } from "./useAutosave";
 import type { PoolStatus } from "./useGenerationPool";
 
 /** Build the next meta after a stage completes — marks it done + advances the
@@ -55,16 +57,25 @@ export function StepRail({
   draftId: string;
   current: DraftStageT;
 }) {
+  const router = useRouter();
   const curIdx = STAGES.findIndex((s) => s.id === current);
   return (
     <nav className="flex w-full items-center gap-1">
       {STAGES.map((s, i) => {
         const active = s.id === current;
         const done = i < curIdx;
+        const href = `/admin/generate/${draftId}/${s.id}`;
         return (
           <Fragment key={s.id}>
             <Link
-              href={`/admin/generate/${draftId}/${s.id}`}
+              href={href}
+              onClick={(e) => {
+                // Flush pending autosaves before navigating so the next step's
+                // server render reads fresh JSON (no edit-then-switch race).
+                if (active || e.metaKey || e.ctrlKey || e.shiftKey) return;
+                e.preventDefault();
+                void flushPendingAutosaves().then(() => router.push(href));
+              }}
               className={`inline-flex flex-1 items-center justify-center rounded-pill px-2 py-1 text-xs font-semibold transition-colors ${
                 active
                   ? "bg-accent-deep text-paper"

@@ -15,24 +15,33 @@ export function useStageVisit(draftId: string, meta: DraftMetaT, stage: DraftSta
   }, []);
 }
 
+// Live flush callbacks for the mounted step's autosaves. StepRail awaits these
+// before navigating so the next step's server render reads fresh JSON.
+const pendingFlushes = new Set<() => unknown>();
+
+/** Persist every mounted autosave NOW and wait for the writes to land. Called
+ *  before wizard navigation so a just-edited field can't race the next step. */
+export function flushPendingAutosaves(): Promise<unknown> {
+  return Promise.allSettled([...pendingFlushes].map((f) => Promise.resolve(f())));
+}
+
 /**
- * Debounced autosave + flush-on-unmount. With the per-step "Save & continue"
- * buttons gone, edits persist automatically: `save` runs `delay`ms after the
- * last change and once more when the component unmounts (so switching tabs or
- * leaving the page never loses work). `enabled` gates it (skip until data
- * exists). The save is fire-and-forget — generation actions persist their
- * result immediately so navigation never races an unsaved big change.
+ * Debounced autosave + flush-on-unmount, plus registration in
+ * `pendingFlushes` so navigation can await the save. With the per-step "Save &
+ * continue" buttons gone, edits persist automatically. The `save` callback may
+ * return a promise — it's awaited on an explicit flush (navigation) so the
+ * next step never reads stale disk data.
  */
 export function useAutosave<T>(
   data: T,
-  save: (data: T) => void,
+  save: (data: T) => unknown,
   { delay = 1000, enabled = true }: { delay?: number; enabled?: boolean } = {},
 ) {
   const dataRef = useRef(data);
   const saveRef = useRef(save);
   const enabledRef = useRef(enabled);
 
-  // Keep refs current (after each render) so the unmount flush sees the latest.
+  // Keep refs current (after each render) so flushes see the latest.
   useEffect(() => {
     dataRef.current = data;
     saveRef.current = save;
@@ -48,11 +57,14 @@ export function useAutosave<T>(
     return () => clearTimeout(t);
   }, [data, enabled, delay]);
 
-  // Flush once on unmount (tab/page navigation).
-  useEffect(
-    () => () => {
-      if (enabledRef.current) saveRef.current(dataRef.current);
-    },
-    [],
-  );
+  // Register a flush for navigation, and flush on unmount.
+  useEffect(() => {
+    const flush = () =>
+      enabledRef.current ? saveRef.current(dataRef.current) : undefined;
+    pendingFlushes.add(flush);
+    return () => {
+      pendingFlushes.delete(flush);
+      flush();
+    };
+  }, []);
 }

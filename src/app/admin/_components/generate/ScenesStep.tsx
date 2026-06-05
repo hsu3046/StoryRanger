@@ -187,10 +187,10 @@ export function ScenesStep({
   }, []);
 
   // Autosave narration / bgm edits + per-scene image prompts (sceneMeta).
-  useAutosave(story, (s) => { if (s) void saveDraftScenesAction(draftId, s); }, {
+  useAutosave(story, (s) => (s ? saveDraftScenesAction(draftId, s) : undefined), {
     enabled: !!story,
   });
-  useAutosave(sceneMeta, (m) => { void saveDraftSceneMetaAction(draftId, m); }, {
+  useAutosave(sceneMeta, (m) => saveDraftSceneMetaAction(draftId, m), {
     enabled: !!story,
   });
   useStageVisit(draftId, meta, "scene");
