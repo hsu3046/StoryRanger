@@ -1108,7 +1108,9 @@ export function StoryPlayer({
     ? formatNarration(pendingOutcome.text, state.hero)
     : formatNarration(currentScene.narration, state.hero);
   const displayedSpeakerId: SpeakerId = showingOutcome
-    ? outcomePrevScene?.speaker ?? currentScene.speaker
+    ? pendingOutcome?.branch.outcomeSpeaker ??
+      outcomePrevScene?.speaker ??
+      currentScene.speaker
     : currentScene.speaker;
   // During a battle the engine has already advanced currentSceneId to the
   // destination (so the post-battle zoom-reveal lands on the right scene). But

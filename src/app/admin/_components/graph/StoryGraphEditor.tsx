@@ -2174,6 +2174,7 @@ function BranchInspector({
         branch={branch}
         targetScene={targetScene}
         onChange={onChange}
+        characters={characters}
       />
 
       <hr className="my-1 border-t border-ink-soft/15" />
@@ -2408,6 +2409,7 @@ function BranchOutcomeEditor({
   branch,
   targetScene,
   onChange,
+  characters,
 }: {
   storyId: string;
   storyLanguage: string;
@@ -2419,6 +2421,7 @@ function BranchOutcomeEditor({
   branch: BranchT;
   targetScene: SceneT | undefined;
   onChange: (mut: (b: BranchT) => BranchT) => void;
+  characters: { id: string; name: string }[];
 }) {
   const [loading, setLoading] = useState(false);
   const confirm = useConfirm();
@@ -2477,32 +2480,53 @@ function BranchOutcomeEditor({
   }
 
   return (
-    <Field label="Narration">
-      <textarea
-        value={branch.outcome ?? ""}
-        onChange={(e) =>
-          onChange((b) => ({
-            ...b,
-            outcome: e.target.value || undefined,
-          }))
-        }
-        rows={4}
-        placeholder="e.g. {{name}} nods and steps through. {{They}} feel {{their}} pack settle on {{their}} shoulders. (leave empty for no outcome line)"
-        className={inputCls}
-      />
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <CharCount value={branch.outcome ?? ""} />
-        <button
-          type="button"
-          onClick={generate}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-pill bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:opacity-50"
-        >
-          <Sparkle size={12} weight="fill" />
-          {loading ? "Generating…" : "Generate"}
-        </button>
-      </div>
-    </Field>
+    <>
+      <Field label="Narration">
+        <textarea
+          value={branch.outcome ?? ""}
+          onChange={(e) =>
+            onChange((b) => ({
+              ...b,
+              outcome: e.target.value || undefined,
+            }))
+          }
+          rows={4}
+          placeholder="e.g. {{name}} nods and steps through. {{They}} feel {{their}} pack settle on {{their}} shoulders. (leave empty for no outcome line)"
+          className={inputCls}
+        />
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <CharCount value={branch.outcome ?? ""} />
+          <button
+            type="button"
+            onClick={generate}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-pill bg-accent/15 px-3 py-1 text-xs font-semibold text-accent-deep hover:bg-accent/25 disabled:opacity-50"
+          >
+            <Sparkle size={12} weight="fill" />
+            {loading ? "Generating…" : "Generate"}
+          </button>
+        </div>
+      </Field>
+      {/* Outcome voice — only meaningful when there's outcome text. Empty =
+          inherit the source scene's speaker (the long-standing default). */}
+      {(branch.outcome ?? "").trim().length > 0 && (
+        <Field label="Outcome voice">
+          <SelectWithCustom
+            value={branch.outcomeSpeaker ?? ""}
+            allowEmpty="(Scene's speaker — default)"
+            options={[
+              { value: "narrator", label: "Narrator" },
+              ...characters
+                .filter((c) => c.id !== "narrator")
+                .map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            onChange={(v) =>
+              onChange((b) => ({ ...b, outcomeSpeaker: v || undefined }))
+            }
+          />
+        </Field>
+      )}
+    </>
   );
 }
 

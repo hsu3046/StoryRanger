@@ -86,6 +86,9 @@ export const BranchSchema = z.object({
   /** Outcome narration shown AFTER the branch is taken and BEFORE
    *  navigating to the next scene. Single tap continues. */
   outcome: z.string().optional(),
+  /** Speaker (voice) for the outcome narration. Omit to inherit the source
+   *  scene's speaker — the previous default behaviour. */
+  outcomeSpeaker: SpeakerIdSchema.optional(),
 });
 
 export const SceneEndingSchema = z.object({

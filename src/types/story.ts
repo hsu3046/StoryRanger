@@ -79,6 +79,9 @@ export interface Branch {
   };
   /** Narration shown after the branch resolves, before scene transition. */
   outcome?: string;
+  /** Speaker (voice) for the outcome narration; omit to inherit the source
+   *  scene's speaker. */
+  outcomeSpeaker?: SpeakerId;
 }
 
 export interface Scene {
