@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { preload } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 
@@ -31,7 +32,7 @@ import {
   takeBranch,
 } from "@/lib/story-engine";
 import { checkMedals } from "@/lib/medals-engine";
-import { assetUrl } from "@/lib/asset-paths";
+import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
 import { ChallengeGate } from "../challenge/ChallengeGate";
 import { loadState, saveState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
@@ -1057,20 +1058,19 @@ export function StoryPlayer({
     return () => clearTimeout(t);
   }, [isEnding, narrationDone]);
 
-  // Warm the TTS cache while the player listens to the current scene.
-  // For every branch on the current scene, fire-and-forget prefetches for
-  // (a) the branch's outcome line (spoken by the current narrator) and
-  // (b) the destination scene's narration (spoken by that scene's speaker).
-  // First-time visit to either becomes an IndexedDB cache hit on click,
-  // skipping the OpenAI roundtrip that the user perceived as "slow start".
+  // Warm caches while the player listens to the current scene, for every branch
+  // on it: (a) the branch's outcome line + the destination scene's narration
+  // (TTS, gated on audio being on), and (b) the destination scene's IMAGE into
+  // the browser disk cache — so the cross-fade lands on a cached bitmap instead
+  // of flashing the bg while it loads from R2 on first visit. The image warm-up
+  // is independent of audio mute.
   useEffect(() => {
-    if (!hydrated || voiceVolume <= 0) return;
+    if (!hydrated) return;
+    const audioOn = voiceVolume > 0;
     for (const branch of currentScene.branches ?? []) {
-      if (branch.outcome) {
+      if (audioOn && branch.outcome) {
         // Match the playback voice: an authored `outcomeSpeaker` overrides the
-        // scene speaker (else ttsObjectKey differs and this warm-up misses, so
-        // the first tap on a per-branch-voice outcome would still wait on
-        // /api/tts). Falls back to the scene speaker when unset.
+        // scene speaker (else ttsObjectKey differs and this warm-up misses).
         const outSpeaker =
           (branch.outcomeSpeaker
             ? characterMap[branch.outcomeSpeaker]
@@ -1085,13 +1085,21 @@ export function StoryPlayer({
       }
       const nextScene = story.scenes[branch.next];
       if (!nextScene) continue;
-      const nextSpeaker = characterMap[nextScene.speaker];
-      if (!nextSpeaker) continue;
-      void prefetchNarration(
-        formatNarration(nextScene.narration, state.hero),
-        nextSpeaker.voice,
-        nextSpeaker.voiceSpeed,
-      );
+      // webp only — every scene ships one; low priority so it yields to the
+      // current scene image + audio. React 19 dedupes identical preloads.
+      preload(sceneImageWebpUrl(nextScene.image), {
+        as: "image",
+        fetchPriority: "low",
+      });
+      if (audioOn) {
+        const nextSpeaker = characterMap[nextScene.speaker];
+        if (nextSpeaker)
+          void prefetchNarration(
+            formatNarration(nextScene.narration, state.hero),
+            nextSpeaker.voice,
+            nextSpeaker.voiceSpeed,
+          );
+      }
     }
   }, [
     hydrated,
