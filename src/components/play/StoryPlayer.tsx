@@ -675,14 +675,24 @@ export function StoryPlayer({
   );
 
   // ── Tutorial hints (account-wide, one-time) ──────────────────────────
-  // Does THIS scene have anyone to chat with? Mirrors the dialogue rail's
-  // availability (authored Interactive Characters that have a persona).
+  // Does THIS scene have anyone to chat with AND is the rail actually visible?
+  // Mirrors the rail's availability (authored Interactive Characters with a
+  // persona) AND its visibility gate (hidden during an encounter/outcome
+  // overlay). Without the overlay check the tip could fire + auto-dismiss while
+  // the rail is suppressed and never replay once it appears.
   const dialogueAvailable = useMemo(
     () =>
+      !pendingEncounter &&
+      !pendingOutcome &&
       (currentScene.dialogueCharacters ?? []).some((id) =>
         canTalkTo(characterMap[id]),
       ),
-    [currentScene.dialogueCharacters, characterMap],
+    [
+      currentScene.dialogueCharacters,
+      characterMap,
+      pendingEncounter,
+      pendingOutcome,
+    ],
   );
 
   // Enqueue a tip once. We DON'T push immediately — `pendingHints` buffers it so
