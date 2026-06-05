@@ -121,6 +121,12 @@ export function EncounterFlow({
   const [phase, setPhase] = useState<Phase>(
     initialBattleState ? "body" : "intro",
   );
+  // Latch the tutorial-freeze flag at mount. The parent recomputes it from
+  // `seenTutorials`, which the battle hint marks as "battle" the moment this
+  // encounter appears — flipping the prop false BEFORE BattleScreen mounts (it
+  // only mounts after the intro/alert phases). Latching keeps the first-battle
+  // timer freeze applied to the BattleScreen we eventually mount.
+  const [tutorialFreezeLatched] = useState(tutorialFreeze);
 
   const monsterIds =
     encounter.displayMonsters ?? encounter.body.monsterIds;
@@ -181,7 +187,7 @@ export function EncounterFlow({
           fallenAttackers,
           companions,
           companionMoods,
-          tutorialFreeze,
+          tutorialFreeze: tutorialFreezeLatched,
         }}
         onRetry={onRetry}
         onComplete={(res) => {
