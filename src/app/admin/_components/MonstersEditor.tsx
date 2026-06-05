@@ -9,6 +9,7 @@ import {
   type MonsterStatsT,
   type MonstersFileT,
 } from "@/data/schemas";
+import { normalizeDrop } from "@/data/monsters";
 import { saveMonstersAction } from "../_actions/saveJson";
 import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { AssetThumb } from "./AssetThumb";
@@ -17,7 +18,6 @@ import { useConfirm } from "./ConfirmDialog";
 import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
 
-const TYPES = ["hostile", "neutral", "friendly"] as const;
 const SIZES = ["tiny", "small", "medium", "large", "huge"] as const;
 interface Props {
   storyId: string;
@@ -100,7 +100,6 @@ export function MonstersEditor({
     const placeholder: MonsterStatsT = {
       id,
       name: "New Monster",
-      type: "hostile",
       hits: 2,
       size: "small",
       drops: [],
@@ -220,7 +219,6 @@ export function MonstersEditor({
                 <tr>
                   <th className="px-3 py-2 w-14"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-20">Type</th>
                   <th className="px-3 py-2 w-20">Size</th>
                   <th className="px-3 py-2 w-16">HP</th>
                   <th className="px-3 py-2 w-20">Airborne</th>
@@ -252,19 +250,6 @@ export function MonstersEditor({
                       />
                     </td>
                     <td className="px-3 py-2 text-ink">{m.name}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-pill px-2 py-0.5 text-xs capitalize ${
-                          m.type === "hostile"
-                            ? "bg-ruby/15 text-ruby"
-                            : m.type === "friendly"
-                              ? "bg-emerald/15 text-emerald"
-                              : "bg-accent/15 text-accent-deep"
-                        }`}
-                      >
-                        {m.type}
-                      </span>
-                    </td>
                     <td className="px-3 py-2 capitalize text-ink-soft">{m.size}</td>
                     <td className="px-3 py-2 tabular-nums">{m.hits}</td>
                     <td className="px-3 py-2 text-ink-soft">
@@ -273,13 +258,17 @@ export function MonstersEditor({
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         {(m.drops ?? []).map((d) => {
-                          const it = itemById.get(d);
+                          const { item, chance } = normalizeDrop(d);
+                          const it = itemById.get(item);
                           return (
                             <span
-                              key={d}
+                              key={item}
                               className="rounded-pill bg-paper-deep/40 px-1.5 py-0.5 text-xs text-ink"
                             >
-                              {it?.icon ?? "🎁"} {it?.name ?? d}
+                              {it?.icon ?? "🎁"} {it?.name ?? item}
+                              {chance < 100 && (
+                                <span className="ml-1 text-ink-soft">{chance}%</span>
+                              )}
                             </span>
                           );
                         })}
@@ -337,15 +326,44 @@ function MonsterForm({
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const dropSet = new Set(monster.drops ?? []);
+  // Drops as a normalized item→chance map (plain-string drops read as 100%).
+  const dropChances = new Map(
+    (monster.drops ?? []).map((d) => {
+      const n = normalizeDrop(d);
+      return [n.item, n.chance] as const;
+    }),
+  );
+  const selectedDropIds = [...dropChances.keys()];
+  const dropItemById = new Map(itemCatalog.map((it) => [it.id, it]));
   const defaultImageBase = `/stories/${storyId}/monsters/${monster.id}`;
   const currentImagePath = monster.image ?? defaultImageBase;
 
+  // Toggle a drop on/off. Adding stores a plain string (100% — keeps the
+  // existing data shape); the chance is tuned separately below.
   function toggleDrop(itemId: string) {
-    const next = new Set(dropSet);
-    if (next.has(itemId)) next.delete(itemId);
-    else next.add(itemId);
-    onChange((m) => ({ ...m, drops: Array.from(next) }));
+    onChange((m) => {
+      const cur = m.drops ?? [];
+      const has = cur.some((d) => normalizeDrop(d).item === itemId);
+      return has
+        ? { ...m, drops: cur.filter((d) => normalizeDrop(d).item !== itemId) }
+        : { ...m, drops: [...cur, itemId] };
+    });
+  }
+
+  // Set a drop's chance (1–100). 100 collapses back to a plain string
+  // (back-compat); anything below becomes `{ item, chance }`.
+  function setDropChance(itemId: string, value: number) {
+    const c = Math.max(1, Math.min(100, Math.round(value) || 1));
+    onChange((m) => ({
+      ...m,
+      drops: (m.drops ?? []).map((d) =>
+        normalizeDrop(d).item === itemId
+          ? c >= 100
+            ? itemId
+            : { item: itemId, chance: c }
+          : d,
+      ),
+    }));
   }
 
   return (
@@ -421,23 +439,6 @@ function MonsterForm({
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Type">
-          <StyledSelect
-            value={monster.type}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                type: e.target.value as MonsterStatsT["type"],
-              }))
-            }
-          >
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </StyledSelect>
-        </Field>
         <Field label="Size">
           <StyledSelect
             value={monster.size}
@@ -498,9 +499,34 @@ function MonsterForm({
       <Field label="Drops">
         <ItemChipPicker
           catalog={itemCatalog}
-          selected={monster.drops ?? []}
+          selected={selectedDropIds}
           onToggle={toggleDrop}
         />
+        {selectedDropIds.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1">
+            {selectedDropIds.map((itemId) => {
+              const it = dropItemById.get(itemId);
+              const chance = dropChances.get(itemId) ?? 100;
+              return (
+                <div key={itemId} className="flex items-center gap-2">
+                  <span className="flex-1 truncate text-sm text-ink">
+                    {it?.icon ?? "🎁"} {it?.name ?? itemId}
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={chance}
+                    onChange={(e) => setDropChance(itemId, Number(e.target.value))}
+                    className={`${inputCls} w-20 text-right`}
+                    aria-label={`${it?.name ?? itemId} drop chance percent`}
+                  />
+                  <span className="text-sm text-ink-soft">%</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Field>
     </div>
   );

@@ -12,14 +12,21 @@ import { getStory } from "@/lib/stories";
 import type { MonsterStatsT } from "./schemas";
 import type { SpriteSize } from "@/lib/sprite-size";
 
-export type MonsterType = "hostile" | "neutral" | "friendly";
+/** A drop entry — a plain item id (always dropped) or `{ item, chance }` where
+ *  `chance` is the drop probability in percent (1–100). Mirrors
+ *  `MonsterDropSchema`. */
+export type MonsterDrop = string | { item: string; chance: number };
 
+/** Resolve a drop to its `{ item, chance }` form. A plain string is a 100% drop
+ *  (back-compat: existing `drops: string[]` data needs no migration). */
+export function normalizeDrop(d: MonsterDrop): { item: string; chance: number } {
+  return typeof d === "string" ? { item: d, chance: 100 } : d;
+}
 export interface MonsterStats {
   id: string;
   name: string;
-  type: MonsterType;
   hits: number;
-  drops?: string[];
+  drops?: MonsterDrop[];
   size: SpriteSize;
   airborne?: boolean;
   notes?: string;

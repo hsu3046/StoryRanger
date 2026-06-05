@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowsCounterClockwise,
   CaretDown,
   CaretUp,
+  CircleNotch,
   DotsSixVertical,
+  Pause,
+  Play,
   Sparkle,
 } from "@phosphor-icons/react";
 
@@ -16,7 +18,7 @@ import {
   saveDraftScenesAction,
 } from "../../_actions/generateDraft";
 import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
-import { inputClsSm } from "../form";
+import { inputCls, inputClsSm } from "../form";
 import { ImagePreview } from "./ImagePreview";
 import {
   Card,
@@ -53,50 +55,186 @@ function relink(story: Story, ids: string[]): Story {
 
 /** Compact custom dropdown (iOS-safe backdrop pattern) to pick a scene's
  *  speaker from the cast. */
+/** Speaker (page narrator/character) picker with a per-row voice preview —
+ *  plays each character's ElevenLabs sample via /api/voice-preview (free, no TTS
+ *  credits), mirroring VoiceSelectWithPreview but keyed on the speaker. */
 function SpeakerSelect({
   value,
   options,
   onChange,
 }: {
   value: string;
-  options: { id: string; name: string }[];
+  options: { id: string; name: string; voiceId: string }[];
   onChange: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [direction, setDirection] = useState<"down" | "up">("down");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Resolved preview URLs cached per voice id (a voice may be shared by cast).
+  const urlCache = useRef<Map<string, string>>(new Map());
+  // The character row the user last intended to hear — a newer click (or close)
+  // supersedes any in-flight fetch so a slow response can't play late.
+  const reqRef = useRef<string | null>(null);
   const current = options.find((o) => o.id === value);
+
+  // Open above the trigger when there isn't room below (cards run tall).
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const NEEDED = 280; // max-h-64 (256px) + breathing room.
+    setDirection(spaceBelow < NEEDED && spaceAbove > spaceBelow ? "up" : "down");
+  }, [open]);
+
+  const stop = () => {
+    reqRef.current = null;
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlayingId(null);
+    setLoadingId(null);
+  };
+  // Stop preview when popover closes or component unmounts.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- stop audio when the popover closes
+    if (!open) stop();
+  }, [open]);
+  useEffect(() => () => stop(), []);
+
+  function playUrl(rowId: string, url: string) {
+    audioRef.current?.pause();
+    const audio = new Audio(url);
+    audio.volume = 0.7;
+    audio.onended = () => setPlayingId(null);
+    audioRef.current = audio;
+    // Flip to "playing" only once playback actually starts; a newer preview may
+    // have superseded this one before the promise resolves.
+    audio
+      .play()
+      .then(() => {
+        if (reqRef.current === rowId) setPlayingId(rowId);
+      })
+      .catch(() => {
+        if (audioRef.current === audio) {
+          audioRef.current = null;
+          setPlayingId(null);
+        }
+      });
+  }
+  async function preview(rowId: string, voiceId: string) {
+    if (!voiceId) return;
+    if (playingId === rowId) {
+      stop();
+      return;
+    }
+    reqRef.current = rowId; // new intent supersedes any in-flight fetch
+    audioRef.current?.pause();
+    setPlayingId(null);
+    const cached = urlCache.current.get(voiceId);
+    if (cached) {
+      if (reqRef.current === rowId) playUrl(rowId, cached);
+      return;
+    }
+    setLoadingId(rowId);
+    try {
+      const res = await fetch(`/api/voice-preview?voiceId=${encodeURIComponent(voiceId)}`);
+      const data = (await res.json().catch(() => ({}))) as { previewUrl?: string };
+      if (!res.ok || !data.previewUrl) throw new Error("preview failed");
+      urlCache.current.set(voiceId, data.previewUrl);
+      if (reqRef.current === rowId) playUrl(rowId, data.previewUrl);
+    } catch {
+      /* silent — the row still selects fine */
+    } finally {
+      setLoadingId((cur) => (cur === rowId ? null : cur));
+    }
+  }
+
   return (
-    <span className="relative inline-block">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 hover:bg-paper-deep"
+        className={`${inputCls} flex w-full items-center justify-between pr-9 text-left`}
       >
-        {current?.name ?? value}
-        <CaretDown weight="bold" className="h-3.5 w-3.5 opacity-60" aria-hidden />
+        <span className="truncate">{current?.name ?? value}</span>
       </button>
+      <CaretDown
+        size={14}
+        weight="bold"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft"
+      />
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-32 overflow-auto rounded-card bg-paper p-1 shadow-button ring-1 ring-ink-soft/15">
-            {options.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => {
-                  onChange(o.id);
-                  setOpen(false);
-                }}
-                className={`block w-full rounded-button px-2 py-1 text-left text-xs hover:bg-paper-deep/60 ${
-                  o.id === value ? "font-semibold text-accent-deep" : "text-ink"
-                }`}
-              >
-                {o.name}
-              </button>
-            ))}
-          </div>
+          {/* Transparent click-trap — the only reliable outside-tap-to-close
+              pattern on iOS Safari (document mousedown is ignored there). */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <ul
+            className={`absolute left-0 right-0 z-50 max-h-64 overflow-y-auto rounded-card bg-paper py-1 shadow-overlay ring-1 ring-ink-soft/15 ${
+              direction === "up" ? "bottom-full mb-1" : "top-full mt-1"
+            }`}
+          >
+            {options.map((o) => {
+              const isPlaying = playingId === o.id;
+              const isLoading = loadingId === o.id;
+              return (
+                <li key={o.id} className="flex items-center gap-1 pr-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(o.id);
+                      setOpen(false);
+                    }}
+                    className={`flex min-w-0 flex-1 items-center px-3 py-1.5 text-left text-sm hover:bg-paper-deep/40 ${
+                      value === o.id ? "bg-paper-deep/30 font-semibold" : ""
+                    }`}
+                    title={`${o.name} — ${o.id}`}
+                  >
+                    <span className="min-w-0 truncate">{o.name}</span>
+                  </button>
+                  {o.voiceId ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void preview(o.id, o.voiceId);
+                      }}
+                      disabled={isLoading}
+                      title={isPlaying ? "Stop preview" : "Preview voice"}
+                      aria-label={isPlaying ? "Stop preview" : "Preview voice"}
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-pill transition-colors ${
+                        isPlaying
+                          ? "bg-emerald text-paper"
+                          : "bg-paper-deep/60 text-ink-soft hover:bg-paper-deep"
+                      }`}
+                    >
+                      {isLoading ? (
+                        <CircleNotch size={10} weight="bold" className="animate-spin" />
+                      ) : isPlaying ? (
+                        <Pause size={10} weight="fill" />
+                      ) : (
+                        <Play size={10} weight="fill" />
+                      )}
+                    </button>
+                  ) : (
+                    /* spacer keeps the label column aligned with rows that have
+                       a preview button (h-6 w-6). */
+                    <span className="h-6 w-6 shrink-0" aria-hidden />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -162,7 +300,7 @@ export function ScenesStep({
   const nameOf = (id: string) =>
     characters.characters.find((c) => c.id === id)?.name ?? id;
   const speakerOptions = useMemo(
-    () => characters.characters.map((c) => ({ id: c.id, name: c.name })),
+    () => characters.characters.map((c) => ({ id: c.id, name: c.name, voiceId: c.voice })),
     [characters],
   );
 
@@ -356,7 +494,7 @@ export function ScenesStep({
         className="inline-flex w-full max-w-md items-center justify-center gap-1 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-accent-deep ring-1 ring-ink-soft/10 transition hover:bg-paper-deep active:scale-95 disabled:opacity-40 disabled:active:scale-100"
       >
         <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
-        {coverBusy ? "Generating…" : coverDone ? "Regenerate cover" : "Generate cover"}
+        {coverBusy ? "Generating…" : "Generate cover"}
       </button>
     </div>
   );
@@ -418,8 +556,8 @@ export function ScenesStep({
         <div className="flex items-center gap-2">
           {pageStepper}
           <GhostButton onClick={generatePages} disabled={busyAny}>
-            <ArrowsCounterClockwise weight="bold" className="h-4 w-4" aria-hidden />
-            {busy === "gen" ? "Regenerating…" : "Regenerate pages"}
+            <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
+            {busy === "gen" ? "Generating…" : "Generate pages"}
           </GhostButton>
           <PrimaryButton onClick={generateImages} disabled={busyAny}>
             {img.running ? "Generating…" : "✨ Generate images"}
@@ -536,12 +674,12 @@ export function ScenesStep({
                     </span>
                     <button
                       type="button"
-                      aria-label="Regenerate narration"
+                      aria-label="Generate narration"
                       className="inline-flex items-center text-accent-deep disabled:opacity-40"
                       onClick={() => regenerateNarration(id)}
                       disabled={busyAny}
                     >
-                      <ArrowsCounterClockwise weight="bold" className="h-3.5 w-3.5" aria-hidden />
+                      <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
                     </button>
                     <span
                       className={`ml-auto text-[10px] tabular-nums ${
@@ -560,26 +698,30 @@ export function ScenesStep({
                     readOnly={narSt === "running"}
                     placeholder="(narration)"
                   />
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                       Voice
                     </span>
-                    <SpeakerSelect
-                      value={scene.speaker}
-                      options={speakerOptions}
-                      onChange={(s) => applyScene(id, { speaker: s })}
-                    />
-                    <span className="ml-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    <div className="min-w-0 flex-1">
+                      <SpeakerSelect
+                        value={scene.speaker}
+                        options={speakerOptions}
+                        onChange={(s) => applyScene(id, { speaker: s })}
+                      />
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                       BGM
                     </span>
-                    <BgmSelectWithPreview
-                      value={scene.bgm ?? ""}
-                      options={bgmOptions}
-                      storyId={draftId}
-                      allowEmpty="(none)"
-                      placeholder="(no tracks — add later)"
-                      onChange={(v) => applyScene(id, { bgm: v })}
-                    />
+                    <div className="min-w-0 flex-1">
+                      <BgmSelectWithPreview
+                        value={scene.bgm ?? ""}
+                        options={bgmOptions}
+                        storyId={draftId}
+                        allowEmpty="(none)"
+                        placeholder="(no tracks — add later)"
+                        onChange={(v) => applyScene(id, { bgm: v })}
+                      />
+                    </div>
                   </div>
                   {nar.entries[id]?.error && (
                     <p className="text-xs text-ruby">{nar.entries[id].error}</p>

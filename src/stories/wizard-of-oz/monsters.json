@@ -3,7 +3,6 @@
     {
       "id": "wolf",
       "name": "Forest Wolf",
-      "type": "hostile",
       "hits": 3,
       "drops": [
         "magic-berry"
@@ -13,7 +12,6 @@
     {
       "id": "wolf-alpha",
       "name": "Pack Leader",
-      "type": "hostile",
       "hits": 5,
       "drops": [
         "magic-berry"
@@ -23,7 +21,6 @@
     {
       "id": "wolf-pup",
       "name": "Wolf Pup",
-      "type": "neutral",
       "hits": 1,
       "size": "tiny",
       "notes": "Befriendable — gives 'lost-pup-trust' item if hero spares it."
@@ -31,7 +28,6 @@
     {
       "id": "crow-scout",
       "name": "Crow Scout",
-      "type": "hostile",
       "hits": 3,
       "drops": [
         "ravens-frozen-feather"
@@ -42,7 +38,6 @@
     {
       "id": "crow-flock",
       "name": "Crow Flock",
-      "type": "hostile",
       "hits": 4,
       "drops": [
         "ravens-frozen-feather"
@@ -53,7 +48,6 @@
     {
       "id": "kalidah",
       "name": "Kalidah",
-      "type": "hostile",
       "hits": 8,
       "drops": [
         "honey-cake",
@@ -66,7 +60,6 @@
     {
       "id": "fighting-tree",
       "name": "Fighting Tree",
-      "type": "hostile",
       "hits": 5,
       "drops": [
         "honey-cake"
@@ -76,7 +69,6 @@
     {
       "id": "hammerhead",
       "name": "Hammerhead",
-      "type": "hostile",
       "hits": 7,
       "drops": [
         "magic-berry"
@@ -86,7 +78,6 @@
     {
       "id": "winged-monkey",
       "name": "Winged Monkey",
-      "type": "hostile",
       "hits": 3,
       "drops": [
         "ravens-frozen-feather",
@@ -98,7 +89,6 @@
     {
       "id": "swamp-beast",
       "name": "Swamp Beast",
-      "type": "hostile",
       "hits": 6,
       "drops": [
         "honey-cake"
@@ -108,7 +98,6 @@
     {
       "id": "cave-spider",
       "name": "Crystal Cave Spider",
-      "type": "hostile",
       "hits": 3,
       "drops": [
         "magic-berry"
@@ -119,7 +108,6 @@
     {
       "id": "bat-swarm",
       "name": "Bat Swarm",
-      "type": "hostile",
       "hits": 4,
       "drops": [
         "magic-berry"
@@ -130,7 +118,6 @@
     {
       "id": "goblin-scout",
       "name": "Goblin Scout",
-      "type": "hostile",
       "hits": 2,
       "drops": [
         "magic-berry"
@@ -140,7 +127,6 @@
     {
       "id": "wicked-witch",
       "name": "Wicked Witch of the West",
-      "type": "hostile",
       "hits": 16,
       "drops": [
         "honey-cake"
@@ -151,7 +137,6 @@
     {
       "id": "wisp",
       "name": "Will-o-Wisp",
-      "type": "neutral",
       "hits": 2,
       "drops": [
         "magic-berry"
@@ -163,7 +148,6 @@
     {
       "id": "cat",
       "name": "Cat",
-      "type": "hostile",
       "hits": 3,
       "drops": [
         "magic-berry"

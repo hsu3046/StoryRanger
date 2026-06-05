@@ -2,6 +2,8 @@
   "title": "Nemo's Secret World",
   "subtitle": "A Journey Twenty Thousand Leagues Under the Sea",
   "premise": "When Professor Aronnax falls overboard, he discovers a wondrous metallic monster is actually a magnificent submarine called the Nautilus. Led by the mysterious Captain Nemo, the crew explores coral forests and battles giant squids in a breathtaking underwater odyssey. This adventure focuses on the awe of discovery and the importance of protecting the ocean's hidden wonders.",
+  "lesson": "",
+  "tone": "",
   "targetAge": {
     "min": 8,
     "max": 12
@@ -14,24 +16,6 @@
   ],
   "language": "English",
   "estimatedMinutes": 20,
-  "artStyleBible": {
-    "medium": "Digital watercolor with steampunk brass textures and glowing bioluminescent layers.",
-    "palette": "Deep oceanic blues, emerald greens, and warm polished brass with neon accents for sea life.",
-    "lineQuality": "Clean, architectural lines for the submarine contrasted with fluid, organic strokes for the creatures.",
-    "mood": "Wondrous, adventurous, and slightly mysterious but never truly frightening.",
-    "motifs": [
-      "Brass gears",
-      "Portholes",
-      "Giant squid silhouettes",
-      "Seashells",
-      "Victorian velvet"
-    ],
-    "negative": [
-      "Text or dialogue bubbles",
-      "Photorealistic gore",
-      "Blood",
-      "Horror-style monsters",
-      "Modern plastic technology"
-    ]
-  }
+  "artStyleId": "japanese-animation-watercolor",
+  "artStylePrompt": "Japanese animation watercolor illustration, children's storybook style. Soft hand-painted backgrounds with gentle color gradients, detailed natural textures — moss, bark, light through leaves. Warm nostalgic atmosphere, delicate linework, quiet and pastoral mood. Gentle and deeply emotional.No frame, no border, no text, no watermark, full background."
 }

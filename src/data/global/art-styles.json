@@ -1,0 +1,100 @@
+{
+  "styles": [
+    {
+      "id": "soft-watercolor",
+      "name": "Soft Watercolor",
+      "image": "/image/style/Soft watercolor.webp",
+      "prompt": "Soft watercolor illustration, children's storybook style. Minimal linework — shapes defined by color rather than outlines. Rich layered watercolor washes with visible wet-on-wet blooms, gentle color bleeding at edges, subtle watercolor backruns and soft drips. Colors melt softly into each other, dreamy and painterly. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "japanese-animation-watercolor",
+      "name": "Japanese Animation",
+      "image": "/image/style/Japanese animation watercolor.webp",
+      "prompt": "Japanese animation watercolor illustration, children's storybook style. Soft hand-painted backgrounds with gentle color gradients, detailed natural textures — moss, bark, light through leaves. Warm nostalgic atmosphere, delicate linework, quiet and pastoral mood. Gentle and deeply emotional.No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "colored-pencil",
+      "name": "Colored Pencil",
+      "image": "/image/style/Colored pencil.webp",
+      "prompt": "Colored pencil illustration, children's storybook style. Rough and expressive pencil strokes — heavy visible grain, uneven pressure with darker edges and lighter centers. Bold layered cross-hatching, colors built up in multiple rough strokes rather than smooth fills. Waxy colored pencil texture throughout, slightly scratchy and imperfect. Bright saturated colors with raw hand-drawn energy. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "classic-vintage-storybook",
+      "name": "Classic Vintage Storybook",
+      "image": "/image/style/Classic vintage storybook.webp",
+      "prompt": "Classic vintage storybook illustration, 1950s Golden Book style. Rich gouache colors, clean outlines, flat decorative shapes, warm golden tones. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "clean-simple-childrens-book",
+      "name": "Clean & Simple Children's Book",
+      "image": "/image/style/Clean and simple childrens book.webp",
+      "prompt": "Clean and simple children's book illustration. Simplified shapes but recognizable and warm — characters have clear personality and expression. Limited flat color palette of 4-5 soft colors, minimal shading, no complex textures. Generous white space, uncluttered composition. Simple but not geometric — organic soft edges, slightly imperfect hand-drawn feel. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "expressive-loose",
+      "name": "Expressive & Loose",
+      "image": "/image/style/Expressive loose childrens art book.webp",
+      "prompt": "Expressive loose children's art book illustration. Deliberately rough and sketchy — uneven wobbly lines, imperfect shapes, gestural brushstrokes that miss the edges. Thick visible paint strokes, raw texture, accidental smudges left intentionally. Childlike spontaneity but with sophisticated color harmony and confident composition. Looks effortless but deeply considered. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "highly-detailed-fine",
+      "name": "Highly Detailed Fine",
+      "image": "/image/style/Highly detailed fine.webp",
+      "prompt": "Highly detailed fine illustration, children's storybook style. Intricate linework with meticulous cross-hatching and delicate stippling. very leaf, bark texture, and fabric fold rendered with precision. Softly muted palette — warm terracotta, dusty teal, soft olive green, pale golden yellow, muted blush pink. Colors are present but quietly toned down — recognizable hues, never grey, never dull. Like a carefully hand-engraved illustration finished with soft restrained washes of color. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "paper-cut",
+      "name": "Paper Cut Art",
+      "image": "/image/style/Paper cut art.webp",
+      "prompt": "Paper cut art illustration, children's storybook style. Layered cut paper, visible depth and shadow, bold flat shapes, bright primary colors, white paper highlights. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "scandinavian-folk",
+      "name": "Scandinavian Folk Art",
+      "image": "/image/style/Scandinavian folk art.webp",
+      "prompt": "Scandinavian folk art illustration, children's storybook style. Flat graphic shapes, bold outlines, limited earthy palette of rust, mustard, sage green and cream, decorative folk patterns. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "3d-rendered",
+      "name": "3D Rendered",
+      "image": "/image/style/3D rendered childrens book.webp",
+      "prompt": "3D rendered children's book illustration, soft clay-like characters, smooth rounded forms, warm studio lighting, Pixar-inspired charm, pastel color palette. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "american-superhero-comic",
+      "name": "American Superhero Comic",
+      "image": "/image/style/American superhero comic book.webp",
+      "prompt": "American superhero comic book illustration. Bold thick black outlines, flat cel-shaded colors with hard edge highlights. Dynamic halftone dot patterns in shadows. Primary color palette — red, blue, yellow. Strong diagonal compositions, exaggerated proportions, high energy. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "dark-fantasy-oil-painting",
+      "name": "Dark Fantasy Oil Painting",
+      "image": "/image/style/Dark Fantasy.webp",
+      "prompt": "Dark fantasy oil painting illustration. Rich textured brushwork, deep jewel tones — crimson, midnight blue, aged gold. Dramatic chiaroscuro lighting from a single mysterious source. Epic and foreboding atmosphere, detailed environmental storytelling, painterly and grand. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "graphic-novel",
+      "name": "Graphic Novel",
+      "image": "/image/style/Graphic novel.webp",
+      "prompt": "Graphic novel illustration. Loose expressive ink brushwork with confident gestural lines. Limited muted color palette — deep navy, burnt sienna, warm cream. Heavy use of negative space, atmospheric shadow, moody and literary. Sophisticated adult storytelling aesthetic. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "modern-woodblock",
+      "name": "Modern Woodblock Print",
+      "image": "/image/style/Modern woodblock print.webp",
+      "prompt": "Modern woodblock print illustration. Flat bold shapes with visible wood grain texture, strong black outlines, limited high-contrast color palette — black, white, red, one accent color. Geometric stylization, dynamic angular compositions, traditional craft meets contemporary edge. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "retro-scifi-poster",
+      "name": "Retro Sci-Fi Poster",
+      "image": "/image/style/Retro science fiction poster.webp",
+      "prompt": "Retro science fiction poster illustration. Vintage 1950s pulp magazine aesthetic. Flat graphic shapes with airbrush gradients, warm amber, turquoise and cream palette, dramatic sunset silhouettes. Optimistic atomic age energy, clean and iconic. No frame, no border, no text, no watermark, full background."
+    },
+    {
+      "id": "scifi-noir",
+      "name": "Sci-Fi Noir",
+      "image": "/image/style/Sci-fi noir.webp",
+      "prompt": "Sci-fi noir illustration. Sleek metallic surfaces, deep shadow with dramatic high-contrast lighting, cool blue and steel grey palette with sharp neon accent lines. Hard geometric edges, cinematic wide composition. Gritty and futuristic, like a dark space opera concept art. No frame, no border, no text, no watermark, full background."
+    }
+  ]
+}

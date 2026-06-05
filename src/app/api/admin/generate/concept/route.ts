@@ -23,16 +23,18 @@ const SYSTEM_PROMPT = `You are a children's picture-book editor. Turn the author
 
 Produce:
 - title + a short subtitle (tagline; "" if none fits)
-- premise: 2-4 sentences capturing the setup, the central emotional arc, and the tone. This is the anchor every later stage is bound by.
+- premise: 1-2 sentences — the SETUP/hook: who the hero is and the situation or problem that starts the story. Describe WHAT happens, NOT the message or the mood.
+- lesson: ONE warm sentence — the heart of the book: what you want a child to learn or feel by the end (e.g. "asking for help is brave too"). The story's ending should land this.
+- tone: a few mood words for how the book FEELS (e.g. "cozy, gentle, a little mysterious").
 - targetAge: a sensible {min,max} year band.
-- themes: 2-5 short themes.
+- themes: 2-5 short topic themes (e.g. courage, friendship).
 - language: echo back the language you are told to WRITE IN.
 - estimatedMinutes: a realistic read/play time (typically 8-20).
-- artStyleBible: the visual direction every illustration must obey for consistency —
-    medium (technique), palette (colours/mood), lineQuality, mood, motifs (recurring visual elements), negative (things to NEVER draw: text/words in the image, watermarks, scary photo-realism, gore).
+
+(The visual art style is chosen separately by the author from a template gallery — do NOT invent one.)
 
 RULES:
-- LANGUAGE: write title/subtitle/premise/themes STRICTLY in the language named under "WRITE IN", even if the brief is in another language. The artStyleBible may stay in English (it's an illustrator brief).
+- LANGUAGE: write title/subtitle/premise/lesson/tone/themes STRICTLY in the language named under "WRITE IN", even if the brief is in another language.
 - Keep it warm, gentle, and age-appropriate. No violence, no scary realism.
 - Output JSON only, matching the schema. No markdown, no commentary.`;
 
@@ -70,7 +72,16 @@ export async function POST(req: Request) {
     const concept = await chat({
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: lines.join("\n") }],
-      schema: ConceptSchema,
+      // Art style is author-picked from the gallery, not LLM-generated — omit
+      // those fields. lesson/tone carry .default("") on the schema (for reading
+      // older drafts) but we DO want the model to generate them, so re-add them
+      // as required (no default) for the structured-output call.
+      schema: ConceptSchema.omit({
+        artStyleId: true,
+        artStylePrompt: true,
+        lesson: true,
+        tone: true,
+      }).extend({ lesson: z.string(), tone: z.string() }),
       schemaName: "concept",
     });
     return NextResponse.json({ concept });

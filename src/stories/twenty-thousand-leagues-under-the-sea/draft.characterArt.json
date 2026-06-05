@@ -1,3 +1,24 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "id": "hero",
+      "visualDescription": "A scholarly gentleman with a silver-streaked goatee and round spectacles, wearing a Victorian explorer's waistcoat and a rumpled white linen shirt."
+    },
+    {
+      "id": "narrator",
+      "visualDescription": "An ethereal, translucent jellyfish-like presence that floats through the scenes with bioluminescent pulses of blue and gold."
+    },
+    {
+      "id": "captain-nemo",
+      "visualDescription": "A tall, imposing figure with a dark beard and piercing sea-green eyes, wearing a tailored navy-blue coat with brass buttons and glowing teal trim."
+    },
+    {
+      "id": "first-mate-conseil",
+      "visualDescription": "A stout and organized man with short-cropped ginger hair, wearing a utility vest filled with vials and a waterproof leather belt."
+    },
+    {
+      "id": "the-giant-squid",
+      "visualDescription": "A massive cephalopod with iridescent shifting skin, huge golden eyes, and long tentacles tipped with bioluminescent suction cups."
+    }
+  ]
 }

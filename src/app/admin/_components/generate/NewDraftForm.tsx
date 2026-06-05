@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowCircleRight } from "@phosphor-icons/react";
 
 import { createDraftAction } from "../../_actions/generateDraft";
 import { Field, inputCls, StyledSelect } from "../form";
@@ -31,10 +32,7 @@ export function NewDraftForm() {
 
   return (
     <Card title="New story">
-      <Field
-        label="Working title"
-        hint="Used for the story's id (slug). The concept stage can refine the display title."
-      >
+      <Field label="Title">
         <input
           className={inputCls}
           value={title}
@@ -42,7 +40,7 @@ export function NewDraftForm() {
           placeholder="e.g. The Lantern Fox"
         />
       </Field>
-      <Field label="Language" hint="The language the story is written in.">
+      <Field label="Language">
         <StyledSelect
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
@@ -55,12 +53,9 @@ export function NewDraftForm() {
           ))}
         </StyledSelect>
       </Field>
-      <Field
-        label="Brief"
-        hint="What's the story about? Premise, characters, mood, the lesson…"
-      >
+      <Field label="Brief">
         <textarea
-          className={`${inputCls} min-h-28`}
+          className={`${inputCls} min-h-80`}
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
           placeholder="A shy little fox who lights lanterns for lost travellers learns that asking for help is brave too…"
@@ -69,7 +64,14 @@ export function NewDraftForm() {
       {err && <ErrorNote>{err}</ErrorNote>}
       <div className="flex justify-end">
         <PrimaryButton onClick={submit} disabled={pending || !title.trim() || !brief.trim()}>
-          {pending ? "Creating…" : "Create draft →"}
+          {pending ? (
+            "Creating…"
+          ) : (
+            <>
+              Create Draft
+              <ArrowCircleRight weight="fill" className="h-4 w-4" />
+            </>
+          )}
         </PrimaryButton>
       </div>
     </Card>

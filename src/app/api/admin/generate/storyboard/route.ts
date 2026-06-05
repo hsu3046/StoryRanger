@@ -93,7 +93,11 @@ export async function POST(req: Request) {
     "",
     `TITLE: ${c.title}`,
     c.subtitle ? `SUBTITLE: ${c.subtitle}` : "",
-    `PREMISE / TONE: ${c.premise}`,
+    `PREMISE: ${c.premise}`,
+    c.lesson
+      ? `LESSON (the arc must build toward this; the final beat resolves it): ${c.lesson}`
+      : "",
+    c.tone ? `TONE: ${c.tone}` : "",
     `THEMES: ${c.themes.join(", ")}`,
     `TARGET AGE: ${c.targetAge.min}-${c.targetAge.max}`,
     "",

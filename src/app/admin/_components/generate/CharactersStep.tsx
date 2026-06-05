@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Sparkle } from "@phosphor-icons/react";
 
 import type { CharacterArtFileT, ConceptT, DraftMetaT, StoryboardT } from "@/data/schemas";
 import type { Character, CharacterPersona, CharactersFile } from "@/types/story";
+import { VOICES } from "@/data/voices";
 import {
   saveCharacterArtAction,
   saveDraftCharactersAction,
 } from "../../_actions/generateDraft";
 import { useConfirm } from "../ConfirmDialog";
 import { inputClsSm } from "../form";
+import { VoiceSelectWithPreview } from "../VoiceSelectWithPreview";
 import { ImagePreview } from "./ImagePreview";
 import { Card, ErrorNote, postJson, PrimaryButton } from "./shared";
 import { useAutosave, useStageVisit } from "./useAutosave";
 import { useGenerationPool } from "./useGenerationPool";
 
 const CHAR_MAX = 10; // hero + up to 9 NPCs
+const fieldLabelCls =
+  "text-xs font-semibold uppercase tracking-wide text-ink-soft";
 const DEFAULT_NPC_VOICE = "ErXwobaYiN019PkySvjV";
 const DEFAULT_NPC_COLOR = "#3a7ca5";
 
@@ -169,6 +173,11 @@ export function CharactersStep({
         : c,
     );
   }
+  function setVoice(id: string, voice: string) {
+    setChars((c) =>
+      c ? { characters: c.characters.map((ch) => (ch.id === id ? { ...ch, voice } : ch)) } : c,
+    );
+  }
   function setVisual(id: string, visualDescription: string) {
     setArt((a) => {
       const entries = a?.entries ?? [];
@@ -297,15 +306,16 @@ export function CharactersStep({
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-3">
         {shown.map((ch) => {
           const slug = slugOf(ch);
           const imgSt = img.entries[slug]?.status;
           const imgPresent = imgSt === "done" || initialImgDone.has(slug);
           const imgBase = `/stories/${draftId}/characters/${slug}`;
           return (
-            <div key={ch.id} className="flex gap-3 rounded-card bg-paper-deep/20 p-2.5">
-              <div className="flex w-24 shrink-0 flex-col gap-1">
+            <Fragment key={ch.id}>
+            <div className="flex gap-3 rounded-card bg-paper-deep/20 p-2.5">
+              <div className="flex w-40 shrink-0 flex-col gap-1">
                 <ImagePreview
                   base={imgBase}
                   version={versions[slug] ?? 0}
@@ -324,27 +334,47 @@ export function CharactersStep({
                   {imgSt === "running" ? "Generating…" : "Generate"}
                 </button>
               </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <input
-                  className={`${inputClsSm} font-semibold`}
-                  value={ch.name}
-                  onChange={(e) => setName(ch.id, e.target.value)}
-                  placeholder="Name"
-                />
-                <textarea
-                  className={`${inputClsSm} min-h-20`}
-                  value={ch.persona?.shortBio ?? ""}
-                  onChange={(e) => setBio(ch.id, e.target.value)}
-                  placeholder="Bio — who they are & how they talk"
-                />
-                <textarea
-                  className={`${inputClsSm} min-h-20`}
-                  value={visualOf(ch.id)}
-                  onChange={(e) => setVisual(ch.id, e.target.value)}
-                  placeholder="Appearance for Image"
-                />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className={fieldLabelCls}>Name</span>
+                  <input
+                    className={`${inputClsSm} font-semibold`}
+                    value={ch.name}
+                    onChange={(e) => setName(ch.id, e.target.value)}
+                    placeholder="Name"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className={fieldLabelCls}>Bio</span>
+                  <textarea
+                    className={`${inputClsSm} min-h-20`}
+                    value={ch.persona?.shortBio ?? ""}
+                    onChange={(e) => setBio(ch.id, e.target.value)}
+                    placeholder="Who they are & how they talk"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className={fieldLabelCls}>Appearance</span>
+                  <textarea
+                    className={`${inputClsSm} min-h-20`}
+                    value={visualOf(ch.id)}
+                    onChange={(e) => setVisual(ch.id, e.target.value)}
+                    placeholder="Face, hair, outfit, palette…"
+                  />
+                </label>
+                <div className="flex flex-col gap-1">
+                  <span className={fieldLabelCls}>Voice</span>
+                  <VoiceSelectWithPreview
+                    value={ch.voice}
+                    options={VOICES}
+                    placeholder="(choose a voice)"
+                    onChange={(v) => setVoice(ch.id, v)}
+                  />
+                </div>
               </div>
             </div>
+            <hr className="border-t border-ink-soft/15" />
+            </Fragment>
           );
         })}
       </div>

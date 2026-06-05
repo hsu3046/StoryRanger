@@ -64,25 +64,47 @@ export function BgmSelectWithPreview({
       return;
     }
     stopPreview();
-    const audio = new Audio(assetUrl(`/stories/${storyId}/audio/bgm/${key}.mp3`));
-    audio.volume = 0.4;
-    audio.onended = () => setPlayingKey(null);
-    audioRef.current = audio;
-    // Only flip the row to "playing" once playback actually starts — a
-    // failed play() (404 / autoplay block) otherwise shows a Pause icon
-    // with no audio. Guard against a newer preview having superseded this
-    // one before the promise resolves.
-    audio
-      .play()
-      .then(() => {
-        if (audioRef.current === audio) setPlayingKey(key);
-      })
-      .catch(() => {
-        if (audioRef.current === audio) {
-          audioRef.current = null;
-          setPlayingKey(null);
-        }
-      });
+    // Resolve like playback does: the story's own folder first (a story can
+    // override a common track locally), then the shared /audio/bgm pool — so a
+    // track that lives only in common still previews.
+    const candidates = [
+      assetUrl(`/stories/${storyId}/audio/bgm/${key}.mp3`),
+      assetUrl(`/audio/bgm/${key}.mp3`),
+    ];
+    const tryPlay = (idx: number) => {
+      if (idx >= candidates.length) {
+        audioRef.current = null;
+        setPlayingKey(null);
+        return;
+      }
+      const audio = new Audio(candidates[idx]);
+      audio.volume = 0.4;
+      audio.onended = () => setPlayingKey(null);
+      // 404 / undecodable → fall through to the next candidate.
+      audio.onerror = () => {
+        if (audioRef.current === audio) tryPlay(idx + 1);
+      };
+      audioRef.current = audio;
+      // Only flip the row to "playing" once playback actually starts. 404 load
+      // errors are handled by onerror above; here we only catch the autoplay
+      // block so a failed play() doesn't show a Pause icon with no audio.
+      audio
+        .play()
+        .then(() => {
+          if (audioRef.current === audio) setPlayingKey(key);
+        })
+        .catch((err: unknown) => {
+          if (
+            audioRef.current === audio &&
+            err instanceof DOMException &&
+            err.name === "NotAllowedError"
+          ) {
+            audioRef.current = null;
+            setPlayingKey(null);
+          }
+        });
+    };
+    tryPlay(0);
   }
 
   // Stop preview when popover closes or component unmounts.

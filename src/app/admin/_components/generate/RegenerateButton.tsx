@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowsCounterClockwise } from "@phosphor-icons/react";
+import { Sparkle } from "@phosphor-icons/react";
 
 import { inputClsSm } from "../form";
 import { GhostButton, PrimaryButton } from "./shared";
@@ -69,8 +69,8 @@ export function RegenerateButton({
   return (
     <>
       <GhostButton onClick={openModal} disabled={disabled}>
-        <ArrowsCounterClockwise weight="bold" className="h-4 w-4" aria-hidden />
-        {busy ? "Regenerating…" : "Regenerate"}
+        <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
+        {busy ? "Generating…" : "Generate"}
       </GhostButton>
       {mounted &&
         open &&
@@ -150,8 +150,8 @@ export function RegenerateButton({
                     Cancel
                   </button>
                   <PrimaryButton onClick={submit}>
-                    <ArrowsCounterClockwise weight="bold" className="h-4 w-4" aria-hidden />
-                    Regenerate
+                    <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
+                    Generate
                   </PrimaryButton>
                 </div>
               </div>

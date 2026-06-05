@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CaretDown, CircleNotch, Pause, Play } from "@phosphor-icons/react";
+import {
+  CaretDown,
+  CircleNotch,
+  Pause,
+  Play,
+  SpeakerSimpleX,
+} from "@phosphor-icons/react";
 
 import type { VoiceEntryT } from "@/data/schemas";
 import { inputCls } from "./form";
@@ -249,7 +255,14 @@ export function VoiceSelectWithPreview({
                 }`}
                 title="No voice — this character never speaks aloud (dialogue text still shows)"
               >
-                🔇 (no voice)
+                <span className="flex items-center gap-1.5">
+                  <SpeakerSimpleX
+                    weight="bold"
+                    className="h-4 w-4 shrink-0"
+                    aria-hidden
+                  />
+                  (no voice)
+                </span>
               </button>
               {/* spacer keeps the label column aligned with rows that have a
                   preview button (h-6 w-6). */}
