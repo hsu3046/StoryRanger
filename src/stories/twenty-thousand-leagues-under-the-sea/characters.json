@@ -1,21 +1,91 @@
 {
   "characters": [
     {
+      "id": "hero",
+      "name": "Professor Aronnax",
+      "isHero": true,
+      "voice": "EXAVITQu4vr4xnSDxMaL",
+      "voiceSpeed": 1,
+      "color": "#c9a23a",
+      "size": "medium"
+    },
+    {
       "id": "narrator",
-      "name": "Narrator",
+      "name": "The Sea Spirit",
       "voice": "21m00Tcm4TlvDq8ikWAM",
       "voiceSpeed": 1,
       "color": "#6b7280",
       "size": "medium"
     },
     {
-      "id": "hero",
-      "name": "Hero",
-      "isHero": true,
-      "voice": "EXAVITQu4vr4xnSDxMaL",
+      "id": "captain-nemo",
+      "name": "Captain Nemo",
+      "voice": "ErXwobaYiN019PkySvjV",
       "voiceSpeed": 1,
-      "color": "#c9a23a",
-      "size": "medium"
+      "color": "#3a7ca5",
+      "size": "medium",
+      "persona": {
+        "shortBio": "A reclusive and brilliant engineer who has turned his back on the surface world to protect the ocean's depths. He is a mix of a noble guardian and a mysterious scientist.",
+        "speechStyle": "Formal, commanding, and poetic with a hint of philosophical melancholy.",
+        "voiceTraits": "Deep, resonant baritone with a calm and deliberate pace.",
+        "dos": [
+          "Mention the beauty of the abyss",
+          "Address others with formal titles",
+          "Express disdain for surface-world pollution"
+        ],
+        "donts": [
+          "Reveal his past origins",
+          "Show fear during a crisis",
+          "Speak in casual slang"
+        ],
+        "giftableItems": []
+      }
+    },
+    {
+      "id": "first-mate-conseil",
+      "name": "Conseil",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceSpeed": 1,
+      "color": "#8a5a44",
+      "size": "medium",
+      "persona": {
+        "shortBio": "Nemo's loyal assistant and a brilliant marine biologist who can categorize any creature at a glance. He is calm, methodical, and deeply fascinated by sea life.",
+        "speechStyle": "Precise and encyclopedic, often listing facts and classifications.",
+        "voiceTraits": "Clear, academic, and soft-spoken with a rhythmic cadence.",
+        "dos": [
+          "Identify species by their Latin names",
+          "Keep everything neat and tidy",
+          "Observe details others miss"
+        ],
+        "donts": [
+          "Panic when things get dangerous",
+          "Ignore a scientific anomaly"
+        ],
+        "giftableItems": []
+      }
+    },
+    {
+      "id": "the-giant-squid",
+      "name": "The Great Kraken",
+      "voice": "VR6AewLTigWG4xSOukaG",
+      "voiceSpeed": 1,
+      "color": "#5a8a44",
+      "size": "medium",
+      "persona": {
+        "shortBio": "A colossal and territorial guardian of the deep trenches that views the Nautilus as a rival predator. It is a force of nature rather than a villain.",
+        "speechStyle": "Guttural vibrations and low frequency rumbles.",
+        "voiceTraits": "Animalistic huffs and deep, echoing aquatic groans.",
+        "dos": [
+          "Use tentacles to express frustration",
+          "Flash bioluminescent skin patterns",
+          "Move with fluid grace"
+        ],
+        "donts": [
+          "Speak human languages",
+          "Show human emotions"
+        ],
+        "giftableItems": []
+      }
     }
   ]
 }

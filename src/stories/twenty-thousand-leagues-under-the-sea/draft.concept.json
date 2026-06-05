@@ -14,24 +14,6 @@
   ],
   "language": "English",
   "estimatedMinutes": 20,
-  "artStyleBible": {
-    "medium": "Digital watercolor with steampunk brass textures and glowing bioluminescent layers.",
-    "palette": "Deep oceanic blues, emerald greens, and warm polished brass with neon accents for sea life.",
-    "lineQuality": "Clean, architectural lines for the submarine contrasted with fluid, organic strokes for the creatures.",
-    "mood": "Wondrous, adventurous, and slightly mysterious but never truly frightening.",
-    "motifs": [
-      "Brass gears",
-      "Portholes",
-      "Giant squid silhouettes",
-      "Seashells",
-      "Victorian velvet"
-    ],
-    "negative": [
-      "Text or dialogue bubbles",
-      "Photorealistic gore",
-      "Blood",
-      "Horror-style monsters",
-      "Modern plastic technology"
-    ]
-  }
+  "artStyleId": "classic-vintage-storybook",
+  "artStylePrompt": "Classic vintage storybook illustration, 1950s Golden Book style. Rich gouache colors, clean outlines, flat decorative shapes, warm golden tones. No frame, no border, no text, no watermark, full background."
 }
