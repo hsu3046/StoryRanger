@@ -9,7 +9,7 @@ import { saveDraftMetaAction } from "../../_actions/generateDraft";
 export function useStageVisit(draftId: string, meta: DraftMetaT, stage: DraftStageT) {
   useEffect(() => {
     if (meta.currentStage !== stage) {
-      void saveDraftMetaAction(draftId, { ...meta, currentStage: stage });
+      void saveDraftMetaAction(draftId, { currentStage: stage });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

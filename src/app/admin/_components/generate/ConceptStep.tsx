@@ -30,7 +30,7 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
     enabled: !!concept,
   });
   // Persist the story idea (brief) to meta so it survives navigation.
-  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { ...meta, brief: t }), {
+  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { brief: t }), {
     enabled: briefText !== brief,
   });
   useStageVisit(draftId, meta, "concept");

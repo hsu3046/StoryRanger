@@ -9,6 +9,7 @@ import type { DraftMetaT } from "@/data/schemas";
 import type { ValidationIssue } from "../../_lib/validateStory";
 import { commitDraftAction, validateDraftAction } from "../../_actions/generateDraft";
 import { Card, ErrorNote, GhostButton, PrimaryButton } from "./shared";
+import { useStageVisit } from "./useAutosave";
 
 interface Props {
   draftId: string;
@@ -22,6 +23,8 @@ export function ReviewStep({ draftId, meta, initialValidation }: Props) {
   const [busy, setBusy] = useState<"validate" | "commit" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [committed, setCommitted] = useState(meta.status === "committed");
+
+  useStageVisit(draftId, meta, "review");
 
   async function revalidate() {
     setBusy("validate");

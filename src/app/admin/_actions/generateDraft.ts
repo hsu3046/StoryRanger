@@ -166,15 +166,22 @@ export async function createDraftAction(input: {
 
 // ── Per-stage artifact saves (validated; written to the draft dir) ──
 
+/**
+ * Merge a partial meta patch into the current on-disk meta. Callers pass only
+ * the field(s) they own (e.g. `{ currentStage }` or `{ brief }`) so concurrent
+ * updates from different steps don't clobber each other's fields (a full-object
+ * write from a stale render would, for example, revert currentStage).
+ */
 export async function saveDraftMetaAction(
   storyId: string,
   payload: unknown,
 ): Promise<ActionResult> {
   ensureDev();
   try {
+    const cur = await readDraftMeta(storyId);
     const merged =
       payload && typeof payload === "object"
-        ? { ...payload, storyId, updatedAt: nowIso() }
+        ? { ...(cur ?? {}), ...(payload as Record<string, unknown>), storyId, updatedAt: nowIso() }
         : payload;
     await writeJson(DraftMetaSchema, storyPath(storyId, DRAFT_FILES.meta), merged);
     revalidatePath(`/admin/generate/${storyId}`);
