@@ -75,8 +75,54 @@ export async function readDraftMeta(storyId: string): Promise<DraftMetaT | null>
     return null;
   }
 }
-export function readConcept(storyId: string): Promise<ConceptT | null> {
-  return readJsonSafe(storyId, DRAFT_FILES.concept, ConceptSchema);
+/** Flatten a legacy free-form art-style bible (medium/palette/lineQuality/mood/
+ *  motifs/negative) into a single style prompt, so a draft authored before the
+ *  template gallery keeps its visual direction. */
+function flattenLegacyBible(b: Record<string, unknown>): string {
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const arr = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const parts = [
+    str(b.medium),
+    str(b.palette),
+    str(b.lineQuality),
+    str(b.mood),
+  ].filter(Boolean);
+  const motifs = arr(b.motifs);
+  if (motifs.length) parts.push(`recurring motifs: ${motifs.join(", ")}`);
+  const neg = arr(b.negative);
+  if (neg.length) parts.push(`avoid: ${neg.join(", ")}`);
+  return parts.join("; ");
+}
+
+export async function readConcept(storyId: string): Promise<ConceptT | null> {
+  try {
+    const raw = await fs.readFile(
+      path.join(storyDir(storyId), DRAFT_FILES.concept),
+      "utf-8",
+    );
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    // Back-compat: drafts authored before the art-style template gallery carry a
+    // free-form `artStyleBible` but no `artStylePrompt`. The new schema drops the
+    // unknown key, which would silently lose the visual direction; synthesize a
+    // prompt from the old bible so reopening/regenerating an old draft keeps its
+    // look until the author picks a template.
+    if (
+      obj &&
+      typeof obj === "object" &&
+      !obj.artStylePrompt &&
+      obj.artStyleBible &&
+      typeof obj.artStyleBible === "object"
+    ) {
+      obj.artStylePrompt = flattenLegacyBible(
+        obj.artStyleBible as Record<string, unknown>,
+      );
+    }
+    const res = ConceptSchema.safeParse(obj);
+    return res.success ? res.data : null;
+  } catch {
+    return null;
+  }
 }
 export function readStoryboard(storyId: string): Promise<StoryboardT | null> {
   return readJsonSafe(storyId, DRAFT_FILES.storyboard, StoryboardSchema);
