@@ -5,8 +5,6 @@
       "id": "overboard-at-night",
       "title": "The Great Fall",
       "synopsis": "Professor Aronnax is knocked off his ship during an encounter with the mysterious 'sea monster'.",
-      "speaker": "narrator",
-      "setting": "The dark, churning Pacific Ocean at night.",
       "isEnding": false,
       "endingLabel": "",
       "branches": [
@@ -22,8 +20,6 @@
       "id": "nemo-introduction",
       "title": "Meeting the Captain",
       "synopsis": "A hatch opens and the Professor is brought inside the Nautilus to meet Captain Nemo.",
-      "speaker": "hero",
-      "setting": "A luxurious salon filled with books and sea specimens.",
       "isEnding": false,
       "endingLabel": "",
       "branches": [
@@ -42,28 +38,9 @@
       ]
     },
     {
-      "id": "nautilus-tour",
-      "title": "Wonders of the Deep",
-      "synopsis": "Nemo reveals the giant windows showing the bioluminescent life of the deep ocean.",
-      "speaker": "narrator",
-      "setting": "The Nautilus observation deck, deep underwater.",
-      "isEnding": false,
-      "endingLabel": "",
-      "branches": [
-        {
-          "id": "go-diving",
-          "label": "Put on a diving suit",
-          "next": "coral-forest",
-          "outcomeHint": "Experience the seafloor firsthand."
-        }
-      ]
-    },
-    {
       "id": "coral-forest",
       "title": "The Coral Forest",
       "synopsis": "The team explores an underwater forest of coral and discovers rare marine species.",
-      "speaker": "hero",
-      "setting": "A vibrant, glowing underwater forest.",
       "isEnding": false,
       "endingLabel": "",
       "branches": [
@@ -85,8 +62,6 @@
       "id": "squid-attack",
       "title": "The Giant Squid",
       "synopsis": "Massive tentacles wrap around the Nautilus, threatening to crush the hull.",
-      "speaker": "narrator",
-      "setting": "Deep ocean trenches, shadows everywhere.",
       "isEnding": false,
       "endingLabel": "",
       "branches": [
@@ -105,11 +80,24 @@
       ]
     },
     {
+      "id": "nautilus-tour",
+      "title": "Wonders of the Deep",
+      "synopsis": "Nemo reveals the giant windows showing the bioluminescent life of the deep ocean.",
+      "isEnding": false,
+      "endingLabel": "",
+      "branches": [
+        {
+          "id": "go-diving",
+          "label": "Put on a diving suit",
+          "next": "coral-forest",
+          "outcomeHint": "Experience the seafloor firsthand."
+        }
+      ]
+    },
+    {
       "id": "victory-repair",
       "title": "Calm After the Storm",
       "synopsis": "The Nautilus survives, and Nemo reflects on the majesty and danger of the sea.",
-      "speaker": "nemo",
-      "setting": "The engine room, glowing with blue energy.",
       "isEnding": false,
       "endingLabel": "",
       "branches": [
@@ -131,18 +119,14 @@
       "id": "ending-guardian",
       "title": "Guardian of the Abyss",
       "synopsis": "Professor Aronnax chooses to stay on the Nautilus, exploring the final frontiers of the Earth.",
-      "speaker": "hero",
-      "setting": "The Nautilus sailing into an unknown trench.",
-      "isEnding": true,
-      "endingLabel": "A Lifetime of Discovery",
+      "isEnding": false,
+      "endingLabel": "",
       "branches": []
     },
     {
       "id": "ending-messenger",
       "title": "The Voice of the Sea",
       "synopsis": "Nemo drops Aronnax near a shore; the Professor writes his famous book to inspire conservation.",
-      "speaker": "narrator",
-      "setting": "A quiet beach at sunrise.",
       "isEnding": true,
       "endingLabel": "The Legend Lives On",
       "branches": []
