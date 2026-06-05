@@ -28,8 +28,6 @@ interface Props {
   onResetVolumes: () => void;
   /** Play a sample effect so the Effects slider can be auditioned. */
   onPreviewSfx: () => void;
-  /** Forget seen tutorials so the one-time hints replay. */
-  onResetTutorials: () => void;
 }
 
 export function SettingsModal({
@@ -46,7 +44,6 @@ export function SettingsModal({
   onSfxVolume,
   onResetVolumes,
   onPreviewSfx,
-  onResetTutorials,
 }: Props) {
   return (
     <AnimatePresence>
@@ -129,16 +126,6 @@ export function SettingsModal({
                 onCommit={onPreviewSfx}
               />
             </div>
-
-            {/* Replay the one-time tutorial tips. */}
-            <button
-              type="button"
-              onClick={onResetTutorials}
-              className="inline-flex items-center gap-1.5 self-start rounded-pill px-2 py-1 text-xs font-medium text-ink-soft transition-colors hover:bg-paper-deep/60 hover:text-ink active:scale-95"
-            >
-              <ArrowCounterClockwise size={14} weight="bold" />
-              Show tutorial again
-            </button>
 
             <div className="flex flex-col gap-2">
               {/* Leave story */}

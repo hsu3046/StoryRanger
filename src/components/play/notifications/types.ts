@@ -1,10 +1,10 @@
 /**
- * Shape of a single top-of-screen notification (medal / item / companion / hint).
+ * Shape of a single top-of-screen notification (medal / item / companion).
  * ONE data object describes every kind; NotificationCard renders the variant
- * from `kind === "hint"` vs `chips` (item) vs `accent === "accent"` (medal) vs
- * the neutral default (companion). `hint` powers the one-time tutorial tips.
+ * from `chips` (item) vs `accent === "accent"` (medal) vs the neutral default
+ * (companion). This replaces the former three bespoke toast components.
  */
-export type NotifKind = "medal" | "item" | "companion" | "hint";
+export type NotifKind = "medal" | "item" | "companion";
 
 /** A single "icon + label ×N" chip inside an item notification. */
 export interface NotifChip {

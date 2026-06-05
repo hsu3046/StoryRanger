@@ -145,10 +145,6 @@ export interface SetupArgs {
   fallenAttackers: AttackerId[];
   companions: CompanionId[];
   companionMoods: CompanionMoods;
-  /** First-battle tutorial: freeze the answer timer for the whole battle so a
-   *  new player learns the flow without time pressure (reuses the existing
-   *  `timeFreeze` "whole-battle" path → "⏸️ Time stopped" shows automatically). */
-  tutorialFreeze?: boolean;
 }
 
 const MONSTER_SLOTS: StagePosition[][] = [
@@ -314,7 +310,6 @@ export function setupBattle(args: SetupArgs): BattleState {
     companionIdxThisRound: 0,
     rewards: [],
     itemsConsumed: [],
-    ...(args.tutorialFreeze ? { timeFreeze: "whole-battle" as const } : {}),
   };
 }
 
