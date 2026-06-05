@@ -1749,6 +1749,9 @@ export function StoryPlayer({
           clearSeenTutorials();
           setSeenTutorials(new Set());
           enqueuedHintsRef.current = new Set();
+          // Also clear the bag-open latch, else the 🎒 item tip won't replay
+          // when the bag is reopened this session despite the reset.
+          bagOpenedRef.current = false;
         }}
       />
 
