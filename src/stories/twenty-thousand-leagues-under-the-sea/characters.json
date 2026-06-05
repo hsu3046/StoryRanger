@@ -86,6 +86,22 @@
         ],
         "giftableItems": []
       }
+    },
+    {
+      "id": "character-6",
+      "name": "",
+      "voice": "ErXwobaYiN019PkySvjV",
+      "voiceSpeed": 1,
+      "color": "#3a7ca5",
+      "size": "medium",
+      "persona": {
+        "shortBio": "",
+        "speechStyle": "",
+        "voiceTraits": "",
+        "dos": [],
+        "donts": [],
+        "giftableItems": []
+      }
     }
   ]
 }
