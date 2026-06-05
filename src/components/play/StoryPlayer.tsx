@@ -36,6 +36,12 @@ import { ChallengeGate } from "../challenge/ChallengeGate";
 import { loadState, saveState } from "@/lib/storage";
 import { recordEarnedAchievements } from "@/lib/achievements";
 import {
+  loadSeenTutorials,
+  recordSeenTutorial,
+  clearSeenTutorials,
+  type TutorialKey,
+} from "@/lib/tutorials";
+import {
   characterAssetSlug,
   characterSpriteBase,
   formatNarration,
@@ -184,6 +190,18 @@ export function StoryPlayer({
   const [bgmVolume, setBgmVolume] = useState<number>(DEFAULT_VOLUMES.bgm);
   const [sfxVolume, setSfxVolume] = useState<number>(DEFAULT_VOLUMES.sfx);
   const [shelfOpen, setShelfOpen] = useState(false);
+  // Tutorial hints (account-wide, one-time). `seenTutorials` holds the keys
+  // already shown (loaded from localStorage); `pendingHints` buffers queued tips
+  // so they fire only when the toast stack is empty (never over a reward toast).
+  const [seenTutorials, setSeenTutorials] = useState<Set<TutorialKey>>(
+    new Set(),
+  );
+  const [pendingHints, setPendingHints] = useState<
+    { key: TutorialKey; icon: string; copy: string }[]
+  >([]);
+  // Synchronous guard so a hint enqueues exactly once even under StrictMode's
+  // double-invoked effects (state updates are async; this ref is not).
+  const enqueuedHintsRef = useRef<Set<TutorialKey>>(new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Map viewer open (only reachable when `mapImage` is set). */
   const [mapOpen, setMapOpen] = useState(false);
@@ -473,6 +491,7 @@ export function StoryPlayer({
     setVoiceVolume(readVol("storyranger:voiceVolume", DEFAULT_VOLUMES.voice));
     setBgmVolume(readVol("storyranger:bgmVolume", DEFAULT_VOLUMES.bgm));
     setSfxVolume(readVol("storyranger:sfxVolume", DEFAULT_VOLUMES.sfx));
+    if (!previewMode) setSeenTutorials(new Set(loadSeenTutorials()));
     setHydrated(true);
   }, [story, slot, previewMode]);
 
@@ -654,6 +673,80 @@ export function StoryPlayer({
       ),
     [currentScene.asks, characterMap],
   );
+
+  // ── Tutorial hints (account-wide, one-time) ──────────────────────────
+  // Does THIS scene have anyone to chat with AND is the rail actually visible?
+  // Mirrors the rail's availability (authored Interactive Characters with a
+  // persona) AND its visibility gate (hidden during an encounter/outcome
+  // overlay). Without the overlay check the tip could fire + auto-dismiss while
+  // the rail is suppressed and never replay once it appears.
+  const dialogueAvailable = useMemo(
+    () =>
+      !pendingEncounter &&
+      !pendingOutcome &&
+      (currentScene.dialogueCharacters ?? []).some((id) =>
+        canTalkTo(characterMap[id]),
+      ),
+    [
+      currentScene.dialogueCharacters,
+      characterMap,
+      pendingEncounter,
+      pendingOutcome,
+    ],
+  );
+
+  // Enqueue a tip once. We DON'T push immediately — `pendingHints` buffers it so
+  // the flush effect fires it only when the toast stack is empty (a tip must
+  // never overlap a medal/item/companion reward toast). `enqueuedHintsRef` +
+  // `seenTutorials` together guarantee exactly one enqueue.
+  const fireHint = useCallback(
+    (key: TutorialKey, icon: string, copy: string) => {
+      if (previewMode || !hydrated) return;
+      if (seenTutorials.has(key) || enqueuedHintsRef.current.has(key)) return;
+      enqueuedHintsRef.current.add(key);
+      recordSeenTutorial(key);
+      setSeenTutorials((prev) => new Set(prev).add(key));
+      setPendingHints((q) => [...q, { key, icon, copy }]);
+    },
+    [previewMode, hydrated, seenTutorials],
+  );
+
+  // Flush one pending tip ONLY when nothing else is on the toast stack.
+  useEffect(() => {
+    if (pendingHints.length === 0 || notifQueue.length > 0) return;
+    const [next, ...rest] = pendingHints;
+    pushNotif({
+      kind: "hint",
+      id: `hint:${next.key}`,
+      icon: next.icon,
+      eyebrow: "Tip!",
+      title: next.copy,
+      durationMs: 5500,
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- drain one queued tip once the toast stack clears
+    setPendingHints(rest);
+  }, [notifQueue, pendingHints, pushNotif]);
+
+  // Triggers — each fires its hint the first time that mechanic appears.
+  const bagOpenedRef = useRef(false);
+  useEffect(() => {
+    if (shelfOpen && !bagOpenedRef.current) {
+      bagOpenedRef.current = true;
+      fireHint("item", "🎒", "Tap an item in your bag to use it.");
+    }
+  }, [shelfOpen, fireHint]);
+  useEffect(() => {
+    if (dialogueAvailable)
+      fireHint("dialogue", "💬", "Tap a friend on the left to chat.");
+  }, [dialogueAvailable, fireHint]);
+  useEffect(() => {
+    if (pendingEncounter)
+      fireHint("battle", "⚔️", "Take your time — solve to attack!");
+  }, [pendingEncounter, fireHint]);
+  useEffect(() => {
+    if (pendingChallenge)
+      fireHint("challenge", "🧩", "Solve the puzzle to keep going.");
+  }, [pendingChallenge, fireHint]);
 
   function handleChoose(branch: Branch) {
     // An educational-challenge gate blocks the reward. Stage it on
@@ -1614,6 +1707,9 @@ export function StoryPlayer({
             onComplete={applyEncounterResult}
             onRetry={retryEncounter}
             onOpenSettings={() => setSettingsOpen(true)}
+            tutorialFreeze={
+              hydrated && !previewMode && !seenTutorials.has("battle")
+            }
           />
         )}
       </AnimatePresence>
@@ -1659,6 +1755,14 @@ export function StoryPlayer({
           setSfxVolume(DEFAULT_VOLUMES.sfx);
         }}
         onPreviewSfx={() => getAudio().playSfx(SFX.MEDAL)}
+        onResetTutorials={() => {
+          clearSeenTutorials();
+          setSeenTutorials(new Set());
+          enqueuedHintsRef.current = new Set();
+          // Also clear the bag-open latch, else the 🎒 item tip won't replay
+          // when the bag is reopened this session despite the reset.
+          bagOpenedRef.current = false;
+        }}
       />
 
       {/* Map viewer — the story map shown large. Tap the backdrop or ✕ to
