@@ -74,6 +74,8 @@ interface Props {
   /** When set, called with a missed challenge so the home "Check Your Answers"
    *  review can collect it. Undefined in admin preview / demo (no recording). */
   recordWrongChallenge?: (challenge: Challenge) => void;
+  /** First-battle tutorial — freeze the answer timer for the whole battle. */
+  tutorialFreeze?: boolean;
 }
 
 type Phase = "intro" | "alert" | "body";
@@ -110,6 +112,7 @@ export function EncounterFlow({
   onOpenSettings,
   age,
   recordWrongChallenge,
+  tutorialFreeze,
 }: Props) {
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
@@ -178,6 +181,7 @@ export function EncounterFlow({
           fallenAttackers,
           companions,
           companionMoods,
+          tutorialFreeze,
         }}
         onRetry={onRetry}
         onComplete={(res) => {
