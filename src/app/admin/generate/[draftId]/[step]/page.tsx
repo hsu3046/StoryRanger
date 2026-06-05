@@ -106,8 +106,15 @@ export default async function WizardStepPage({
       listPresentImageStems(draftId, "scenes"),
       coverPresent(draftId),
     ]);
-    // Pages exist only once the pagination has run (it writes the sidecar).
-    const hasPages = !!sceneMeta && Object.keys(sceneMeta.scenes).length > 0;
+    // A draft has real pages when the pagination ran (sceneMeta written) OR when
+    // an older draft already has assembled/narrated scenes (legacy, no sceneMeta)
+    // — anything beyond the single empty placeholder scene seeded at creation.
+    // Otherwise legacy work would be hidden behind "Generate pages" and lost.
+    const sceneVals = scenes ? Object.values(scenes.scenes) : [];
+    const hasPages =
+      (!!sceneMeta && Object.keys(sceneMeta.scenes).length > 0) ||
+      sceneVals.length > 1 ||
+      sceneVals.some((s) => (s.narration ?? "").trim().length > 0);
     body = (
       <ScenesStep
         draftId={draftId}
