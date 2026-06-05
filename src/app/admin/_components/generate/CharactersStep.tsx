@@ -253,8 +253,14 @@ export function CharactersStep({
     await img.run([slug], imgWorker, 1);
   }
 
+  // A freshly-created draft ships a placeholder characters.json (narrator +
+  // hero) but no characterArt, so `chars` is always truthy. Treat "no art yet"
+  // as not-yet-generated and show the Generate action — otherwise the LLM cast
+  // route is unreachable (the edit view has no cast-level generate button).
+  const generated = (art?.entries.length ?? 0) > 0;
+
   // ── Empty state — first generation ──
-  if (!chars) {
+  if (!chars || !generated) {
     return (
       <Card title="Characters">
         <p className="text-sm text-ink-soft">
