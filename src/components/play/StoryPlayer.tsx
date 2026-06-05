@@ -1065,15 +1065,23 @@ export function StoryPlayer({
   // skipping the OpenAI roundtrip that the user perceived as "slow start".
   useEffect(() => {
     if (!hydrated || voiceVolume <= 0) return;
-    const currentVoice = speaker?.voice;
-    const currentSpeed = speaker?.voiceSpeed ?? 1;
     for (const branch of currentScene.branches ?? []) {
-      if (branch.outcome && currentVoice) {
-        void prefetchNarration(
-          formatNarration(branch.outcome, state.hero),
-          currentVoice,
-          currentSpeed,
-        );
+      if (branch.outcome) {
+        // Match the playback voice: an authored `outcomeSpeaker` overrides the
+        // scene speaker (else ttsObjectKey differs and this warm-up misses, so
+        // the first tap on a per-branch-voice outcome would still wait on
+        // /api/tts). Falls back to the scene speaker when unset.
+        const outSpeaker =
+          (branch.outcomeSpeaker
+            ? characterMap[branch.outcomeSpeaker]
+            : undefined) ?? speaker;
+        if (outSpeaker?.voice) {
+          void prefetchNarration(
+            formatNarration(branch.outcome, state.hero),
+            outSpeaker.voice,
+            outSpeaker.voiceSpeed ?? 1,
+          );
+        }
       }
       const nextScene = story.scenes[branch.next];
       if (!nextScene) continue;
@@ -1108,7 +1116,9 @@ export function StoryPlayer({
     ? formatNarration(pendingOutcome.text, state.hero)
     : formatNarration(currentScene.narration, state.hero);
   const displayedSpeakerId: SpeakerId = showingOutcome
-    ? outcomePrevScene?.speaker ?? currentScene.speaker
+    ? pendingOutcome?.branch.outcomeSpeaker ??
+      outcomePrevScene?.speaker ??
+      currentScene.speaker
     : currentScene.speaker;
   // During a battle the engine has already advanced currentSceneId to the
   // destination (so the post-battle zoom-reveal lands on the right scene). But
