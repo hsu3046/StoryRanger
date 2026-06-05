@@ -195,7 +195,12 @@ export function NotificationStack({
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed left-1/2 z-50 flex w-full max-w-xs -translate-x-1/2 flex-col items-center gap-2"
+      // z-[65] keeps toasts above the battle (z-50), challenge gate (z-[55])
+      // and in-gate problem card (z-[60]) overlays so a tutorial tip enqueued
+      // for the first encounter/challenge isn't hidden under the gate and lost
+      // to its auto-dismiss timer. Still below modals (Settings z-[80],
+      // Treasures z-100), which legitimately cover toasts.
+      className="pointer-events-none fixed left-1/2 z-[65] flex w-full max-w-xs -translate-x-1/2 flex-col items-center gap-2"
       style={{ top: "max(0.625rem, env(safe-area-inset-top))" }}
     >
       <AnimatePresence initial={false}>
