@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { SpriteSizeSchema } from "./primitives";
 
-export const MonsterTypeSchema = z.enum(["hostile", "neutral", "friendly"]);
-
 /**
  * A single drop. Back-compatible union:
  *   - a plain item id string → always dropped (100%)
@@ -21,7 +19,6 @@ export const MonsterDropSchema = z.union([
 export const MonsterStatsSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: MonsterTypeSchema,
   hits: z.number().min(0).max(20),
   drops: z.array(MonsterDropSchema).optional(),
   size: SpriteSizeSchema,

@@ -18,7 +18,6 @@ import { useConfirm } from "./ConfirmDialog";
 import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
 
-const TYPES = ["hostile", "neutral", "friendly"] as const;
 const SIZES = ["tiny", "small", "medium", "large", "huge"] as const;
 interface Props {
   storyId: string;
@@ -101,7 +100,6 @@ export function MonstersEditor({
     const placeholder: MonsterStatsT = {
       id,
       name: "New Monster",
-      type: "hostile",
       hits: 2,
       size: "small",
       drops: [],
@@ -221,7 +219,6 @@ export function MonstersEditor({
                 <tr>
                   <th className="px-3 py-2 w-14"></th>
                   <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2 w-20">Type</th>
                   <th className="px-3 py-2 w-20">Size</th>
                   <th className="px-3 py-2 w-16">HP</th>
                   <th className="px-3 py-2 w-20">Airborne</th>
@@ -253,19 +250,6 @@ export function MonstersEditor({
                       />
                     </td>
                     <td className="px-3 py-2 text-ink">{m.name}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-pill px-2 py-0.5 text-xs capitalize ${
-                          m.type === "hostile"
-                            ? "bg-ruby/15 text-ruby"
-                            : m.type === "friendly"
-                              ? "bg-emerald/15 text-emerald"
-                              : "bg-accent/15 text-accent-deep"
-                        }`}
-                      >
-                        {m.type}
-                      </span>
-                    </td>
                     <td className="px-3 py-2 capitalize text-ink-soft">{m.size}</td>
                     <td className="px-3 py-2 tabular-nums">{m.hits}</td>
                     <td className="px-3 py-2 text-ink-soft">
@@ -455,23 +439,6 @@ function MonsterForm({
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Type">
-          <StyledSelect
-            value={monster.type}
-            onChange={(e) =>
-              onChange((m) => ({
-                ...m,
-                type: e.target.value as MonsterStatsT["type"],
-              }))
-            }
-          >
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </StyledSelect>
-        </Field>
         <Field label="Size">
           <StyledSelect
             value={monster.size}
