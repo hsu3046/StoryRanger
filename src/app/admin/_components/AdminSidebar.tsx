@@ -141,7 +141,7 @@ export function AdminSidebar({ stories }: Props) {
         <SidebarLink href="/admin" label="Dashboard" icon={SquaresFour} />
         <SidebarLink
           href="/admin/generate"
-          label="Generate Story"
+          label="Create Story"
           icon={Sparkle}
         />
         <SidebarLink

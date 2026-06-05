@@ -9,10 +9,7 @@ export default async function GenerateIndexPage() {
   return (
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <header className="flex shrink-0 items-center gap-2 border-b border-ink-soft/10 bg-paper px-4 py-2">
-        <p className="font-handwritten text-base text-accent-deep">✨ Generate Story</p>
-        <span className="text-xs text-ink-soft/70">
-          Gemini 3 Flash + Nano Banana 2
-        </span>
+        <p className="font-handwritten text-base text-accent-deep">Create Story</p>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
