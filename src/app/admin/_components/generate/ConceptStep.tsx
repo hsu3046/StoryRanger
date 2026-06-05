@@ -165,8 +165,29 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
           onChange={(e) => set("themes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
         />
       </Field>
-      <Field label="Premise / tone">
-        <textarea className={`${inputCls} min-h-44`} value={concept.premise} onChange={(e) => set("premise", e.target.value)} />
+      <Field label="Premise">
+        <textarea
+          className={`${inputCls} min-h-28`}
+          value={concept.premise}
+          onChange={(e) => set("premise", e.target.value)}
+          placeholder="What happens — who the hero is and the situation that starts the story"
+        />
+      </Field>
+      <Field label="Lesson">
+        <textarea
+          className={`${inputCls} min-h-20`}
+          value={concept.lesson ?? ""}
+          onChange={(e) => set("lesson", e.target.value)}
+          placeholder="What you want children to learn or feel by the end"
+        />
+      </Field>
+      <Field label="Tone">
+        <input
+          className={inputCls}
+          value={concept.tone ?? ""}
+          onChange={(e) => set("tone", e.target.value)}
+          placeholder="cozy, gentle, a little mysterious"
+        />
       </Field>
 
       <h4 className="mt-5 text-sm font-semibold text-accent-deep">Art Style</h4>
@@ -186,7 +207,7 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
                   : "ring-1 ring-ink-soft/10 hover:ring-ink-soft/30"
               }`}
             >
-              <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-button bg-paper-deep/40">
+              <span className="relative block aspect-video w-full overflow-hidden rounded-button bg-paper-deep/40">
                 {s.image ? (
                   /* eslint-disable-next-line @next/next/no-img-element -- author-curated static thumbnails (R2-mirrored), not user content */
                   <img
@@ -206,7 +227,7 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
                   </span>
                 )}
               </span>
-              <span className="truncate px-0.5 text-xs font-medium text-ink">
+              <span className="block truncate px-0.5 text-center text-xs font-medium text-ink">
                 {s.name}
               </span>
             </button>
@@ -254,6 +275,9 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
                   </button>
 
                   <div className="flex max-w-[80vw] flex-col items-center gap-3">
+                    <p className="text-center text-lg font-semibold text-paper">
+                      {s.name}
+                    </p>
                     <div className="flex max-h-[68vh] items-center justify-center overflow-hidden rounded-card bg-paper/10">
                       {s.image ? (
                         /* eslint-disable-next-line @next/next/no-img-element -- author-curated static thumbnail */
@@ -268,9 +292,6 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
                         </div>
                       )}
                     </div>
-                    <p className="text-center text-lg font-semibold text-paper">
-                      {s.name}
-                    </p>
                     <button
                       type="button"
                       onClick={() => {

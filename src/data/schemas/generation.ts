@@ -44,8 +44,16 @@ export const ConceptSchema = z.object({
   title: z.string(),
   /** Tagline. "" when none. */
   subtitle: z.string(),
-  /** 2-4 sentences — the tone anchor fed to every later stage. */
+  /** 1-2 sentences — the SETUP/hook: who the hero is and the situation or
+   *  problem that starts the story. WHAT happens, not the message or the mood. */
   premise: z.string(),
+  /** The heart of the book — one warm sentence on what a child should learn or
+   *  feel by the end (e.g. "asking for help is brave too"). The ending lands
+   *  this. `.default("")` for back-compat with concepts authored before this. */
+  lesson: z.string().default(""),
+  /** A few mood words for how the book FEELS (e.g. "cozy, gentle, a little
+   *  mysterious"). Steers narration voice + cast. `.default("")` back-compat. */
+  tone: z.string().default(""),
   /** Target age band (years). */
   targetAge: z.object({ min: z.number().int(), max: z.number().int() }),
   /** 2-5 themes. */
@@ -123,6 +131,15 @@ export const GeneratedCharacterSchema = z.object({
   speechStyle: z.string(),
   /** One-line vocal feel (→ persona.voiceTraits). "" for hero/narrator. */
   voiceTraits: z.string(),
+  /** Voice-casting hints (set for EVERY character) — matched against the
+   *  voices.json tag vocabulary to auto-pick a catalog voice. Fixed English
+   *  tag tokens, never translated. The author can still change the pick. */
+  voiceGender: z.enum(["male", "female", "neutral"]),
+  voiceAge: z.enum(["young", "adult", "elder"]),
+  voiceTone: z.enum(["warm", "bright", "calm", "dark"]),
+  /** Optional special-voice feature ("" or e.g. "evil"/"funny"/"robot"/
+   *  "fairy"/"monster") — matched as a bonus against feature tags. */
+  voiceFeature: z.string(),
   /** Positive behavioural guidelines (→ persona.dos). */
   dos: z.array(z.string()),
   /** Hard boundaries (→ persona.donts). */

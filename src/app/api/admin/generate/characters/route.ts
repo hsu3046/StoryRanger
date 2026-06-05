@@ -11,6 +11,7 @@ import {
   type GeneratedCharacterT,
 } from "@/data/schemas";
 import type { Character } from "@/types/story";
+import { VOICES } from "@/data/voices";
 import { slugify } from "@/app/admin/_lib/slugify";
 
 export const runtime = "nodejs";
@@ -21,19 +22,34 @@ const RequestSchema = z.object({
   authorRequest: z.string().max(4000).optional(),
 });
 
-const DEFAULT_NARRATOR_VOICE = "21m00Tcm4TlvDq8ikWAM";
-const DEFAULT_HERO_VOICE = "EXAVITQu4vr4xnSDxMaL";
-// NPC voice + colour palettes (cycled deterministically by order).
-const NPC_VOICES = [
-  "ErXwobaYiN019PkySvjV",
-  "pNInz6obpgDQGcFmaJgB",
-  "VR6AewLTigWG4xSOukaG",
-  "AZnzlk1XvdvUeBnXmlld",
-  "MF3mGyEYCl7XYWbV9V6O",
-  "TxGEqnHWrfWFTfGW9XjX",
-  "RILOU7YmBhvwJGDGjNmP",
-  "yoZ06aMxZJJ28mfd3POQ",
-];
+// Auto-cast a voice by matching the LLM's classified profile against the
+// voices.json tag vocabulary (age/tone/gender/feature). Deterministic; the
+// author can still change the pick in the editor. `used` spreads distinct
+// voices across the cast so siblings don't all share one voice.
+const FALLBACK_VOICE = VOICES[0]?.id ?? "";
+function pickVoiceByTags(
+  want: { gender: string; age: string; tone: string; feature: string },
+  used: Set<string>,
+): string {
+  let bestId = FALLBACK_VOICE;
+  let bestScore = -Infinity;
+  for (const v of VOICES) {
+    let s = 0;
+    if (want.gender && v.tags.includes(want.gender)) s += 3;
+    if (want.age && v.tags.includes(want.age)) s += 2;
+    if (want.tone && v.tags.includes(want.tone)) s += 1;
+    if (want.feature && v.tags.includes(want.feature)) s += 3;
+    if (!used.has(v.id)) s += 0.5; // prefer an as-yet-unused voice
+    if (s > bestScore) {
+      bestScore = s;
+      bestId = v.id;
+    }
+  }
+  used.add(bestId);
+  return bestId;
+}
+
+// NPC colour palette (cycled deterministically by order).
 const COLORS = [
   "#3a7ca5",
   "#8a5a44",
@@ -52,9 +68,10 @@ Rules:
 - Create an NPC (role "npc") for every named character the beat synopses imply (other than the hero) — the recurring or important figures the story needs. Give each a stable lowercase kebab-case id derived from their name.
 - Do NOT create companions/party members (role "companion") — battles are added later by hand.
 - For each NPC give a persona: bio (1-3 sentences), speechStyle, voiceTraits, dos (2-4), donts (1-3).
+- For EVERY character (including hero + narrator) set the voice-casting hints so the right voice is auto-picked: voiceGender (male/female/neutral), voiceAge (young/adult/elder), voiceTone (warm/bright/calm/dark), and voiceFeature ("" or a special tag like "evil"/"funny"/"robot"/"fairy"/"monster" when it fits the character).
 - For EVERY character give a vivid one-line visualDescription (face, hair, outfit, palette, proportions) the illustrator will follow.
 
-LANGUAGE: write name/bio/speechStyle/voiceTraits/dos/donts in the language named under "WRITE IN". The visualDescription stays in English (illustrator brief). ids stay ASCII kebab-case.
+LANGUAGE: write name/bio/speechStyle/voiceTraits/dos/donts in the language named under "WRITE IN". The visualDescription stays in English (illustrator brief). ids and the voiceGender/voiceAge/voiceTone/voiceFeature tag tokens stay as the fixed English values above — never translate them.
 
 Output JSON only matching the schema. No markdown.`;
 
@@ -69,6 +86,7 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
   let npcIdx = 0;
   let fallbackIdx = 0;
   const usedIds = new Set<string>();
+  const usedVoices = new Set<string>();
 
   for (const g of generated) {
     // Force a single hero with the conventional id "hero". Otherwise normalise
@@ -95,11 +113,15 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
     const isNarrator = g.role === "narrator" || id === "narrator";
     const givesPersona = !isHero && !isNarrator;
 
-    const voice = isHero
-      ? DEFAULT_HERO_VOICE
-      : isNarrator
-        ? DEFAULT_NARRATOR_VOICE
-        : NPC_VOICES[npcIdx % NPC_VOICES.length];
+    const voice = pickVoiceByTags(
+      {
+        gender: g.voiceGender,
+        age: g.voiceAge,
+        tone: g.voiceTone,
+        feature: g.voiceFeature,
+      },
+      usedVoices,
+    );
     const color = isHero ? "#c9a23a" : isNarrator ? "#6b7280" : COLORS[npcIdx % COLORS.length];
     if (givesPersona) npcIdx += 1;
 
@@ -134,7 +156,10 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
     characters.unshift({
       id: "narrator",
       name: "Narrator",
-      voice: DEFAULT_NARRATOR_VOICE,
+      voice: pickVoiceByTags(
+        { gender: "", age: "adult", tone: "calm", feature: "" },
+        usedVoices,
+      ),
       voiceSpeed: 1,
       color: "#6b7280",
       size: "medium",
@@ -145,7 +170,10 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
       id: "hero",
       name: "Hero",
       isHero: true,
-      voice: DEFAULT_HERO_VOICE,
+      voice: pickVoiceByTags(
+        { gender: "", age: "adult", tone: "warm", feature: "" },
+        usedVoices,
+      ),
       voiceSpeed: 1,
       color: "#c9a23a",
       size: "medium",
@@ -176,7 +204,8 @@ export async function POST(req: Request) {
     `WRITE IN: ${c.language}`,
     "",
     `TITLE: ${c.title}`,
-    `PREMISE / TONE: ${c.premise}`,
+    `PREMISE: ${c.premise}`,
+    ...(c.tone ? [`TONE (shape voices/speech to this): ${c.tone}`] : []),
     `THEMES: ${c.themes.join(", ")}`,
     `ART STYLE: ${c.artStylePrompt}`,
     "",
