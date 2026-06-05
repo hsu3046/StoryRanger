@@ -1,7 +1,7 @@
 {
   "storyId": "twenty-thousand-leagues-under-the-sea",
   "status": "drafting",
-  "currentStage": "concept",
+  "currentStage": "characters",
   "stageStatuses": {
     "concept": "done",
     "storyboard": "done"
@@ -9,7 +9,7 @@
   "brief": "The story of  Twenty Thousand Leagues Under the Sea. about 30 scenes in total. For kids around age 8-12.",
   "language": "English",
   "createdAt": "2026-06-03T11:19:26.555Z",
-  "updatedAt": "2026-06-05T12:45:09.984Z",
+  "updatedAt": "2026-06-05T14:07:08.843Z",
   "itemProgress": {
     "narration": {
       "done": [],
