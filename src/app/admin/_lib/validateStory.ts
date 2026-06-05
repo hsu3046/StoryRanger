@@ -18,6 +18,7 @@ import {
   StorySchema,
 } from "@/data/schemas";
 import { storyDir } from "./contentFs";
+import { normalizeDrop } from "@/data/monsters";
 
 export interface ValidationIssue {
   where: string;
@@ -169,11 +170,12 @@ export async function validateStory(
 
   // ── 4. Monster drops reference real items ──────────────────────
   for (const m of monstersFile?.monsters ?? []) {
-    for (const drop of m.drops ?? []) {
-      if (!itemIds.has(drop)) {
+    for (const d of m.drops ?? []) {
+      const item = normalizeDrop(d).item;
+      if (!itemIds.has(item)) {
         errors.push({
           where: `monster:${m.id}.drops`,
-          message: `item "${drop}" is not in the items catalog`,
+          message: `item "${item}" is not in the items catalog`,
         });
       }
     }
