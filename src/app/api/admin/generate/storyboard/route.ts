@@ -8,39 +8,52 @@ export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   concept: ConceptSchema,
+  /** Desired number of storyboard beats (the arc's resolution). Clamped 5–12. */
+  beatCount: z.number().int().optional(),
   authorRequest: z.string().max(4000).optional(),
 });
 
-const SYSTEM_PROMPT = `You are a children's picture-book editor laying out the STORYBOARD (the beat-by-beat skeleton) for an interactive storybook. No prose yet — just structure.
+export const BEAT_MIN = 5;
+export const BEAT_MAX = 12;
+const clampBeats = (n: number | undefined): number =>
+  Math.max(BEAT_MIN, Math.min(BEAT_MAX, Math.round(n ?? 8)));
 
-Produce an ordered list of BEATS. Each beat is one page/scene:
-- id: a short unique lowercase kebab-case slug (e.g. "kitchen-morning"). Stable — it becomes the scene key.
+/**
+ * Linear arc prompt — the storyboard is now the high-level FLOW only (a small
+ * ordered set of beats), NOT the page-level scene graph. Branching, choices,
+ * and battles are authored later in the story graph, so beats carry no
+ * branches; the page expansion + narration happens in the scene stage.
+ */
+function systemPrompt(beatCount: number): string {
+  return `You are a children's picture-book editor laying out the STORYBOARD — the high-level beat skeleton (the story's overall flow) for an interactive storybook. No prose yet — just the arc.
+
+Produce an ordered, LINEAR list of BEATS — the major story moments from opening to ending, in reading order. Each beat:
+- id: a short unique lowercase kebab-case slug (e.g. "kitchen-morning"). Stable.
 - title: a brief editor label (not shown to the child).
-- synopsis: 1-2 lines on what happens here.
-- speaker: "narrator" for most beats, or a character id (lowercase kebab-case) when a specific character carries the moment. The protagonist is the player-named hero with id "hero".
-- setting: location + time of day (drives the illustration).
-- isEnding: true only for terminal beats; set endingLabel (e.g. "A Happy Homecoming") when true, else "".
-- branches: the choices leading onward. Each: id (kebab slug, unique within the beat), label (what the child taps), next (the id of an EXISTING beat), outcomeHint ("" or a 1-line bridge).
+- synopsis: 1-2 lines on what happens in this beat. This is the only content — who speaks and where it's set are decided later, when the beat is expanded into pages.
+- isEnding: true ONLY for the final beat; set endingLabel (e.g. "A Happy Homecoming") when true, else "".
+- branches: ALWAYS an empty array []. Do NOT create choices — this storyboard is a straight, linear flow. (Branching, choices, and battles are authored LATER in the story graph, not here.)
 
 STRUCTURE RULES:
-- 8-16 beats. Start with a single opening beat.
-- It is a DAG: branches may CONVERGE (multiple beats point to the same next), but every "next" MUST reference a real beat id in this list.
-- Non-ending beats have 1-3 branches. Ending beats have NO branches.
-- At least one reachable ending. Offer real choices (2-3 branches) on a few key beats so the story branches and reconverges; keep the rest mostly linear (single branch).
-- Pick a startSceneId equal to the opening beat's id.
+- EXACTLY ${beatCount} beats, in order. The first beat opens the story; the LAST beat is the ending (isEnding=true, endingLabel set).
+- Shape the arc well: setup → rising action → climax → resolution — a satisfying beginning, middle, and end. Each beat moves the story forward.
+- Every beat except the last has isEnding=false and endingLabel "".
+- branches is [] for EVERY beat.
+- startSceneId = the first beat's id.
 
-LANGUAGE: write title/synopsis/labels/setting/endingLabel/outcomeHint in the language named under "WRITE IN" — but ids stay ASCII kebab-case.
+LANGUAGE: write title/synopsis/endingLabel in the language named under "WRITE IN" — but ids stay ASCII kebab-case.
 
 Output JSON only matching the schema. No markdown.`;
+}
 
-/** Deterministic referential-integrity lint over the storyboard graph. */
+/** Deterministic lint over the (now linear) storyboard. */
 function lintStoryboard(sb: StoryboardT): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
   const ids = sb.beats.map((b) => b.id);
   const idSet = new Set(ids);
 
-  // Duplicate ids.
+  // Duplicate ids collapse to one scene key in expansion — block.
   const seen = new Set<string>();
   for (const id of ids) {
     if (seen.has(id)) errors.push(`duplicate beat id "${id}"`);
@@ -50,33 +63,8 @@ function lintStoryboard(sb: StoryboardT): { errors: string[]; warnings: string[]
   if (!idSet.has(sb.startSceneId)) {
     errors.push(`startSceneId "${sb.startSceneId}" is not a beat id`);
   }
-
-  for (const beat of sb.beats) {
-    for (const br of beat.branches) {
-      if (!idSet.has(br.next)) {
-        errors.push(`beat "${beat.id}" → branch "${br.id}".next "${br.next}" is not a beat id`);
-      }
-    }
-    if (beat.isEnding && beat.branches.length > 0) {
-      warnings.push(`ending beat "${beat.id}" still has branches`);
-    }
-    if (!beat.isEnding && beat.branches.length === 0) {
-      warnings.push(`beat "${beat.id}" is a dead end (no branches, not an ending)`);
-    }
-  }
-
-  // Reachability from start (warn on orphans).
-  const reachable = new Set<string>();
-  const stack = [sb.startSceneId];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    if (reachable.has(cur) || !idSet.has(cur)) continue;
-    reachable.add(cur);
-    const beat = sb.beats.find((b) => b.id === cur);
-    for (const br of beat?.branches ?? []) stack.push(br.next);
-  }
-  for (const id of ids) {
-    if (!reachable.has(id)) warnings.push(`beat "${id}" is unreachable from the start`);
+  if (!sb.beats.some((b) => b.isEnding)) {
+    warnings.push("no ending beat — the last beat should be an ending");
   }
 
   return { errors, warnings };
@@ -99,6 +87,7 @@ export async function POST(req: Request) {
   }
 
   const c = body.concept;
+  const beatCount = clampBeats(body.beatCount);
   const userLines: string[] = [
     `WRITE IN: ${c.language}`,
     "",
@@ -116,11 +105,13 @@ export async function POST(req: Request) {
       "",
     );
   }
-  userLines.push(`Lay out the storyboard now, in ${c.language}.`);
+  userLines.push(
+    `Lay out the storyboard now as EXACTLY ${beatCount} linear beats, in ${c.language}.`,
+  );
 
   try {
     const storyboard = await chat({
-      system: SYSTEM_PROMPT,
+      system: systemPrompt(beatCount),
       messages: [{ role: "user", content: userLines.join("\n") }],
       schema: StoryboardSchema,
       schemaName: "storyboard",

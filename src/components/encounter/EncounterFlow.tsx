@@ -74,8 +74,6 @@ interface Props {
   /** When set, called with a missed challenge so the home "Check Your Answers"
    *  review can collect it. Undefined in admin preview / demo (no recording). */
   recordWrongChallenge?: (challenge: Challenge) => void;
-  /** First-battle tutorial — freeze the answer timer for the whole battle. */
-  tutorialFreeze?: boolean;
 }
 
 type Phase = "intro" | "alert" | "body";
@@ -112,7 +110,6 @@ export function EncounterFlow({
   onOpenSettings,
   age,
   recordWrongChallenge,
-  tutorialFreeze,
 }: Props) {
   void characterImageBase; // only used inside BattleScreen now
   // Resume directly into the battle when we have a saved snapshot — the
@@ -121,12 +118,6 @@ export function EncounterFlow({
   const [phase, setPhase] = useState<Phase>(
     initialBattleState ? "body" : "intro",
   );
-  // Latch the tutorial-freeze flag at mount. The parent recomputes it from
-  // `seenTutorials`, which the battle hint marks as "battle" the moment this
-  // encounter appears — flipping the prop false BEFORE BattleScreen mounts (it
-  // only mounts after the intro/alert phases). Latching keeps the first-battle
-  // timer freeze applied to the BattleScreen we eventually mount.
-  const [tutorialFreezeLatched] = useState(tutorialFreeze);
 
   const monsterIds =
     encounter.displayMonsters ?? encounter.body.monsterIds;
@@ -187,7 +178,6 @@ export function EncounterFlow({
           fallenAttackers,
           companions,
           companionMoods,
-          tutorialFreeze: tutorialFreezeLatched,
         }}
         onRetry={onRetry}
         onComplete={(res) => {

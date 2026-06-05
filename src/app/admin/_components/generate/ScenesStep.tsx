@@ -1,130 +1,600 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowsCounterClockwise,
+  CaretDown,
+  CaretUp,
+  DotsSixVertical,
+  Sparkle,
+} from "@phosphor-icons/react";
 
-import type { ConceptT, DraftMetaT, StoryboardT } from "@/data/schemas";
-import type { Scene, Story } from "@/types/story";
-import { saveDraftMetaAction, saveDraftScenesAction } from "../../_actions/generateDraft";
-import { slugify } from "../../_lib/slugify";
-import { buildBeatKeyMap } from "../../_lib/sceneKeys";
-import { advanceMeta, Card, ErrorNote, PrimaryButton } from "./shared";
+import type { ConceptT, DraftMetaT, DraftSceneMetaT, StoryboardT } from "@/data/schemas";
+import type { CharactersFile, Scene, Story } from "@/types/story";
+import {
+  saveDraftSceneMetaAction,
+  saveDraftScenesAction,
+} from "../../_actions/generateDraft";
+import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
+import { inputClsSm } from "../form";
+import { ImagePreview } from "./ImagePreview";
+import {
+  Card,
+  ErrorNote,
+  GhostButton,
+  postJson,
+  PrimaryButton,
+} from "./shared";
+import { useAutosave, useStageVisit } from "./useAutosave";
+import { useGenerationPool } from "./useGenerationPool";
+
+const PAGE_MIN = 12;
+const PAGE_MAX = 40;
+
+/** Rebuild the linear chain after a reorder: each page's single "continue"
+ *  branch points to the next page, the last page becomes the ending, and
+ *  startScene follows the new order. Narration / image / bgm stay with their id. */
+function relink(story: Story, ids: string[]): Story {
+  const label = Object.values(story.scenes).flatMap((s) => s.branches)[0]?.label ?? "Continue";
+  const scenes: Record<string, Scene> = {};
+  ids.forEach((id, i) => {
+    const s = story.scenes[id];
+    const isLast = i === ids.length - 1;
+    if (isLast) {
+      scenes[id] = { ...s, branches: [], ending: s.ending ?? { id, label: "The End" } };
+    } else {
+      const rest: Scene = { ...s, branches: [{ id: "continue", label, next: ids[i + 1] }] };
+      delete rest.ending;
+      scenes[id] = rest;
+    }
+  });
+  return { ...story, startScene: ids[0] ?? story.startScene, scenes };
+}
+
+/** Compact custom dropdown (iOS-safe backdrop pattern) to pick a scene's
+ *  speaker from the cast. */
+function SpeakerSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { id: string; name: string }[];
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.id === value);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 rounded-button bg-paper-deep/40 px-3 py-1.5 text-sm text-ink ring-1 ring-ink-soft/10 hover:bg-paper-deep"
+      >
+        {current?.name ?? value}
+        <CaretDown weight="bold" className="h-3.5 w-3.5 opacity-60" aria-hidden />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-32 overflow-auto rounded-card bg-paper p-1 shadow-button ring-1 ring-ink-soft/15">
+            {options.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => {
+                  onChange(o.id);
+                  setOpen(false);
+                }}
+                className={`block w-full rounded-button px-2 py-1 text-left text-xs hover:bg-paper-deep/60 ${
+                  o.id === value ? "font-semibold text-accent-deep" : "text-ink"
+                }`}
+              >
+                {o.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
 
 interface Props {
   draftId: string;
   concept: ConceptT;
   storyboard: StoryboardT;
+  characters: CharactersFile;
   meta: DraftMetaT;
-  /** Already-assembled scenes (re-visit), if any. */
+  /** Generated pages (re-visit), or null before the first "Generate pages". */
   initialScenes: Story | null;
+  initialSceneMeta: DraftSceneMetaT | null;
+  bgmOptions: string[];
+  presence: { sceneStems: string[]; cover: boolean };
 }
 
-export function ScenesStep({ draftId, concept, storyboard, meta, initialScenes }: Props) {
-  const router = useRouter();
+export function ScenesStep({
+  draftId,
+  concept,
+  storyboard,
+  characters,
+  meta,
+  initialScenes,
+  initialSceneMeta,
+  bgmOptions,
+  presence,
+}: Props) {
+  const beatCount = storyboard.beats.length;
+  const defaultPages = Math.max(PAGE_MIN, Math.min(PAGE_MAX, beatCount * 3));
+
   const [story, setStory] = useState<Story | null>(initialScenes);
-  const [busy, setBusy] = useState<"assemble" | "continue" | null>(null);
+  const storyRef = useRef<Story | null>(initialScenes);
+  const [sceneMeta, setSceneMeta] = useState<DraftSceneMetaT>(
+    initialSceneMeta ?? { scenes: {} },
+  );
+  const [pageCount, setPageCount] = useState(
+    initialScenes ? Object.keys(initialScenes.scenes).length : defaultPages,
+  );
+  const [busy, setBusy] = useState<"gen" | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [, start] = useTransition();
+  const [versions, setVersions] = useState<Record<string, number>>({});
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverDone, setCoverDone] = useState(presence.cover);
+  const [coverVer, setCoverVer] = useState(0);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  function assemble(): Story {
-    // Beat ids become scene-record keys AND image filenames, so normalise them
-    // to a slug that satisfies the image-save NAME_RE. Build one raw→slug map
-    // first (deduping collisions) so scene keys, image paths, branch.next, and
-    // startScene all resolve to the SAME slug.
-    const idMap = buildBeatKeyMap(storyboard.beats);
-    const resolve = (id: string): string => idMap.get(id) ?? slugify(id);
+  // Two independent pools — narration prose vs page illustrations.
+  const nar = useGenerationPool();
+  const img = useGenerationPool();
+  const imgDoneRef = useRef<Set<string>>(new Set());
 
-    // Preserve any narration / bgm / reward already authored for a beat that
-    // still exists (re-assemble must NOT wipe prose). Index prior scenes by the
-    // SAME slug so they line up across re-assembles.
-    const prev = story?.scenes ?? {};
+  const sceneIds = useMemo(
+    () => (story ? Object.keys(story.scenes) : []),
+    [story],
+  );
+  // Scene images already on disk at mount (read in render — a plain Set, not a
+  // ref). Newly-generated ones surface via the pool's "done" status instead.
+  const initialImgDone = useMemo(
+    () => new Set(presence.sceneStems),
+    [presence],
+  );
+  const nameOf = (id: string) =>
+    characters.characters.find((c) => c.id === id)?.name ?? id;
+  const speakerOptions = useMemo(
+    () => characters.characters.map((c) => ({ id: c.id, name: c.name })),
+    [characters],
+  );
 
-    const scenes: Record<string, Scene> = {};
-    for (const beat of storyboard.beats) {
-      const key = resolve(beat.id);
-      const old = prev[key];
-      scenes[key] = {
-        image: old?.image || `/stories/${draftId}/scenes/${key}`,
-        bgm: old?.bgm ?? "",
-        speaker: beat.speaker ? slugify(beat.speaker) || "narrator" : "narrator",
-        narration: old?.narration ?? "",
-        ...(old?.reward ? { reward: old.reward } : {}),
-        branches: beat.branches.map((b) => ({
-          id: b.id,
-          label: b.label,
-          next: resolve(b.next),
-          ...(b.outcomeHint.trim() ? { outcome: b.outcomeHint.trim() } : {}),
-        })),
-        ...(beat.isEnding
-          ? { ending: { id: key, label: beat.endingLabel || "The End" } }
-          : {}),
-      };
+  useEffect(() => {
+    storyRef.current = story;
+  }, [story]);
+
+  // Resume: narration that's already written + images already on disk → done.
+  useEffect(() => {
+    if (!story) return;
+    const narrated = Object.keys(story.scenes).filter(
+      (id) => (story.scenes[id].narration ?? "").trim().length > 0,
+    );
+    if (narrated.length) nar.markDone(narrated);
+    const imgDone = presence.sceneStems.filter((s) => story.scenes[s]);
+    if (imgDone.length) {
+      imgDoneRef.current = new Set(imgDone);
+      img.markDone(imgDone);
     }
-    return {
-      id: draftId,
-      title: concept.title,
-      ...(concept.subtitle.trim() ? { subtitle: concept.subtitle.trim() } : {}),
-      language: concept.language,
-      estimatedMinutes: concept.estimatedMinutes,
-      coverImage: `/stories/${draftId}/cover`,
-      startScene: resolve(storyboard.startSceneId),
-      scenes,
-    };
+    // Run once on mount for the loaded story.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave narration / bgm edits + per-scene image prompts (sceneMeta).
+  useAutosave(story, (s) => (s ? saveDraftScenesAction(draftId, s) : undefined), {
+    enabled: !!story,
+  });
+  useAutosave(sceneMeta, (m) => saveDraftSceneMetaAction(draftId, m), {
+    enabled: !!story,
+  });
+  useStageVisit(draftId, meta, "scene");
+
+  function applyScene(id: string, patch: Partial<Story["scenes"][string]>) {
+    setStory((prev) =>
+      prev
+        ? { ...prev, scenes: { ...prev.scenes, [id]: { ...prev.scenes[id], ...patch } } }
+        : prev,
+    );
+  }
+  function moveScene(from: number, to: number) {
+    setStory((prev) => {
+      if (!prev || from === to) return prev;
+      const ids = Object.keys(prev.scenes);
+      const [m] = ids.splice(from, 1);
+      ids.splice(to, 0, m);
+      return relink(prev, ids);
+    });
+  }
+  function setImagePrompt(id: string, setting: string) {
+    setSceneMeta((prev) => {
+      const cur = prev.scenes[id] ?? { setting: "", synopsis: "", parentBeatId: "" };
+      return { scenes: { ...prev.scenes, [id]: { ...cur, setting } } };
+    });
+  }
+  function bump(id: string) {
+    setVersions((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }));
   }
 
-  function doAssemble() {
+  async function generatePages() {
     setErr(null);
-    setBusy("assemble");
-    const assembled = assemble();
-    start(async () => {
-      const res = await saveDraftScenesAction(draftId, assembled);
-      if (!res.ok) {
-        setErr(res.error);
-        setBusy(null);
-        return;
-      }
-      setStory(assembled);
+    setBusy("gen");
+    try {
+      const res = await postJson<{ story: Story; sceneMeta: DraftSceneMetaT }>(
+        "/api/admin/generate/scenes",
+        {
+          storyId: draftId,
+          concept,
+          storyboard,
+          characters,
+          sceneCount: pageCount,
+        },
+      );
+      const saveScenes = await saveDraftScenesAction(draftId, res.story);
+      if (!saveScenes.ok) throw new Error(saveScenes.error);
+      const saveMeta = await saveDraftSceneMetaAction(draftId, res.sceneMeta);
+      if (!saveMeta.ok) throw new Error(saveMeta.error);
+      setStory(res.story);
+      setSceneMeta(res.sceneMeta);
+      // Pagination already wrote the narration → mark it done.
+      nar.markDone(Object.keys(res.story.scenes));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
       setBusy(null);
-    });
+    }
   }
 
-  function continueNext() {
-    setBusy("continue");
-    start(async () => {
-      await saveDraftMetaAction(draftId, advanceMeta(meta, "scenes", "narration"));
-      router.push(`/admin/generate/${draftId}/narration`);
+  async function narWorker(id: string) {
+    const cur = storyRef.current;
+    if (!cur) return;
+    const scene = cur.scenes[id];
+    const incoming: { label: string; narration: string }[] = [];
+    for (const s of Object.values(cur.scenes)) {
+      for (const b of s.branches) {
+        if (b.next === id) incoming.push({ label: b.label, narration: s.narration ?? "" });
+      }
+    }
+    const before = scene.narration ?? "";
+    const ctx = sceneMeta.scenes[id];
+    const authorRequest = ctx
+      ? `Write THIS page: ${ctx.synopsis}${ctx.setting ? ` (setting: ${ctx.setting})` : ""}`
+      : undefined;
+    const res = await postJson<{ narration: string }>("/api/scene-narration", {
+      storyId: draftId,
+      language: concept.language,
+      storyTitle: concept.title,
+      storyPremise: concept.premise,
+      speaker: scene.speaker,
+      speakerName: scene.speaker === "narrator" ? undefined : nameOf(scene.speaker),
+      choices: scene.branches.map((b) => b.label).slice(0, 6),
+      incoming: incoming.slice(0, 3),
+      authorRequest,
     });
+    if ((storyRef.current?.scenes[id].narration ?? "") !== before) return;
+    applyScene(id, { narration: res.narration });
   }
 
-  const count = story ? Object.keys(story.scenes).length : 0;
+  async function imgWorker(id: string) {
+    await postJson("/api/admin/generate/scene-image", { storyId: draftId, sceneId: id });
+    imgDoneRef.current.add(id);
+    bump(id);
+  }
+
+  function regenerateNarration(id: string) {
+    setErr(null);
+    void nar.run([id], narWorker, 1);
+  }
+  // Persist the current scenes (narration/speaker/bgm) + image prompts before
+  // image generation — scene-image reads them from disk, so unsaved edits would
+  // otherwise build the prompt / character refs from stale data.
+  async function persistScenes(): Promise<boolean> {
+    const cur = storyRef.current;
+    if (cur) {
+      const a = await saveDraftScenesAction(draftId, cur);
+      if (!a.ok) {
+        setErr(a.error);
+        return false;
+      }
+    }
+    const b = await saveDraftSceneMetaAction(draftId, sceneMeta);
+    if (!b.ok) {
+      setErr(b.error);
+      return false;
+    }
+    return true;
+  }
+  function generateImages() {
+    setErr(null);
+    void (async () => {
+      if (!(await persistScenes())) return;
+      const todo = sceneIds.filter((id) => !imgDoneRef.current.has(id));
+      await img.run(todo.length ? todo : sceneIds, imgWorker, 3);
+    })();
+  }
+  function regenerateImage(id: string) {
+    setErr(null);
+    void (async () => {
+      if (!(await persistScenes())) return;
+      await img.run([id], imgWorker, 1);
+    })();
+  }
+
+  async function generateCover() {
+    setErr(null);
+    setCoverBusy(true);
+    try {
+      await postJson("/api/admin/generate/cover-image", { storyId: draftId });
+      setCoverDone(true);
+      setCoverVer((v) => v + 1);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
+  const coverSection = (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Cover</span>
+      <ImagePreview
+        base={`/stories/${draftId}/cover`}
+        version={coverVer}
+        alt="Cover"
+        present={coverDone}
+        className="aspect-video w-full max-w-md"
+      />
+      <button
+        type="button"
+        onClick={() => void generateCover()}
+        disabled={coverBusy}
+        className="inline-flex w-full max-w-md items-center justify-center gap-1 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-accent-deep ring-1 ring-ink-soft/10 transition hover:bg-paper-deep active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+      >
+        <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
+        {coverBusy ? "Generating…" : coverDone ? "Regenerate cover" : "Generate cover"}
+      </button>
+    </div>
+  );
+
+  const pageStepper = (
+    <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+      <button
+        type="button"
+        aria-label="Fewer pages"
+        disabled={pageCount <= Math.max(PAGE_MIN, beatCount)}
+        onClick={() => setPageCount((n) => Math.max(Math.max(PAGE_MIN, beatCount), n - 1))}
+        className="rounded-pill bg-paper-deep/60 px-2 py-0.5 font-semibold text-ink ring-1 ring-ink-soft/10 hover:bg-paper-deep disabled:opacity-40"
+      >
+        −
+      </button>
+      <span className="w-6 text-center text-sm font-semibold tabular-nums text-ink">
+        {pageCount}
+      </span>
+      <button
+        type="button"
+        aria-label="More pages"
+        disabled={pageCount >= PAGE_MAX}
+        onClick={() => setPageCount((n) => Math.min(PAGE_MAX, n + 1))}
+        className="rounded-pill bg-paper-deep/60 px-2 py-0.5 font-semibold text-ink ring-1 ring-ink-soft/10 hover:bg-paper-deep disabled:opacity-40"
+      >
+        +
+      </button>
+    </div>
+  );
+
+  // ── Empty state — before the first pagination ──
+  if (!story) {
+    return (
+      <Card
+        title={
+          <>
+            <span>Scene</span>
+            {pageStepper}
+          </>
+        }
+        actions={
+          <PrimaryButton onClick={generatePages} disabled={busy === "gen"}>
+            {busy === "gen" ? "Generating…" : "✨ Generate pages"}
+          </PrimaryButton>
+        }
+      >
+        {coverSection}
+        {err && <ErrorNote>{err}</ErrorNote>}
+      </Card>
+    );
+  }
+
+  const busyAny = busy !== null || nar.running || img.running;
 
   return (
-    <Card title="Scenes">
-      <p className="text-sm text-ink-soft">
-        Assemble the storyboard into the playable scene graph. Narration and
-        images are filled in the next stages.
-      </p>
-      <div className="rounded-card bg-paper-deep/40 px-3 py-2 text-sm">
-        {story ? (
-          <span className="text-ink">
-            ✓ {count} scene{count === 1 ? "" : "s"} assembled · start ={" "}
-            <code className="text-ink-soft">{story.startScene}</code>
-          </span>
-        ) : (
-          <span className="text-ink-soft">{storyboard.beats.length} beats ready to assemble.</span>
-        )}
-      </div>
-      {err && <ErrorNote>{err}</ErrorNote>}
-      <div className="flex justify-end gap-2">
-        <PrimaryButton onClick={doAssemble} disabled={busy !== null}>
-          {busy === "assemble" ? "Assembling…" : story ? "Re-assemble" : "Assemble scenes"}
-        </PrimaryButton>
-        {story && (
-          <PrimaryButton onClick={continueNext} disabled={busy !== null}>
-            {busy === "continue" ? "…" : "Continue →"}
+    <Card
+      title="Scene"
+      actions={
+        <div className="flex items-center gap-2">
+          {pageStepper}
+          <GhostButton onClick={generatePages} disabled={busyAny}>
+            <ArrowsCounterClockwise weight="bold" className="h-4 w-4" aria-hidden />
+            {busy === "gen" ? "Regenerating…" : "Regenerate pages"}
+          </GhostButton>
+          <PrimaryButton onClick={generateImages} disabled={busyAny}>
+            {img.running ? "Generating…" : "✨ Generate images"}
           </PrimaryButton>
-        )}
+        </div>
+      }
+    >
+      {coverSection}
+
+      <div className="flex flex-col gap-3">
+        {sceneIds.map((id, i) => {
+          const scene = story.scenes[id];
+          const narSt = nar.entries[id]?.status;
+          const imgSt = img.entries[id]?.status;
+          const imgPresent = imgSt === "done" || initialImgDone.has(id);
+          const imgBase = `/stories/${draftId}/scenes/${id}`;
+          return (
+            <div
+              key={id}
+              onDragOver={(e) => {
+                if (dragIdx !== null) {
+                  e.preventDefault();
+                  setDragOverIdx(i);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragIdx !== null) moveScene(dragIdx, i);
+                setDragIdx(null);
+                setDragOverIdx(null);
+              }}
+              className={`rounded-card bg-paper-deep/30 p-3 ring-1 ${
+                dragOverIdx === i && dragIdx !== i ? "ring-2 ring-accent" : "ring-ink-soft/10"
+              } ${dragIdx === i ? "opacity-50" : ""}`}
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <span
+                  draggable
+                  onDragStart={(e) => {
+                    setDragIdx(i);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  className="cursor-grab text-ink-soft/60 hover:text-ink-soft active:cursor-grabbing"
+                  aria-label="Drag to reorder"
+                  title="Drag to reorder"
+                >
+                  <DotsSixVertical weight="bold" className="h-4 w-4" />
+                </span>
+                <span className="text-xs font-semibold tabular-nums text-ink-soft">{i + 1}</span>
+                <button
+                  type="button"
+                  aria-label="Move up"
+                  disabled={i === 0}
+                  onClick={() => moveScene(i, i - 1)}
+                  className="text-ink-soft/60 hover:text-ink disabled:opacity-30"
+                >
+                  <CaretUp weight="bold" className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Move down"
+                  disabled={i === sceneIds.length - 1}
+                  onClick={() => moveScene(i, i + 1)}
+                  className="text-ink-soft/60 hover:text-ink disabled:opacity-30"
+                >
+                  <CaretDown weight="bold" className="h-3.5 w-3.5" />
+                </button>
+                {scene.ending && (
+                  <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
+                    ending
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {/* Illustration — ~40% */}
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:w-[40%]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Image
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Generate image"
+                      className="inline-flex items-center text-accent-deep disabled:opacity-40"
+                      onClick={() => regenerateImage(id)}
+                      disabled={busyAny}
+                    >
+                      <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                  <ImagePreview
+                    base={imgBase}
+                    version={versions[id] ?? 0}
+                    alt={`Page ${i + 1}`}
+                    present={imgPresent}
+                    className="aspect-video w-full"
+                  />
+                  <textarea
+                    className={`${inputClsSm} min-h-14`}
+                    value={sceneMeta.scenes[id]?.setting ?? ""}
+                    onChange={(e) => setImagePrompt(id, e.target.value)}
+                    placeholder="Image prompt (optional)"
+                  />
+                </div>
+                {/* Narration + BGM */}
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Narration
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Regenerate narration"
+                      className="inline-flex items-center text-accent-deep disabled:opacity-40"
+                      onClick={() => regenerateNarration(id)}
+                      disabled={busyAny}
+                    >
+                      <ArrowsCounterClockwise weight="bold" className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                    <span
+                      className={`ml-auto text-[10px] tabular-nums ${
+                        (scene.narration ?? "").length > 250
+                          ? "font-semibold text-ruby"
+                          : "text-ink-soft/50"
+                      }`}
+                    >
+                      {(scene.narration ?? "").length} / 250
+                    </span>
+                  </div>
+                  <textarea
+                    className={`${inputClsSm} min-h-24 flex-1`}
+                    value={scene.narration ?? ""}
+                    onChange={(e) => applyScene(id, { narration: e.target.value })}
+                    readOnly={narSt === "running"}
+                    placeholder="(narration)"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Voice
+                    </span>
+                    <SpeakerSelect
+                      value={scene.speaker}
+                      options={speakerOptions}
+                      onChange={(s) => applyScene(id, { speaker: s })}
+                    />
+                    <span className="ml-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      BGM
+                    </span>
+                    <BgmSelectWithPreview
+                      value={scene.bgm ?? ""}
+                      options={bgmOptions}
+                      storyId={draftId}
+                      allowEmpty="(none)"
+                      placeholder="(no tracks — add later)"
+                      onChange={(v) => applyScene(id, { bgm: v })}
+                    />
+                  </div>
+                  {nar.entries[id]?.error && (
+                    <p className="text-xs text-ruby">{nar.entries[id].error}</p>
+                  )}
+                  {img.entries[id]?.error && (
+                    <p className="text-xs text-ruby">img: {img.entries[id].error}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {err && <ErrorNote>{err}</ErrorNote>}
     </Card>
   );
 }

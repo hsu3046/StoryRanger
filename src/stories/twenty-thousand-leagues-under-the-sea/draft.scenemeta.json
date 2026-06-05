@@ -1,0 +1,124 @@
+{
+  "scenes": {
+    "scene-1": {
+      "setting": "The deck of the Abraham Lincoln, stormy midnight",
+      "synopsis": "The Professor is thrown into the churning waves by a massive impact.",
+      "parentBeatId": "overboard-at-night"
+    },
+    "scene-2": {
+      "setting": "Surface of the dark ocean, waves crashing",
+      "synopsis": "The Professor struggles to stay afloat as the ship disappears into the fog.",
+      "parentBeatId": "overboard-at-night"
+    },
+    "scene-3": {
+      "setting": "Floating on the metallic surface of the Nautilus",
+      "synopsis": "The Professor finds a hard, steel island in the middle of the sea.",
+      "parentBeatId": "overboard-at-night"
+    },
+    "scene-4": {
+      "setting": "On top of the Nautilus, a hatch opens",
+      "synopsis": "A light shines from within the submarine as the hatch opens.",
+      "parentBeatId": "nemo-introduction"
+    },
+    "scene-5": {
+      "setting": "The grand salon of the Nautilus",
+      "synopsis": "Captain Nemo appears, standing among shelves of books and treasures.",
+      "parentBeatId": "nemo-introduction"
+    },
+    "scene-6": {
+      "setting": "The grand salon of the Nautilus",
+      "synopsis": "Nemo explains that they are now part of his undersea kingdom.",
+      "parentBeatId": "nemo-introduction"
+    },
+    "scene-7": {
+      "setting": "The ocean floor, a forest of giant red and white coral",
+      "synopsis": "The crew walks among the coral trees in diving suits.",
+      "parentBeatId": "coral-forest"
+    },
+    "scene-8": {
+      "setting": "Near a reef, schools of glowing fish pass by",
+      "synopsis": "Brightly colored fish weave through the coral branches.",
+      "parentBeatId": "coral-forest"
+    },
+    "scene-9": {
+      "setting": "A deep valley in the coral forest",
+      "synopsis": "The Professor examines a rare, glowing sea plant.",
+      "parentBeatId": "coral-forest"
+    },
+    "scene-10": {
+      "setting": "Inside the Nautilus, looking out the windows",
+      "synopsis": "A giant eye appears at the glass window.",
+      "parentBeatId": "squid-attack"
+    },
+    "scene-11": {
+      "setting": "The exterior of the Nautilus, tentacles wrapping around it",
+      "synopsis": "Enormous tentacles coil around the submarine's hull.",
+      "parentBeatId": "squid-attack"
+    },
+    "scene-12": {
+      "setting": "The bridge of the Nautilus, red lights flashing",
+      "synopsis": "The crew prepares to defend the ship.",
+      "parentBeatId": "squid-attack"
+    },
+    "scene-13": {
+      "setting": "The deck of the Nautilus, combat with the squid",
+      "synopsis": "The battle reaches its peak as the squid retreats.",
+      "parentBeatId": "squid-attack"
+    },
+    "scene-14": {
+      "setting": "The observation lounge, shutters opening",
+      "synopsis": "The steel shutters open to reveal a glowing underwater vista.",
+      "parentBeatId": "nautilus-tour"
+    },
+    "scene-15": {
+      "setting": "The library of the Nautilus",
+      "synopsis": "Nemo shows the Professor his collection of marine knowledge.",
+      "parentBeatId": "nautilus-tour"
+    },
+    "scene-16": {
+      "setting": "The engine room, glowing with electric power",
+      "synopsis": "The Professor marvels at the advanced technology of the engines.",
+      "parentBeatId": "nautilus-tour"
+    },
+    "scene-17": {
+      "setting": "The hull of the Nautilus being checked by light",
+      "synopsis": "The crew inspects the minor damage after the squid attack.",
+      "parentBeatId": "victory-repair"
+    },
+    "scene-18": {
+      "setting": "Nemo's private cabin, filled with maps",
+      "synopsis": "Nemo gazes at a map of the ocean floor.",
+      "parentBeatId": "victory-repair"
+    },
+    "scene-19": {
+      "setting": "The grand salon, looking at the horizon",
+      "synopsis": "The Professor decides to continue the journey.",
+      "parentBeatId": "ending-guardian"
+    },
+    "scene-20": {
+      "setting": "Inside the Nautilus, traveling through a deep trench",
+      "synopsis": "The submarine glides through a spectacular underwater canyon.",
+      "parentBeatId": "ending-guardian"
+    },
+    "scene-21": {
+      "setting": "A vibrant reef full of life",
+      "synopsis": "The Professor takes notes on the marine life.",
+      "parentBeatId": "ending-guardian"
+    },
+    "scene-22": {
+      "setting": "Near a foggy coastline at dawn",
+      "synopsis": "Nemo prepares a small boat for the Professor.",
+      "parentBeatId": "ending-messenger"
+    },
+    "scene-23": {
+      "setting": "A rocky beach, the Nautilus submerged in the distance",
+      "synopsis": "The Professor watches the Nautilus disappear underwater.",
+      "parentBeatId": "ending-messenger"
+    },
+    "scene-24": {
+      "setting": "A study with a window overlooking the sea",
+      "synopsis": "The Professor writes the book 'Twenty Thousand Leagues Under the Sea'.",
+      "parentBeatId": "ending-messenger"
+    }
+  }
+}

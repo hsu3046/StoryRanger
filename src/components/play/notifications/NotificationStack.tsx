@@ -16,7 +16,6 @@ const KIND_ORDER: Record<NotifKind, number> = {
   medal: 0,
   item: 1,
   companion: 2,
-  hint: 3,
 };
 
 /** Build the "icon + name ×N" chips for an item notification from raw ids. */
@@ -58,36 +57,6 @@ function NotificationCard({
     );
     return () => clearTimeout(t);
   }, [notif.id, notif.durationMs, onDismiss]);
-
-  // Hint variant (tutorial tip) — icon + handwritten "Tip!" eyebrow + one line.
-  // Soft accent ring so it reads as friendly guidance, not a reward.
-  if (notif.kind === "hint") {
-    return (
-      <motion.button
-        {...cardMotion}
-        type="button"
-        aria-label="Tip. Tap to dismiss."
-        onClick={() => onDismiss(notif.id)}
-        className={`${SHELL} items-center gap-2.5 rounded-card ring-accent/25`}
-      >
-        {notif.icon && (
-          <span className="text-xl leading-none" aria-hidden>
-            {notif.icon}
-          </span>
-        )}
-        <span className="flex flex-col items-start text-left leading-tight">
-          {notif.eyebrow && (
-            <span className="font-handwritten text-sm text-accent-deep">
-              {notif.eyebrow}
-            </span>
-          )}
-          {notif.title && (
-            <span className="text-sm font-medium text-ink">{notif.title}</span>
-          )}
-        </span>
-      </motion.button>
-    );
-  }
 
   // Item variant — eyebrow + a row of "×N" chips.
   if (notif.chips) {
@@ -195,11 +164,6 @@ export function NotificationStack({
   return (
     <div
       aria-live="polite"
-      // z-[65] keeps toasts above the battle (z-50), challenge gate (z-[55])
-      // and in-gate problem card (z-[60]) overlays so a tutorial tip enqueued
-      // for the first encounter/challenge isn't hidden under the gate and lost
-      // to its auto-dismiss timer. Still below modals (Settings z-[80],
-      // Treasures z-100), which legitimately cover toasts.
       className="pointer-events-none fixed left-1/2 z-[65] flex w-full max-w-xs -translate-x-1/2 flex-col items-center gap-2"
       style={{ top: "max(0.625rem, env(safe-area-inset-top))" }}
     >

@@ -1,17 +1,321 @@
 {
   "id": "twenty-thousand-leagues-under-the-sea",
-  "title": "Twenty Thousand Leagues Under the Sea",
+  "title": "Nemo's Secret World",
+  "subtitle": "A Journey Twenty Thousand Leagues Under the Sea",
   "language": "English",
-  "estimatedMinutes": 10,
+  "estimatedMinutes": 20,
   "coverImage": "/stories/twenty-thousand-leagues-under-the-sea/cover",
-  "startScene": "s1",
+  "startScene": "scene-1",
   "scenes": {
-    "s1": {
-      "image": "",
+    "scene-1": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-1",
       "bgm": "",
       "speaker": "narrator",
-      "narration": "",
-      "branches": []
+      "narration": "The ship shuddered as a metallic force struck from below. {{They}} tumbled over the railing, falling into the icy, churning foam of the midnight sea.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-2"
+        }
+      ]
+    },
+    "scene-2": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-2",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "The lights of the ship faded into the mist. {{They}} gasped for air, searching for any sign of life in the vast, lonely darkness of the water.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-3"
+        }
+      ]
+    },
+    "scene-3": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-3",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Suddenly, {{their}} hands struck something hard and cold. It was not a whale, but a curved shell of polished steel rising through the waves.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-4"
+        }
+      ]
+    },
+    "scene-4": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-4",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "A hatch hissed open, spilling golden light across the wet metal. Strong hands reached out to pull {{them}} safely into the belly of the beast.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-5"
+        }
+      ]
+    },
+    "scene-5": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-5",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "A man with piercing eyes stood before {{them}}. \"I am Captain Nemo,\" he said, his voice as deep and steady as the tides.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-6"
+        }
+      ]
+    },
+    "scene-6": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-6",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "He told {{them}} that they were now on the Nautilus, a ship that belonged to the silent world. Here, the laws of the land no longer applied.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-7"
+        }
+      ]
+    },
+    "scene-7": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-7",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Wearing heavy suits, {{they}} stepped onto the sandy floor. A forest of vibrant coral towered above like ancient, petrified trees.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-8"
+        }
+      ]
+    },
+    "scene-8": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-8",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Fish as bright as jewels darted between the branches. {{They}} watched in awe as the ocean's hidden garden bloomed in every shade of the rainbow.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-9"
+        }
+      ]
+    },
+    "scene-9": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-9",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Every corner held a new secret for {{them}} to discover. The sea was not a wasteland, but a vibrant cradle of life protected from the world above.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-10"
+        }
+      ]
+    },
+    "scene-10": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-10",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "A shadow darker than the deep crept over the windows. Suddenly, a massive, unblinking eye stared back at {{them}} from the gloom.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-11"
+        }
+      ]
+    },
+    "scene-11": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-11",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Huge, muscular tentacles coiled around the steel hull. The Nautilus groaned under the pressure of the giant squid's powerful grip.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-12"
+        }
+      ]
+    },
+    "scene-12": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-12",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "The ship tilted violently as the struggle intensified. Nemo grabbed an axe, calling for {{them}} to stand firm as the vessel fought to break free.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-13"
+        }
+      ]
+    },
+    "scene-13": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-13",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "With a final, powerful surge, the Nautilus broke the monster's hold. The giant creature vanished back into the ink-black depths of the abyss.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-14"
+        }
+      ]
+    },
+    "scene-14": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-14",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Once the danger passed, Nemo opened the great iron shutters. A world of bioluminescent light flickered like stars beneath the waves.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-15"
+        }
+      ]
+    },
+    "scene-15": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-15",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Nemo showed {{them}} shelves filled with books and jars of specimens. He had gathered all the wisdom of the oceans within these metal walls.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-16"
+        }
+      ]
+    },
+    "scene-16": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-16",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "The engine hummed with a mysterious, rhythmic power. {{They}} realized that the Nautilus was a miracle of science, fueled by the sea itself.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-17"
+        }
+      ]
+    },
+    "scene-17": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-17",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Lights scanned the hull to ensure the ship remained strong. The Nautilus was scarred but undefeated, a testament to Nemo's vision.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-18"
+        }
+      ]
+    },
+    "scene-18": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-18",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "\"The sea is everything,\" Nemo whispered. He explained to {{them}} that while the sea is dangerous, it is also the only place where one is truly free.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-19"
+        }
+      ]
+    },
+    "scene-19": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-19",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "{{They}} looked out at the endless blue and knew there was no going back. The surface world felt small compared to the wonders {{they}} had seen.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-20"
+        }
+      ]
+    },
+    "scene-20": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-20",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Together, they dove deeper than any human had ever gone. {{They}} became a guardian of the deep, a witness to the Earth's final frontiers.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-21"
+        }
+      ]
+    },
+    "scene-21": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-21",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "Days turned into weeks of discovery and marvel. {{They}} documented every new creature, filling pages with the beauty of the hidden world.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-22"
+        }
+      ]
+    },
+    "scene-22": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-22",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "At last, the time came for the story to be told. Nemo brought the Nautilus close to a quiet shore and bid {{them}} a silent farewell.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-23"
+        }
+      ]
+    },
+    "scene-23": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-23",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "{{They}} stood on the sand, watching the metallic wake disappear. The Nautilus returned to the depths, leaving only memories and a mission behind.",
+      "branches": [
+        {
+          "id": "continue",
+          "label": "Continue",
+          "next": "scene-24"
+        }
+      ]
+    },
+    "scene-24": {
+      "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-24",
+      "bgm": "",
+      "speaker": "narrator",
+      "narration": "With a pen in hand, {{they}} began to write of the wonders below. {{They}} hoped the world would learn to love and protect the secret kingdom of the sea.",
+      "branches": [],
+      "ending": {
+        "id": "scene-24",
+        "label": "The Legend Lives On"
+      }
     }
   }
 }

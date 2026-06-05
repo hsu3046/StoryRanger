@@ -1,7 +1,11 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowRight } from "@phosphor-icons/react";
 import type { DraftMetaT, DraftStageT } from "@/data/schemas";
+import { flushPendingAutosaves } from "./useAutosave";
 import type { PoolStatus } from "./useGenerationPool";
 
 /** Build the next meta after a stage completes — marks it done + advances the
@@ -42,9 +46,7 @@ export const STAGES: { id: DraftStageT; label: string }[] = [
   { id: "concept", label: "Concept" },
   { id: "storyboard", label: "Storyboard" },
   { id: "characters", label: "Characters" },
-  { id: "scenes", label: "Scenes" },
-  { id: "narration", label: "Narration" },
-  { id: "images", label: "Images" },
+  { id: "scene", label: "Scene" },
   { id: "review", label: "Review" },
 ];
 
@@ -55,27 +57,43 @@ export function StepRail({
   draftId: string;
   current: DraftStageT;
 }) {
+  const router = useRouter();
   const curIdx = STAGES.findIndex((s) => s.id === current);
   return (
-    <nav className="flex flex-wrap items-center gap-1.5">
+    <nav className="flex w-full items-center gap-1">
       {STAGES.map((s, i) => {
         const active = s.id === current;
         const done = i < curIdx;
+        const href = `/admin/generate/${draftId}/${s.id}`;
         return (
-          <Link
-            key={s.id}
-            href={`/admin/generate/${draftId}/${s.id}`}
-            className={`inline-flex items-center gap-1.5 rounded-pill px-3 py-1 text-xs font-semibold transition-colors ${
-              active
-                ? "bg-accent-deep text-paper"
-                : done
-                  ? "bg-paper-deep/60 text-ink"
-                  : "bg-paper-deep/30 text-ink-soft/70 hover:bg-paper-deep/50"
-            }`}
-          >
-            <span className="tabular-nums opacity-70">{i + 1}</span>
-            {s.label}
-          </Link>
+          <Fragment key={s.id}>
+            <Link
+              href={href}
+              onClick={(e) => {
+                // Flush pending autosaves before navigating so the next step's
+                // server render reads fresh JSON (no edit-then-switch race).
+                if (active || e.metaKey || e.ctrlKey || e.shiftKey) return;
+                e.preventDefault();
+                void flushPendingAutosaves().then(() => router.push(href));
+              }}
+              className={`inline-flex flex-1 items-center justify-center rounded-pill px-2 py-1 text-xs font-semibold transition-colors ${
+                active
+                  ? "bg-accent-deep text-paper"
+                  : done
+                    ? "bg-paper-deep/60 text-ink"
+                    : "bg-paper-deep/30 text-ink-soft/70 hover:bg-paper-deep/50"
+              }`}
+            >
+              {s.label}
+            </Link>
+            {i < STAGES.length - 1 && (
+              <ArrowRight
+                weight="bold"
+                className="h-3.5 w-3.5 shrink-0 text-ink-soft/40"
+                aria-hidden
+              />
+            )}
+          </Fragment>
         );
       })}
     </nav>
@@ -106,17 +124,22 @@ export function Card({
   actions,
   children,
 }: {
-  title?: string;
+  title?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-card-lg bg-paper p-4 ring-1 ring-ink-soft/10">
+    <div className="flex flex-col gap-3">
       {(title || actions) && (
         <div className="flex items-center justify-between gap-3">
-          {title && (
-            <h3 className="text-base font-semibold text-ink">{title}</h3>
-          )}
+          {title &&
+            (typeof title === "string" ? (
+              <h3 className="text-base font-semibold text-ink">{title}</h3>
+            ) : (
+              <div className="flex items-center gap-3 text-base font-semibold text-ink">
+                {title}
+              </div>
+            ))}
           {actions}
         </div>
       )}
@@ -141,7 +164,7 @@ export function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-accent-deep px-4 py-1.5 text-sm font-semibold text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-accent-deep px-4 py-1.5 text-sm font-semibold text-paper transition hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
     >
       {children}
     </button>
@@ -162,7 +185,7 @@ export function GhostButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-ink ring-1 ring-ink-soft/10 transition-colors hover:bg-paper-deep disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-ink ring-1 ring-ink-soft/10 transition hover:bg-paper-deep active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
     >
       {children}
     </button>

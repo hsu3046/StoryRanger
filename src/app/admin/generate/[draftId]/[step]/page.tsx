@@ -3,32 +3,29 @@ import { notFound, redirect } from "next/navigation";
 import type { DraftStageT } from "@/data/schemas";
 import {
   coverPresent,
+  listBgmKeys,
   listPresentImageStems,
   readCharacterArt,
   readConcept,
   readDraftCharacters,
   readDraftMeta,
+  readDraftSceneMeta,
   readDraftScenes,
   readStoryboard,
 } from "../../../_lib/draftStore";
 import { validateStory } from "../../../_lib/validateStory";
-import { buildBeatKeyMap } from "../../../_lib/sceneKeys";
 import { StepRail } from "../../../_components/generate/shared";
 import { ConceptStep } from "../../../_components/generate/ConceptStep";
 import { StoryboardStep } from "../../../_components/generate/StoryboardStep";
 import { CharactersStep } from "../../../_components/generate/CharactersStep";
 import { ScenesStep } from "../../../_components/generate/ScenesStep";
-import { NarrationStep } from "../../../_components/generate/NarrationStep";
-import { ImagesStep } from "../../../_components/generate/ImagesStep";
 import { ReviewStep } from "../../../_components/generate/ReviewStep";
 
 const STAGE_IDS: DraftStageT[] = [
   "concept",
   "storyboard",
   "characters",
-  "scenes",
-  "narration",
-  "images",
+  "scene",
   "review",
 ];
 
@@ -38,13 +35,18 @@ export default async function WizardStepPage({
   params: Promise<{ draftId: string; step: string }>;
 }) {
   const { draftId, step } = await params;
+  const base = `/admin/generate/${draftId}`;
+
+  // Legacy URLs (pre-merge): scenes/narration/images all fold into the Scene
+  // tab (which now owns image generation).
+  if (step === "scenes" || step === "narration" || step === "images") {
+    redirect(`${base}/scene`);
+  }
   if (!STAGE_IDS.includes(step as DraftStageT)) notFound();
   const stage = step as DraftStageT;
 
   const meta = await readDraftMeta(draftId);
   if (!meta) notFound();
-
-  const base = `/admin/generate/${draftId}`;
 
   let body: React.ReactNode;
 
@@ -76,9 +78,10 @@ export default async function WizardStepPage({
     const storyboard = await readStoryboard(draftId);
     if (!concept) redirect(`${base}/concept`);
     if (!storyboard) redirect(`${base}/storyboard`);
-    const [characters, art] = await Promise.all([
+    const [characters, art, characterStems] = await Promise.all([
       readDraftCharacters(draftId),
       readCharacterArt(draftId),
+      listPresentImageStems(draftId, "characters"),
     ]);
     body = (
       <CharactersStep
@@ -88,71 +91,43 @@ export default async function WizardStepPage({
         meta={meta}
         initialCharacters={characters}
         initialArt={art}
+        presence={{ characterStems }}
       />
     );
-  } else if (stage === "scenes") {
+  } else if (stage === "scene") {
     const concept = await readConcept(draftId);
     const storyboard = await readStoryboard(draftId);
+    const characters = await readDraftCharacters(draftId);
     if (!concept) redirect(`${base}/concept`);
     if (!storyboard) redirect(`${base}/storyboard`);
-    const scenes = await readDraftScenes(draftId);
-    // Only treat as "assembled" when the scene keys match the storyboard beats.
-    // Scene keys come from the SAME raw-beat-id → key mapping assembly uses
-    // (slugify + scene-N fallback + dedupe), so an empty-slug or collided beat
-    // id is still detected — otherwise a re-assemble would wipe authored
-    // narration by passing initialScenes=null.
-    const keyMap = buildBeatKeyMap(storyboard.beats);
-    const assembled =
-      scenes &&
-      storyboard.beats.every((b) => scenes.scenes[keyMap.get(b.id) ?? ""]) &&
-      Object.keys(scenes.scenes).length >= storyboard.beats.length
-        ? scenes
-        : null;
+    if (!characters) redirect(`${base}/characters`);
+    const [scenes, sceneMeta, bgmOptions, sceneStems, cover] = await Promise.all([
+      readDraftScenes(draftId),
+      readDraftSceneMeta(draftId),
+      listBgmKeys(draftId),
+      listPresentImageStems(draftId, "scenes"),
+      coverPresent(draftId),
+    ]);
+    // A draft has real pages when the pagination ran (sceneMeta written) OR when
+    // an older draft already has assembled/narrated scenes (legacy, no sceneMeta)
+    // — anything beyond the single empty placeholder scene seeded at creation.
+    // Otherwise legacy work would be hidden behind "Generate pages" and lost.
+    const sceneVals = scenes ? Object.values(scenes.scenes) : [];
+    const hasPages =
+      (!!sceneMeta && Object.keys(sceneMeta.scenes).length > 0) ||
+      sceneVals.length > 1 ||
+      sceneVals.some((s) => (s.narration ?? "").trim().length > 0);
     body = (
       <ScenesStep
         draftId={draftId}
         concept={concept}
         storyboard={storyboard}
-        meta={meta}
-        initialScenes={assembled}
-      />
-    );
-  } else if (stage === "narration") {
-    const concept = await readConcept(draftId);
-    const characters = await readDraftCharacters(draftId);
-    const scenes = await readDraftScenes(draftId);
-    const storyboard = await readStoryboard(draftId);
-    if (!concept) redirect(`${base}/concept`);
-    if (!characters) redirect(`${base}/characters`);
-    if (!scenes) redirect(`${base}/scenes`);
-    body = (
-      <NarrationStep
-        draftId={draftId}
-        concept={concept}
         characters={characters}
         meta={meta}
-        initialScenes={scenes}
-        storyboard={storyboard}
-      />
-    );
-  } else if (stage === "images") {
-    const characters = await readDraftCharacters(draftId);
-    const scenes = await readDraftScenes(draftId);
-    if (!characters) redirect(`${base}/characters`);
-    if (!scenes) redirect(`${base}/scenes`);
-    const [cover, characterStems, dialogueStems, sceneStems] = await Promise.all([
-      coverPresent(draftId),
-      listPresentImageStems(draftId, "characters"),
-      listPresentImageStems(draftId, "dialogue"),
-      listPresentImageStems(draftId, "scenes"),
-    ]);
-    body = (
-      <ImagesStep
-        draftId={draftId}
-        characters={characters}
-        meta={meta}
-        scenes={scenes}
-        presence={{ cover, characterStems, dialogueStems, sceneStems }}
+        initialScenes={hasPages ? scenes : null}
+        initialSceneMeta={sceneMeta}
+        bgmOptions={bgmOptions}
+        presence={{ sceneStems, cover }}
       />
     );
   } else {
@@ -181,9 +156,7 @@ export default async function WizardStepPage({
         </div>
         <StepRail draftId={draftId} current={stage} />
       </header>
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        <div className="mx-auto max-w-3xl">{body}</div>
-      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3">{body}</div>
     </div>
   );
 }

@@ -49,7 +49,7 @@ const SYSTEM_PROMPT = `You are a children's picture-book character designer. Giv
 Rules:
 - Include exactly ONE protagonist with role "hero" and id "hero". The hero is player-named, so give a neutral default name; the hero has no persona fields (leave speechStyle/voiceTraits "" and dos/donts []).
 - Include a "narrator" (role "narrator", id "narrator") — leave persona fields empty like the hero.
-- Create an NPC (role "npc") for every distinct character the storyboard refers to as a "speaker" (other than narrator/hero), plus any clearly-named characters in the synopses. Use the SAME lowercase kebab-case id the storyboard used.
+- Create an NPC (role "npc") for every named character the beat synopses imply (other than the hero) — the recurring or important figures the story needs. Give each a stable lowercase kebab-case id derived from their name.
 - Do NOT create companions/party members (role "companion") — battles are added later by hand.
 - For each NPC give a persona: bio (1-3 sentences), speechStyle, voiceTraits, dos (2-4), donts (1-3).
 - For EVERY character give a vivid one-line visualDescription (face, hair, outfit, palette, proportions) the illustrator will follow.
@@ -172,10 +172,6 @@ export async function POST(req: Request) {
   }
 
   const { concept: c, storyboard: sb } = body;
-  // Distinct speaker ids the storyboard references (excluding narrator/hero).
-  const speakers = Array.from(
-    new Set(sb.beats.map((b) => b.speaker).filter((s) => s && s !== "narrator" && s !== "hero")),
-  );
   const userLines: string[] = [
     `WRITE IN: ${c.language}`,
     "",
@@ -184,10 +180,7 @@ export async function POST(req: Request) {
     `THEMES: ${c.themes.join(", ")}`,
     `ART STYLE: ${c.artStyleBible.medium}; ${c.artStyleBible.palette}; ${c.artStyleBible.mood}`,
     "",
-    "STORYBOARD SPEAKER IDS that need a character (besides narrator/hero):",
-    speakers.length ? speakers.map((s) => `- ${s}`).join("\n") : "- (none — invent NPCs as the synopses imply)",
-    "",
-    "BEAT SYNOPSES (for context):",
+    "STORYBOARD (beat synopses — invent the NPCs these imply, plus hero + narrator):",
     sb.beats.map((b) => `- [${b.id}] ${b.synopsis}`).join("\n"),
     "",
   ];

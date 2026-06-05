@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowsCounterClockwise } from "@phosphor-icons/react";
 
 import type { DraftMetaT } from "@/data/schemas";
 import type { ValidationIssue } from "../../_lib/validateStory";
 import { commitDraftAction, validateDraftAction } from "../../_actions/generateDraft";
 import { Card, ErrorNote, GhostButton, PrimaryButton } from "./shared";
+import { useStageVisit } from "./useAutosave";
 
 interface Props {
   draftId: string;
@@ -21,6 +23,8 @@ export function ReviewStep({ draftId, meta, initialValidation }: Props) {
   const [busy, setBusy] = useState<"validate" | "commit" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [committed, setCommitted] = useState(meta.status === "committed");
+
+  useStageVisit(draftId, meta, "review");
 
   async function revalidate() {
     setBusy("validate");
@@ -48,7 +52,22 @@ export function ReviewStep({ draftId, meta, initialValidation }: Props) {
   const blocked = val.errors.length > 0;
 
   return (
-    <Card title="Review & publish">
+    <Card
+      title="Review & publish"
+      actions={
+        committed ? undefined : (
+          <div className="flex items-center gap-2">
+            <GhostButton onClick={revalidate} disabled={busy !== null}>
+              <ArrowsCounterClockwise weight="bold" className="h-4 w-4" aria-hidden />
+              {busy === "validate" ? "Validating…" : "Re-validate"}
+            </GhostButton>
+            <PrimaryButton onClick={commit} disabled={busy !== null || blocked}>
+              {busy === "commit" ? "Publishing…" : "Publish story"}
+            </PrimaryButton>
+          </div>
+        )
+      }
+    >
       {committed ? (
         <div className="flex flex-col gap-3">
           <p className="rounded-card bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 ring-1 ring-emerald-500/20">
@@ -117,14 +136,6 @@ export function ReviewStep({ draftId, meta, initialValidation }: Props) {
           )}
 
           {err && <ErrorNote>{err}</ErrorNote>}
-          <div className="flex items-center justify-between">
-            <GhostButton onClick={revalidate} disabled={busy !== null}>
-              {busy === "validate" ? "Validating…" : "↻ Re-validate"}
-            </GhostButton>
-            <PrimaryButton onClick={commit} disabled={busy !== null || blocked}>
-              {busy === "commit" ? "Publishing…" : "Publish story"}
-            </PrimaryButton>
-          </div>
         </>
       )}
     </Card>

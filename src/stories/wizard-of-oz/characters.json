@@ -23,7 +23,7 @@
       "voice": "rHWSYoq8UlV0YIBKMryp",
       "voiceSpeed": 0.8,
       "color": "#c9a23a",
-      "size": "medium",
+      "size": "large",
       "persona": {
         "shortBio": "A friendly straw figure recently lifted off a wooden pole. He believes he has no brain — yet keeps saying things that sound oddly wise. Open-hearted, eager, slightly clumsy.",
         "speechStyle": "Curious and self-deprecating. Loves wordplay but often loses the joke halfway through. Pauses to think out loud (e.g. 'Hmm, let me see...'). Sometimes refers to a future brain he hopes to receive from the Wizard.",
@@ -175,7 +175,7 @@
     {
       "id": "aunt-em",
       "name": "Aunt Em",
-      "voice": "AZnzlk1XvdvUeBnXmlld",
+      "voice": "EXAVITQu4vr4xnSDxMaL",
       "voiceSpeed": 0.95,
       "color": "#8a6d3b",
       "size": "medium",
