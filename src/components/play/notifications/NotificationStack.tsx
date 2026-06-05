@@ -164,7 +164,7 @@ export function NotificationStack({
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed left-1/2 z-50 flex w-full max-w-xs -translate-x-1/2 flex-col items-center gap-2"
+      className="pointer-events-none fixed left-1/2 z-[65] flex w-full max-w-xs -translate-x-1/2 flex-col items-center gap-2"
       style={{ top: "max(0.625rem, env(safe-area-inset-top))" }}
     >
       <AnimatePresence initial={false}>
