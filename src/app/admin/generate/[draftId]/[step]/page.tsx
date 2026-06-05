@@ -37,9 +37,11 @@ export default async function WizardStepPage({
   const { draftId, step } = await params;
   const base = `/admin/generate/${draftId}`;
 
-  // Legacy URLs (pre-merge): scenes/narration → scene; the retired cover step → review.
-  if (step === "scenes" || step === "narration") redirect(`${base}/scene`);
-  if (step === "images") redirect(`${base}/review`);
+  // Legacy URLs (pre-merge): scenes/narration/images all fold into the Scene
+  // tab (which now owns image generation).
+  if (step === "scenes" || step === "narration" || step === "images") {
+    redirect(`${base}/scene`);
+  }
   if (!STAGE_IDS.includes(step as DraftStageT)) notFound();
   const stage = step as DraftStageT;
 

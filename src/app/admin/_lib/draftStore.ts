@@ -49,11 +49,13 @@ async function readJsonSafe<T>(
   }
 }
 
-/** Legacy stage ids (pre-merge) → active stage. "scenes"/"narration" fold into
- *  "scene"; the retired "images"/"cover" step (now in concept) → "review". */
+/** Legacy stage ids (pre-merge) → active stage. "scenes"/"narration"/"images"
+ *  all fold into "scene" — image generation now lives on the Scene tab, so a
+ *  draft paused mid-image-gen should resume there (not skip to Review). */
 function normalizeStage(stage: unknown): unknown {
-  if (stage === "scenes" || stage === "narration") return "scene";
-  if (stage === "images") return "review";
+  if (stage === "scenes" || stage === "narration" || stage === "images") {
+    return "scene";
+  }
   return stage;
 }
 
