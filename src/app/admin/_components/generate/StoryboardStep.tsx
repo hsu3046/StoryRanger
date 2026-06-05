@@ -101,7 +101,7 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  useAutosave(sb, (s) => { if (s) void saveStoryboardAction(draftId, normalizeStoryboard(s)); }, {
+  useAutosave(sb, (s) => (s ? saveStoryboardAction(draftId, normalizeStoryboard(s)) : undefined), {
     enabled: !!sb,
   });
   useStageVisit(draftId, meta, "storyboard");
