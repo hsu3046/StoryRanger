@@ -9,6 +9,7 @@ import {
   CharactersFileSchema,
   ConceptSchema,
   DraftMetaSchema,
+  DraftSceneMetaSchema,
   EncountersFileSchema,
   ItemsFileSchema,
   MonstersFileSchema,
@@ -246,6 +247,20 @@ export async function saveDraftScenesAction(
   ensureDev();
   try {
     await writeJson(StorySchema, storyPath(storyId, "scenes.json"), payload);
+    revalidatePath(`/admin/generate/${storyId}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
+export async function saveDraftSceneMetaAction(
+  storyId: string,
+  payload: unknown,
+): Promise<ActionResult> {
+  ensureDev();
+  try {
+    await writeJson(DraftSceneMetaSchema, storyPath(storyId, DRAFT_FILES.sceneMeta), payload);
     revalidatePath(`/admin/generate/${storyId}`);
     return { ok: true };
   } catch (err) {

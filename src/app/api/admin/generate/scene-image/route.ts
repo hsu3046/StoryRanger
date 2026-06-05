@@ -5,12 +5,11 @@ import { generateImageResilient, hasImageKey, type ReferenceImage } from "@/lib/
 import { processFullBleed } from "@/lib/image-post";
 import { scenePrompt } from "@/lib/image-prompts";
 import { characterAssetSlug } from "@/lib/narrative";
-import { slugify } from "@/app/admin/_lib/slugify";
 import {
   readConcept,
   readDraftCharacters,
+  readDraftSceneMeta,
   readDraftScenes,
-  readStoryboard,
 } from "@/app/admin/_lib/draftStore";
 import { loadReferenceImage, saveStoryImage } from "@/app/admin/_lib/saveImage";
 
@@ -43,21 +42,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "no_concept" }, { status: 400 });
   }
 
-  const [storyboard, scenesFile, charsFile] = await Promise.all([
-    readStoryboard(body.storyId),
+  const [sceneMeta, scenesFile, charsFile] = await Promise.all([
+    readDraftSceneMeta(body.storyId),
     readDraftScenes(body.storyId),
     readDraftCharacters(body.storyId),
   ]);
 
-  // Scene keys are slugified beat ids (see ScenesStep.assemble), so match the
-  // beat by its slug — a raw-id compare misses any beat whose id wasn't already
-  // a clean slug, losing the setting/synopsis for the image prompt.
-  const beat = storyboard?.beats.find(
-    (b) => slugify(b.id) === body.sceneId || b.id === body.sceneId,
-  );
+  // Scenes are no longer 1:1 with beats — the page-expansion records each
+  // scene's setting/synopsis (for the image prompt) in draft.scenemeta.json.
   const scene = scenesFile?.scenes[body.sceneId];
-  const setting = beat?.setting ?? "";
-  const synopsis = beat?.synopsis ?? "";
+  const ctx = sceneMeta?.scenes[body.sceneId];
+  const setting = ctx?.setting ?? "";
+  const synopsis = ctx?.synopsis ?? "";
   const narration = scene?.narration ?? "";
 
   const heroId =

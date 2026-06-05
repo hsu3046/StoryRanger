@@ -15,11 +15,13 @@ import {
   CharactersFileSchema,
   ConceptSchema,
   DraftMetaSchema,
+  DraftSceneMetaSchema,
   StorySchema,
   StoryboardSchema,
   type CharacterArtFileT,
   type ConceptT,
   type DraftMetaT,
+  type DraftSceneMetaT,
   type StoryboardT,
 } from "@/data/schemas";
 import type { CharactersFile, Story } from "@/types/story";
@@ -30,6 +32,7 @@ export const DRAFT_FILES = {
   concept: "draft.concept.json",
   storyboard: "draft.storyboard.json",
   characterArt: "draft.characterArt.json",
+  sceneMeta: "draft.scenemeta.json",
 } as const;
 
 async function readJsonSafe<T>(
@@ -46,8 +49,29 @@ async function readJsonSafe<T>(
   }
 }
 
-export function readDraftMeta(storyId: string): Promise<DraftMetaT | null> {
-  return readJsonSafe(storyId, DRAFT_FILES.meta, DraftMetaSchema);
+/** Legacy stage ids (pre-merge) → active stage. "scenes"/"narration" fold into
+ *  "scene"; the retired "images"/"cover" step (now in concept) → "review". */
+function normalizeStage(stage: unknown): unknown {
+  if (stage === "scenes" || stage === "narration") return "scene";
+  if (stage === "images") return "review";
+  return stage;
+}
+
+export async function readDraftMeta(storyId: string): Promise<DraftMetaT | null> {
+  try {
+    const raw = await fs.readFile(
+      path.join(storyDir(storyId), DRAFT_FILES.meta),
+      "utf-8",
+    );
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    if (obj && typeof obj === "object") {
+      obj.currentStage = normalizeStage(obj.currentStage);
+    }
+    const res = DraftMetaSchema.safeParse(obj);
+    return res.success ? res.data : null;
+  } catch {
+    return null;
+  }
 }
 export function readConcept(storyId: string): Promise<ConceptT | null> {
   return readJsonSafe(storyId, DRAFT_FILES.concept, ConceptSchema);
@@ -71,6 +95,11 @@ export function readDraftCharacters(
     "characters.json",
     CharactersFileSchema,
   ) as Promise<CharactersFile | null>;
+}
+export function readDraftSceneMeta(
+  storyId: string,
+): Promise<DraftSceneMetaT | null> {
+  return readJsonSafe(storyId, DRAFT_FILES.sceneMeta, DraftSceneMetaSchema);
 }
 
 /** True when a story dir has been committed (has an index.ts → in registry). */
@@ -129,6 +158,32 @@ export async function listPresentImageStems(
   } catch {
     return [];
   }
+}
+
+/** BGM track stems available to a draft: its own /audio/bgm pool merged with
+ *  the shared /public/audio/bgm pool (mirrors the graph editor's bgmOptions). */
+export async function listBgmKeys(storyId: string): Promise<string[]> {
+  const exts = [".mp3", ".ogg", ".m4a"];
+  const scan = async (...segments: string[]): Promise<string[]> => {
+    const dir = path.resolve(process.cwd(), "public", ...segments);
+    try {
+      const files = await fs.readdir(dir);
+      const stems = new Set<string>();
+      for (const f of files) {
+        const ext = path.extname(f).toLowerCase();
+        if (exts.includes(ext)) stems.add(f.slice(0, -ext.length));
+      }
+      return [...stems];
+    } catch {
+      return [];
+    }
+  };
+  if (!STORY_ID_RE.test(storyId)) return [];
+  const [own, common] = await Promise.all([
+    scan("stories", storyId, "audio", "bgm"),
+    scan("audio", "bgm"),
+  ]);
+  return [...new Set([...own, ...common])].sort();
 }
 
 /** True when a story-root image (e.g. cover) is present in any ext variant. */

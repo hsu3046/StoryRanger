@@ -69,21 +69,19 @@ export const StoryboardBranchSchema = z.object({
 });
 
 export const StoryboardBeatSchema = z.object({
-  /** Stable slug — becomes the scene key in the final scenes record. */
+  /** Stable slug — the beat the scene-pages expand from. */
   id: z.string(),
   /** Editor-only label (not shipped to the player). */
   title: z.string(),
-  /** 1-2 lines — what happens in this beat. Drives narration + image prompts. */
+  /** 1-2 lines — what happens in this beat (the story flow). The page stage
+   *  decides per-page speaker/setting from this + the cast + premise. */
   synopsis: z.string(),
-  /** "narrator" or a character id from the cast. */
-  speaker: z.string(),
-  /** Location / time — drives the scene image prompt. */
-  setting: z.string(),
-  /** Terminal beat (an ending). */
+  /** Terminal beat (the last beat — an ending). */
   isEnding: z.boolean(),
   /** Ending tag label when isEnding ("" otherwise). */
   endingLabel: z.string(),
-  /** Outgoing choices. Empty for an ending. */
+  /** Always empty — the linear storyboard carries no choices (branching is
+   *  authored later in the story graph). Kept for back-compat. */
   branches: z.array(StoryboardBranchSchema),
 });
 
@@ -141,15 +139,30 @@ export const CharacterArtFileSchema = z.object({
   entries: z.array(CharacterArtEntrySchema),
 });
 
+// ── Persisted (draft-only): per-scene context for the image stage ─
+// Scenes are no longer 1:1 with storyboard beats (the scene stage paginates a
+// beat into several pages), so the scene-image prompt can't look a beat up by
+// the scene id. The page-expansion records each scene's setting/synopsis and
+// its parent beat here so the image prompt has visual context.
+
+export const DraftSceneMetaEntrySchema = z.object({
+  setting: z.string(),
+  synopsis: z.string(),
+  parentBeatId: z.string(),
+});
+export const DraftSceneMetaSchema = z.object({
+  scenes: z.record(z.string(), DraftSceneMetaEntrySchema).default({}),
+});
+
 // ── Persisted: draft control state (wizard resume) ───────────────
 
+// Active wizard stages. Legacy drafts may carry "scenes"/"narration"/"images"
+// in currentStage — readDraftMeta() normalizes those before parse.
 export const DraftStageSchema = z.enum([
   "concept",
   "storyboard",
   "characters",
-  "scenes",
-  "narration",
-  "images",
+  "scene",
   "review",
 ]);
 
@@ -198,6 +211,8 @@ export type GeneratedCharacterT = z.infer<typeof GeneratedCharacterSchema>;
 export type GeneratedCharactersT = z.infer<typeof GeneratedCharactersSchema>;
 export type CharacterArtEntryT = z.infer<typeof CharacterArtEntrySchema>;
 export type CharacterArtFileT = z.infer<typeof CharacterArtFileSchema>;
+export type DraftSceneMetaEntryT = z.infer<typeof DraftSceneMetaEntrySchema>;
+export type DraftSceneMetaT = z.infer<typeof DraftSceneMetaSchema>;
 export type DraftStageT = z.infer<typeof DraftStageSchema>;
 export type StageStatusT = z.infer<typeof StageStatusSchema>;
 export type DraftMetaT = z.infer<typeof DraftMetaSchema>;
