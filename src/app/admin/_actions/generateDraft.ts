@@ -166,18 +166,25 @@ export async function createDraftAction(input: {
 
 // ── Per-stage artifact saves (validated; written to the draft dir) ──
 
+// Per-draft serialization for meta read-merge-write. Without it, two
+// overlapping partial saves read the same base and the later write reverts the
+// other's field (e.g. a brief save finishing after a currentStage save). Each
+// save waits for the prior save of the SAME draft, so the merge always reads
+// the latest on-disk meta. (Dev-only single-process; in-memory chain suffices.)
+const metaWriteChains = new Map<string, Promise<unknown>>();
+
 /**
- * Merge a partial meta patch into the current on-disk meta. Callers pass only
- * the field(s) they own (e.g. `{ currentStage }` or `{ brief }`) so concurrent
- * updates from different steps don't clobber each other's fields (a full-object
- * write from a stale render would, for example, revert currentStage).
+ * Merge a partial meta patch into the current on-disk meta, serialized per
+ * draft. Callers pass only the field(s) they own (e.g. `{ currentStage }` or
+ * `{ brief }`) so different steps don't clobber each other's fields.
  */
 export async function saveDraftMetaAction(
   storyId: string,
   payload: unknown,
 ): Promise<ActionResult> {
   ensureDev();
-  try {
+  const prev = metaWriteChains.get(storyId) ?? Promise.resolve();
+  const task = prev.then(async () => {
     const cur = await readDraftMeta(storyId);
     const merged =
       payload && typeof payload === "object"
@@ -185,6 +192,10 @@ export async function saveDraftMetaAction(
         : payload;
     await writeJson(DraftMetaSchema, storyPath(storyId, DRAFT_FILES.meta), merged);
     revalidatePath(`/admin/generate/${storyId}`);
+  });
+  metaWriteChains.set(storyId, task.catch(() => {}));
+  try {
+    await task;
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
