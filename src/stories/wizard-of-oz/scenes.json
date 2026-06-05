@@ -73,7 +73,8 @@
           "id": "take_slippers",
           "label": "How can I get back home?",
           "next": "s04_road",
-          "outcome": "You asked the Good Witch for help, hoping there was a way to return to your home."
+          "outcome": "You asked the Good Witch for help, hoping there was a way to return to your home.",
+          "outcomeSpeaker": "narrator"
         }
       ],
       "reward": {
@@ -631,8 +632,7 @@
         {
           "id": "_to_munchkin_alone",
           "label": "Hold on to anything you can",
-          "next": "s02c_tornado",
-          "outcome": "You gripped the sturdy iron bedpost and braced yourself as the floor rose beneath you."
+          "next": "s02c_tornado"
         }
       ]
     },
@@ -640,7 +640,7 @@
       "image": "/stories/wizard-of-oz/scenes/02d-house-crashes",
       "bgm": "munchkinland",
       "speaker": "narrator",
-      "narration": "You slowly opened the door and stepped outside. The land was bright and magical, full of colorful flowers and soft sunshine.\nThen you saw two striped legs sticking out from under the house.\nyour eyes grew wide, and Toto barked in surprise.",
+      "narration": "You slowly opened the door and stepped outside. The land was bright and magical, full of colorful flowers and soft sunshine.\nThen you saw two striped legs sticking out from under the house.",
       "branches": [
         {
           "id": "branch_3aspv",
@@ -649,10 +649,7 @@
           "outcome": "You leaned in close and caught the sound of soft voices whispering from the bushes."
         }
       ],
-      "reward": {},
-      "dialogueCharacters": [
-        "toto"
-      ]
+      "reward": {}
     },
     "mouse-queen-rescue": {
       "image": "/stories/wizard-of-oz/scenes/09a-mouse-queen-rescue",
@@ -908,7 +905,8 @@
           "addsCompanions": [
             "lion"
           ],
-          "outcome": "You invited the Cowardly Lion to join your group, and together you stepped deeper into the darkening woods."
+          "outcome": "You invited the Cowardly Lion to join your group, and together you stepped deeper into the darkening woods.",
+          "outcomeSpeaker": "narrator"
         }
       ],
       "dialogueCharacters": [
@@ -963,7 +961,8 @@
           "addsCompanions": [
             "tinman"
           ],
-          "outcome": "You shook the Tin Woodman's shiny metal hand and invited him to join your journey."
+          "outcome": "You shook the Tin Woodman's shiny metal hand and invited him to join your journey.",
+          "outcomeSpeaker": "narrator"
         }
       ],
       "asks": [
@@ -987,7 +986,8 @@
           "addsCompanions": [
             "scarecrow"
           ],
-          "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road."
+          "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road.",
+          "outcomeSpeaker": "narrator"
         }
       ],
       "asks": [
@@ -1011,7 +1011,8 @@
           "addsCompanions": [
             "scarecrow"
           ],
-          "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road."
+          "outcome": "You promised the Scarecrow that a brain was waiting for him, and together you set off down the Yellow Brick Road.",
+          "outcomeSpeaker": "narrator"
         }
       ],
       "dialogueCharacters": [
@@ -1032,7 +1033,8 @@
           "addsCompanions": [
             "tinman"
           ],
-          "outcome": "You invited the Tin Woodman to join your quest, and together you marched deeper into the thick, shadowy forest."
+          "outcome": "You invited the Tin Woodman to join your quest, and together you marched deeper into the thick, shadowy forest.",
+          "outcomeSpeaker": "narrator"
         }
       ],
       "dialogueCharacters": [
@@ -1069,9 +1071,6 @@
           "next": "house-crashes",
           "outcome": "You let out a sigh of relief and walked toward the porch to see where the cyclone had dropped you."
         }
-      ],
-      "dialogueCharacters": [
-        "toto"
       ]
     },
     "14b-wizard-faces-open_2": {

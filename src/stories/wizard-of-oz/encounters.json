@@ -12,8 +12,9 @@
       "body": {
         "kind": "battle",
         "monsterIds": [
-          "goblin-scout",
-          "goblin-scout"
+          "crow-flock",
+          "crow-flock",
+          "crow-flock"
         ]
       },
       "rewards": {},
@@ -136,26 +137,6 @@
           "wolf",
           "wolf",
           "wolf"
-        ]
-      },
-      "rewards": {},
-      "challengeType": "mixed"
-    },
-    {
-      "id": "s05_scarecrow__branch_m12es-battle",
-      "trigger": {
-        "sceneId": "s05_scarecrow",
-        "branchId": "branch_m12es"
-      },
-      "intro": {
-        "bg": "cornfield-tall"
-      },
-      "body": {
-        "kind": "battle",
-        "monsterIds": [
-          "crow-flock",
-          "crow-flock",
-          "crow-flock"
         ]
       },
       "rewards": {},
