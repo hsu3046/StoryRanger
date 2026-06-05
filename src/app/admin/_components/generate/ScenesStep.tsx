@@ -290,11 +290,29 @@ export function ScenesStep({
     setErr(null);
     void nar.run([id], narWorker, 1);
   }
+  // Persist the current scenes (narration/speaker/bgm) + image prompts before
+  // image generation — scene-image reads them from disk, so unsaved edits would
+  // otherwise build the prompt / character refs from stale data.
+  async function persistScenes(): Promise<boolean> {
+    const cur = storyRef.current;
+    if (cur) {
+      const a = await saveDraftScenesAction(draftId, cur);
+      if (!a.ok) {
+        setErr(a.error);
+        return false;
+      }
+    }
+    const b = await saveDraftSceneMetaAction(draftId, sceneMeta);
+    if (!b.ok) {
+      setErr(b.error);
+      return false;
+    }
+    return true;
+  }
   function generateImages() {
     setErr(null);
     void (async () => {
-      // Persist edited image prompts (sceneMeta) before the route reads them.
-      await saveDraftSceneMetaAction(draftId, sceneMeta);
+      if (!(await persistScenes())) return;
       const todo = sceneIds.filter((id) => !imgDoneRef.current.has(id));
       await img.run(todo.length ? todo : sceneIds, imgWorker, 3);
     })();
@@ -302,7 +320,7 @@ export function ScenesStep({
   function regenerateImage(id: string) {
     setErr(null);
     void (async () => {
-      await saveDraftSceneMetaAction(draftId, sceneMeta);
+      if (!(await persistScenes())) return;
       await img.run([id], imgWorker, 1);
     })();
   }
