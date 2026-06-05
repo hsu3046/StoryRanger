@@ -47,6 +47,8 @@ export default async function WizardStepPage({
 
   const meta = await readDraftMeta(draftId);
   if (!meta) notFound();
+  const headerConcept = await readConcept(draftId);
+  const headerTitle = headerConcept?.title?.trim() || draftId;
 
   let body: React.ReactNode;
 
@@ -149,10 +151,12 @@ export default async function WizardStepPage({
     <div className="flex h-[calc(100dvh-1px)] flex-col">
       <header className="flex shrink-0 flex-col gap-2 border-b border-ink-soft/10 bg-paper px-4 py-2">
         <div className="flex items-center gap-2">
-          <p className="font-handwritten text-base text-accent-deep">✨ Generate</p>
-          <code className="rounded-pill bg-paper-deep/60 px-2 py-0.5 text-xs text-ink-soft">
-            {draftId}
-          </code>
+          <p className="shrink-0 font-handwritten text-base text-accent-deep">
+            Create Story
+          </p>
+          <span className="truncate text-sm font-semibold text-ink">
+            {headerTitle}
+          </span>
         </div>
         <StepRail draftId={draftId} current={stage} />
       </header>

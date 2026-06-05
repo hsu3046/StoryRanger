@@ -55,7 +55,7 @@ export function NewDraftForm() {
       </Field>
       <Field label="Brief">
         <textarea
-          className={`${inputCls} min-h-28`}
+          className={`${inputCls} min-h-80`}
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
           placeholder="A shy little fox who lights lanterns for lost travellers learns that asking for help is brave too…"

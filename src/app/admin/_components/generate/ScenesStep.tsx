@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowsCounterClockwise,
   CaretDown,
   CaretUp,
   CircleNotch,
@@ -495,7 +494,7 @@ export function ScenesStep({
         className="inline-flex w-full max-w-md items-center justify-center gap-1 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-accent-deep ring-1 ring-ink-soft/10 transition hover:bg-paper-deep active:scale-95 disabled:opacity-40 disabled:active:scale-100"
       >
         <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
-        {coverBusy ? "Generating…" : coverDone ? "Regenerate cover" : "Generate cover"}
+        {coverBusy ? "Generating…" : "Generate cover"}
       </button>
     </div>
   );
@@ -557,8 +556,8 @@ export function ScenesStep({
         <div className="flex items-center gap-2">
           {pageStepper}
           <GhostButton onClick={generatePages} disabled={busyAny}>
-            <ArrowsCounterClockwise weight="bold" className="h-4 w-4" aria-hidden />
-            {busy === "gen" ? "Regenerating…" : "Regenerate pages"}
+            <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
+            {busy === "gen" ? "Generating…" : "Generate pages"}
           </GhostButton>
           <PrimaryButton onClick={generateImages} disabled={busyAny}>
             {img.running ? "Generating…" : "✨ Generate images"}
@@ -675,12 +674,12 @@ export function ScenesStep({
                     </span>
                     <button
                       type="button"
-                      aria-label="Regenerate narration"
+                      aria-label="Generate narration"
                       className="inline-flex items-center text-accent-deep disabled:opacity-40"
                       onClick={() => regenerateNarration(id)}
                       disabled={busyAny}
                     >
-                      <ArrowsCounterClockwise weight="bold" className="h-3.5 w-3.5" aria-hidden />
+                      <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
                     </button>
                     <span
                       className={`ml-auto text-[10px] tabular-nums ${
