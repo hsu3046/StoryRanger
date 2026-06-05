@@ -74,8 +74,16 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
         language,
         authorRequest,
       });
-      setConcept(res.concept);
-      void saveConceptAction(draftId, res.concept);
+      // The LLM omits the art-style fields (author-picked from the gallery), so
+      // preserve the current selection across a regenerate instead of letting
+      // the returned concept reset it to empty defaults.
+      const merged: ConceptT = {
+        ...res.concept,
+        artStyleId: concept?.artStyleId ?? "",
+        artStylePrompt: concept?.artStylePrompt ?? "",
+      };
+      setConcept(merged);
+      void saveConceptAction(draftId, merged);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
