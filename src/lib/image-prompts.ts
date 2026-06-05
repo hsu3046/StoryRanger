@@ -1,22 +1,20 @@
 /**
  * Prompt builders for the image stage. Pure (no I/O). Every prompt is anchored
- * by the concept's art-style bible so the whole book reads as one illustrator's
- * hand; character/scene prompts add the reference-image instruction when
- * conditioning images are attached.
+ * by the concept's chosen art-style prompt so the whole book reads as one
+ * illustrator's hand; character/scene prompts add the reference-image
+ * instruction when conditioning images are attached.
  */
 
 import type { ConceptT } from "@/data/schemas";
 
-type ArtBible = ConceptT["artStyleBible"];
-
-export function styleBibleText(b: ArtBible): string {
-  return [
-    `ART STYLE (obey exactly): medium — ${b.medium}; palette — ${b.palette}; line quality — ${b.lineQuality}; mood — ${b.mood}.`,
-    b.motifs.length ? `Recurring motifs: ${b.motifs.join(", ")}.` : "",
-    `NEVER include: ${[...b.negative, "any text or words in the image", "watermarks", "signatures", "frames or borders"].join(", ")}.`,
-  ]
-    .filter(Boolean)
-    .join(" ");
+/** Anchor every illustration to the picked art-style template's prompt, plus a
+ *  universal "never draw text/watermarks/borders" clause. `stylePrompt` is the
+ *  concept's `artStylePrompt` (the gallery selection); "" until a style is
+ *  picked, in which case only the universal clause is emitted. */
+export function styleText(stylePrompt: string): string {
+  const never = `NEVER include: any text or words in the image, watermarks, signatures, frames or borders.`;
+  const s = stylePrompt.trim();
+  return s ? `ART STYLE (obey exactly): ${s}. ${never}` : never;
 }
 
 const REFERENCE_INSTRUCTION =
@@ -37,7 +35,7 @@ function referenceLine(hasReferences: boolean, mode: ReferenceMode): string | nu
 export function coverPrompt(concept: ConceptT): string {
   return [
     `Children's picture-book COVER illustration, full-bleed, cinematic, 16:9.`,
-    styleBibleText(concept.artStyleBible),
+    styleText(concept.artStylePrompt),
     `TITLE FEELING: "${concept.title}". ${concept.premise}`,
     `An inviting, atmospheric key image that captures the story's heart. Leave gentle space (the title is added separately — do NOT draw any text).`,
   ].join(" ");
@@ -54,7 +52,7 @@ export function scenePrompt(args: {
 }): string {
   const parts = [
     `Children's picture-book PAGE illustration, full-bleed, 16:9.`,
-    styleBibleText(args.concept.artStyleBible),
+    styleText(args.concept.artStylePrompt),
     `SETTING: ${args.setting}.`,
     `MOMENT: ${args.synopsis}`,
   ];
@@ -83,7 +81,7 @@ export function characterSpritePrompt(args: {
   const parts = [
     `Full-body character sprite for a children's picture book — 3/4 front view, standing, friendly, centered, feet near the bottom of the frame, the WHOLE body inside the frame.`,
     SPRITE_BG,
-    styleBibleText(args.concept.artStyleBible),
+    styleText(args.concept.artStylePrompt),
     `CHARACTER: ${args.name}. ${args.visualDescription}`,
   ];
   const ref = referenceLine(args.hasReferences, args.referenceMode ?? "identity");
@@ -102,7 +100,7 @@ export function characterPortraitPrompt(args: {
   const parts = [
     `Head-and-shoulders PORTRAIT of a children's picture-book character, facing forward, warm friendly expression, centered.`,
     SPRITE_BG,
-    styleBibleText(args.concept.artStyleBible),
+    styleText(args.concept.artStylePrompt),
     `CHARACTER: ${args.name}. ${args.visualDescription}`,
   ];
   const ref = referenceLine(args.hasReferences, args.referenceMode ?? "identity");

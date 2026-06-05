@@ -17,6 +17,9 @@ const DIRS = [
   "public/stories/wizard-of-oz/characters/battle",
   "public/stories/wizard-of-oz/backgrounds",
   "public/stories/wizard-of-oz/monsters",
+  // Art-style gallery samples (Concept step picker) — selection thumbnails +
+  // a modal preview, so cap at 1024px wide to keep them light.
+  "public/image/style",
 ];
 
 const EXTS = new Set([".jpg", ".jpeg", ".png"]);
@@ -65,9 +68,12 @@ for (const dir of DIRS) {
       dir.endsWith("/monsters") ||
       dir.endsWith("/characters") ||
       dir.endsWith("/characters/battle");
+    const isStyleSample = dir.endsWith("/image/style");
     const pipeline = isSprite
       ? sharp(input).trim({ threshold: 5 })
-      : sharp(input);
+      : isStyleSample
+        ? sharp(input).resize({ width: 1024, withoutEnlargement: true })
+        : sharp(input);
     const info = await pipeline.webp({ quality: QUALITY }).toFile(output);
     totalIn += inStat.size;
     totalOut += info.size;

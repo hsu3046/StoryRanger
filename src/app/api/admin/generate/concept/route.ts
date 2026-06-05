@@ -28,11 +28,11 @@ Produce:
 - themes: 2-5 short themes.
 - language: echo back the language you are told to WRITE IN.
 - estimatedMinutes: a realistic read/play time (typically 8-20).
-- artStyleBible: the visual direction every illustration must obey for consistency —
-    medium (technique), palette (colours/mood), lineQuality, mood, motifs (recurring visual elements), negative (things to NEVER draw: text/words in the image, watermarks, scary photo-realism, gore).
+
+(The visual art style is chosen separately by the author from a template gallery — do NOT invent one.)
 
 RULES:
-- LANGUAGE: write title/subtitle/premise/themes STRICTLY in the language named under "WRITE IN", even if the brief is in another language. The artStyleBible may stay in English (it's an illustrator brief).
+- LANGUAGE: write title/subtitle/premise/themes STRICTLY in the language named under "WRITE IN", even if the brief is in another language.
 - Keep it warm, gentle, and age-appropriate. No violence, no scary realism.
 - Output JSON only, matching the schema. No markdown, no commentary.`;
 
@@ -70,7 +70,9 @@ export async function POST(req: Request) {
     const concept = await chat({
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: lines.join("\n") }],
-      schema: ConceptSchema,
+      // Art style is author-picked from the gallery, not LLM-generated — omit
+      // those fields so the model isn't asked to invent them.
+      schema: ConceptSchema.omit({ artStyleId: true, artStylePrompt: true }),
       schemaName: "concept",
     });
     return NextResponse.json({ concept });

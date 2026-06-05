@@ -178,7 +178,7 @@ export async function POST(req: Request) {
     `TITLE: ${c.title}`,
     `PREMISE / TONE: ${c.premise}`,
     `THEMES: ${c.themes.join(", ")}`,
-    `ART STYLE: ${c.artStyleBible.medium}; ${c.artStyleBible.palette}; ${c.artStyleBible.mood}`,
+    `ART STYLE: ${c.artStylePrompt}`,
     "",
     "STORYBOARD (beat synopses — invent the NPCs these imply, plus hero + narrator):",
     sb.beats.map((b) => `- [${b.id}] ${b.synopsis}`).join("\n"),

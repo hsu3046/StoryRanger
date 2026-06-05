@@ -19,25 +19,26 @@ import { z } from "zod";
  * intermediate scaffolding the wizard maps into those.
  */
 
-// ── Stage 1: Concept ─────────────────────────────────────────────
+// ── Art-style templates (gallery catalog) ────────────────────────
 
-/** Global art direction — produced once at the concept stage and prepended
- *  verbatim to EVERY image prompt for visual consistency. The generalisation
- *  of the verbatim baselines documented in docs/ASSETS_*.md. */
-export const ArtStyleBibleSchema = z.object({
-  /** Medium / technique, e.g. "soft watercolor with gouache, paper grain". */
-  medium: z.string(),
-  /** Palette + colour mood, e.g. "warm earth tones, dusty rose, sage". */
-  palette: z.string(),
-  /** Line quality, e.g. "loose hand-drawn ink, gentle outlines". */
-  lineQuality: z.string(),
-  /** Overall mood, e.g. "cozy, hopeful, a little mysterious". */
-  mood: z.string(),
-  /** Recurring visual motifs (props, shapes, lighting). */
-  motifs: z.array(z.string()),
-  /** Things to NEVER draw (text in image, scary realism, watermarks…). */
-  negative: z.array(z.string()),
+/** One pickable art-style template. The gallery is authored in
+ *  src/data/global/art-styles.json; selecting a card stores its `prompt` on the
+ *  concept (artStylePrompt) and that text is injected verbatim into every image
+ *  prompt. `image` is a root-relative sample thumbnail (selection UI only —
+ *  never attached to generation). */
+export const ArtStyleTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Root-relative sample image path, e.g. "/image/style/Soft watercolor.jpeg". */
+  image: z.string(),
+  /** The style description injected (verbatim) into every illustration prompt. */
+  prompt: z.string(),
 });
+export const ArtStylesFileSchema = z.object({
+  styles: z.array(ArtStyleTemplateSchema),
+});
+
+// ── Stage 1: Concept ─────────────────────────────────────────────
 
 export const ConceptSchema = z.object({
   title: z.string(),
@@ -52,7 +53,13 @@ export const ConceptSchema = z.object({
   /** Language name or code the story is written in (echoed from the brief). */
   language: z.string(),
   estimatedMinutes: z.number().int(),
-  artStyleBible: ArtStyleBibleSchema,
+  /** Chosen art-style template id (gallery selection); "" until the author
+   *  picks one. NOT produced by the LLM — set client-side from the gallery. */
+  artStyleId: z.string().default(""),
+  /** The selected template's style prompt, stored inline so the draft keeps its
+   *  look even if the template catalog later changes; "" until picked. Injected
+   *  verbatim into every image prompt (see lib/image-prompts.ts). */
+  artStylePrompt: z.string().default(""),
 });
 
 // ── Stage 2: Storyboard ──────────────────────────────────────────
@@ -201,7 +208,7 @@ export const DraftMetaSchema = z.object({
 
 // ── Inferred types ───────────────────────────────────────────────
 
-export type ArtStyleBibleT = z.infer<typeof ArtStyleBibleSchema>;
+export type ArtStyleTemplateT = z.infer<typeof ArtStyleTemplateSchema>;
 export type ConceptT = z.infer<typeof ConceptSchema>;
 export type StoryboardBranchT = z.infer<typeof StoryboardBranchSchema>;
 export type StoryboardBeatT = z.infer<typeof StoryboardBeatSchema>;
