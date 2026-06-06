@@ -4,6 +4,7 @@
       "id": "hero",
       "name": "Professor Aronnax",
       "isHero": true,
+      "gender": "neutral",
       "voice": "EXAVITQu4vr4xnSDxMaL",
       "voiceSpeed": 1,
       "color": "#c9a23a",
@@ -12,6 +13,7 @@
     {
       "id": "narrator",
       "name": "The Sea Spirit",
+      "gender": "neutral",
       "voice": "21m00Tcm4TlvDq8ikWAM",
       "voiceSpeed": 1,
       "color": "#6b7280",
@@ -20,6 +22,7 @@
     {
       "id": "captain-nemo",
       "name": "Captain Nemo",
+      "gender": "neutral",
       "voice": "ErXwobaYiN019PkySvjV",
       "voiceSpeed": 1,
       "color": "#3a7ca5",
@@ -44,6 +47,7 @@
     {
       "id": "first-mate-conseil",
       "name": "Conseil",
+      "gender": "neutral",
       "voice": "pNInz6obpgDQGcFmaJgB",
       "voiceSpeed": 1,
       "color": "#8a5a44",
@@ -67,6 +71,7 @@
     {
       "id": "the-giant-squid",
       "name": "The Great Kraken",
+      "gender": "neutral",
       "voice": "VR6AewLTigWG4xSOukaG",
       "voiceSpeed": 1,
       "color": "#5a8a44",
