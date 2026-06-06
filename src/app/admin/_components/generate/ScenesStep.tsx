@@ -576,7 +576,7 @@ export function ScenesStep({
           </>
         }
         actions={
-          <PrimaryButton onClick={generatePages} disabled={busy === "gen"}>
+          <PrimaryButton onClick={() => generatePages()} disabled={busy === "gen"}>
             {busy === "gen" ? "Generating…" : "✨ Generate pages"}
           </PrimaryButton>
         }

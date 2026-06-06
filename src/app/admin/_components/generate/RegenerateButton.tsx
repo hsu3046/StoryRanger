@@ -137,7 +137,7 @@ export function RegenerateButton({
                   >
                     Cancel
                   </button>
-                  <GhostButton accent onClick={submit} disabled={!text.trim()}>
+                  <GhostButton accent onClick={submit} disabled={!text.trim() && !count}>
                     <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
                     Generate
                   </GhostButton>
