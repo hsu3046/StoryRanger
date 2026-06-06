@@ -6,27 +6,25 @@ import {
   CaretUp,
   CircleNotch,
   DotsSixVertical,
+  ImageSquare,
+  Lock,
+  LockOpen,
   Pause,
   Play,
-  Sparkle,
 } from "@phosphor-icons/react";
 
 import type { ConceptT, DraftMetaT, DraftSceneMetaT, StoryboardT } from "@/data/schemas";
 import type { CharactersFile, Scene, Story } from "@/types/story";
 import {
+  saveDraftMetaAction,
   saveDraftSceneMetaAction,
   saveDraftScenesAction,
 } from "../../_actions/generateDraft";
 import { BgmSelectWithPreview } from "../BgmSelectWithPreview";
 import { inputCls, inputClsSm } from "../form";
 import { ImagePreview } from "./ImagePreview";
-import {
-  Card,
-  ErrorNote,
-  GhostButton,
-  postJson,
-  PrimaryButton,
-} from "./shared";
+import { RegenerateButton } from "./RegenerateButton";
+import { Card, ErrorNote, postJson, PrimaryButton } from "./shared";
 import { useAutosave, useStageVisit } from "./useAutosave";
 import { useGenerationPool } from "./useGenerationPool";
 
@@ -279,8 +277,12 @@ export function ScenesStep({
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverDone, setCoverDone] = useState(presence.cover);
   const [coverVer, setCoverVer] = useState(0);
+  const [coverDesc, setCoverDesc] = useState(meta.coverDescription ?? "");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  // Scenes the author locked — kept verbatim when Generate re-writes the rest.
+  const [locks, setLocks] = useState<Record<string, boolean>>({});
+  const toggleLock = (id: string) => setLocks((l) => ({ ...l, [id]: !l[id] }));
 
   // Two independent pools — narration prose vs page illustrations.
   const nar = useGenerationPool();
@@ -331,6 +333,11 @@ export function ScenesStep({
   useAutosave(sceneMeta, (m) => saveDraftSceneMetaAction(draftId, m), {
     enabled: !!story,
   });
+  // Persist the cover description to draft meta so it survives navigation.
+  // (useAutosave skips the seed value, so clearing back to "" still saves.)
+  useAutosave(coverDesc, (t) =>
+    saveDraftMetaAction(draftId, { coverDescription: t }),
+  );
   useStageVisit(draftId, meta, "scene");
 
   function applyScene(id: string, patch: Partial<Story["scenes"][string]>) {
@@ -359,7 +366,25 @@ export function ScenesStep({
     setVersions((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }));
   }
 
-  async function generatePages() {
+  async function generatePages(authorRequest?: string) {
+    // Partial mode: if any scene is locked, keep the whole page structure and
+    // only re-write the OPEN scenes' narration (no re-pagination). Otherwise a
+    // full re-paginate from the storyboard.
+    if (story && sceneIds.some((id) => locks[id])) {
+      setErr(null);
+      setBusy("gen");
+      try {
+        const openIds = sceneIds.filter((id) => !locks[id]);
+        if (openIds.length > 0)
+          await nar.run(openIds, (id) => narWorker(id, authorRequest), 3);
+        await persistScenes();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
     setErr(null);
     setBusy("gen");
     try {
@@ -371,6 +396,7 @@ export function ScenesStep({
           storyboard,
           characters,
           sceneCount: pageCount,
+          authorRequest,
         },
       );
       const saveScenes = await saveDraftScenesAction(draftId, res.story);
@@ -388,7 +414,7 @@ export function ScenesStep({
     }
   }
 
-  async function narWorker(id: string) {
+  async function narWorker(id: string, revise?: string) {
     const cur = storyRef.current;
     if (!cur) return;
     const scene = cur.scenes[id];
@@ -400,9 +426,15 @@ export function ScenesStep({
     }
     const before = scene.narration ?? "";
     const ctx = sceneMeta.scenes[id];
-    const authorRequest = ctx
-      ? `Write THIS page: ${ctx.synopsis}${ctx.setting ? ` (setting: ${ctx.setting})` : ""}`
-      : undefined;
+    const authorRequest =
+      [
+        revise?.trim() ? `REVISION: ${revise.trim()}` : "",
+        ctx
+          ? `Write THIS page: ${ctx.synopsis}${ctx.setting ? ` (setting: ${ctx.setting})` : ""}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" — ") || undefined;
     const res = await postJson<{ narration: string }>("/api/scene-narration", {
       storyId: draftId,
       language: concept.language,
@@ -424,10 +456,6 @@ export function ScenesStep({
     bump(id);
   }
 
-  function regenerateNarration(id: string) {
-    setErr(null);
-    void nar.run([id], narWorker, 1);
-  }
   // Persist the current scenes (narration/speaker/bgm) + image prompts before
   // image generation — scene-image reads them from disk, so unsaved edits would
   // otherwise build the prompt / character refs from stale data.
@@ -447,14 +475,6 @@ export function ScenesStep({
     }
     return true;
   }
-  function generateImages() {
-    setErr(null);
-    void (async () => {
-      if (!(await persistScenes())) return;
-      const todo = sceneIds.filter((id) => !imgDoneRef.current.has(id));
-      await img.run(todo.length ? todo : sceneIds, imgWorker, 3);
-    })();
-  }
   function regenerateImage(id: string) {
     setErr(null);
     void (async () => {
@@ -467,7 +487,10 @@ export function ScenesStep({
     setErr(null);
     setCoverBusy(true);
     try {
-      await postJson("/api/admin/generate/cover-image", { storyId: draftId });
+      await postJson("/api/admin/generate/cover-image", {
+        storyId: draftId,
+        description: coverDesc,
+      });
       setCoverDone(true);
       setCoverVer((v) => v + 1);
     } catch (e) {
@@ -478,24 +501,41 @@ export function ScenesStep({
   }
 
   const coverSection = (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Cover</span>
-      <ImagePreview
-        base={`/stories/${draftId}/cover`}
-        version={coverVer}
-        alt="Cover"
-        present={coverDone}
-        className="aspect-video w-full max-w-md"
-      />
-      <button
-        type="button"
-        onClick={() => void generateCover()}
-        disabled={coverBusy}
-        className="inline-flex w-full max-w-md items-center justify-center gap-1 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-accent-deep ring-1 ring-ink-soft/10 transition hover:bg-paper-deep active:scale-95 disabled:opacity-40 disabled:active:scale-100"
-      >
-        <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
-        {coverBusy ? "Generating…" : "Generate cover"}
-      </button>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {/* Illustration — same size as a scene thumbnail (~40%) */}
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-[40%]">
+          <ImagePreview
+            base={`/stories/${draftId}/cover`}
+            version={coverVer}
+            alt="Cover"
+            present={coverDone}
+            className="aspect-video w-full"
+          />
+          <button
+            type="button"
+            onClick={() => void generateCover()}
+            disabled={coverBusy}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-pill bg-accent px-3 py-1.5 text-sm font-medium text-paper ring-1 ring-accent-deep/20 transition hover:bg-accent-deep active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+          >
+            <ImageSquare weight="fill" className="h-4 w-4" aria-hidden />
+            {coverBusy ? "Generating…" : "Generate"}
+          </button>
+        </div>
+        {/* Cover description */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Cover Description
+          </span>
+          <textarea
+            className={`${inputClsSm} min-h-24`}
+            value={coverDesc}
+            onChange={(e) => setCoverDesc(e.target.value)}
+            placeholder="Describe what the cover should show"
+          />
+        </div>
+      </div>
     </div>
   );
 
@@ -536,7 +576,7 @@ export function ScenesStep({
           </>
         }
         actions={
-          <PrimaryButton onClick={generatePages} disabled={busy === "gen"}>
+          <PrimaryButton onClick={() => generatePages()} disabled={busy === "gen"}>
             {busy === "gen" ? "Generating…" : "✨ Generate pages"}
           </PrimaryButton>
         }
@@ -551,18 +591,29 @@ export function ScenesStep({
 
   return (
     <Card
-      title="Scene"
-      actions={
-        <div className="flex items-center gap-2">
+      title={
+        <>
+          <span>Scene</span>
           {pageStepper}
-          <GhostButton onClick={generatePages} disabled={busyAny}>
-            <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
-            {busy === "gen" ? "Generating…" : "Generate pages"}
-          </GhostButton>
-          <PrimaryButton onClick={generateImages} disabled={busyAny}>
-            {img.running ? "Generating…" : "✨ Generate images"}
-          </PrimaryButton>
-        </div>
+        </>
+      }
+      actions={
+        <RegenerateButton
+          busy={busy === "gen"}
+          disabled={busyAny}
+          allowEmpty
+          title="Revise the pages"
+          hint={
+            <>
+              Re-writes the open (
+              <LockOpen weight="regular" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) scenes; keeps your locked (
+              <Lock weight="fill" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) ones. Lock a scene to keep it; open it to let the AI re-write it.
+            </>
+          }
+          onRegenerate={generatePages}
+        />
       }
     >
       {coverSection}
@@ -590,7 +641,11 @@ export function ScenesStep({
                 setDragOverIdx(null);
               }}
               className={`rounded-card bg-paper-deep/30 p-3 ring-1 ${
-                dragOverIdx === i && dragIdx !== i ? "ring-2 ring-accent" : "ring-ink-soft/10"
+                dragOverIdx === i && dragIdx !== i
+                  ? "ring-2 ring-accent"
+                  : locks[id]
+                    ? "ring-2 ring-accent/40"
+                    : "ring-ink-soft/10"
               } ${dragIdx === i ? "opacity-50" : ""}`}
             >
               <div className="mb-2 flex items-center gap-2">
@@ -629,29 +684,34 @@ export function ScenesStep({
                 >
                   <CaretDown weight="bold" className="h-3.5 w-3.5" />
                 </button>
-                {scene.ending && (
-                  <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
-                    ending
-                  </span>
-                )}
+                <button
+                  type="button"
+                  onClick={() => toggleLock(id)}
+                  aria-pressed={!!locks[id]}
+                  title={
+                    locks[id]
+                      ? "Locked — kept when you Generate"
+                      : "Open — Generate may re-write this scene"
+                  }
+                  className={`ml-auto inline-flex h-6 w-6 items-center justify-center rounded-pill transition-colors ${
+                    locks[id]
+                      ? "bg-paper-deep/60 text-accent-deep"
+                      : "text-ink-soft/40 hover:text-ink-soft"
+                  }`}
+                >
+                  {locks[id] ? (
+                    <Lock weight="fill" className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <LockOpen className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                </button>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 {/* Illustration — ~40% */}
                 <div className="flex w-full shrink-0 flex-col gap-2 sm:w-[40%]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                      Image
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Generate image"
-                      className="inline-flex items-center text-accent-deep disabled:opacity-40"
-                      onClick={() => regenerateImage(id)}
-                      disabled={busyAny}
-                    >
-                      <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    Image
+                  </span>
                   <ImagePreview
                     base={imgBase}
                     version={versions[id] ?? 0}
@@ -659,12 +719,15 @@ export function ScenesStep({
                     present={imgPresent}
                     className="aspect-video w-full"
                   />
-                  <textarea
-                    className={`${inputClsSm} min-h-14`}
-                    value={sceneMeta.scenes[id]?.setting ?? ""}
-                    onChange={(e) => setImagePrompt(id, e.target.value)}
-                    placeholder="Image prompt (optional)"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => regenerateImage(id)}
+                    disabled={busyAny}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-pill bg-accent px-3 py-1.5 text-sm font-medium text-paper ring-1 ring-accent-deep/20 transition hover:bg-accent-deep active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+                  >
+                    <ImageSquare weight="fill" className="h-4 w-4" aria-hidden />
+                    {imgSt === "running" ? "Generating…" : "Generate"}
+                  </button>
                 </div>
                 {/* Narration + BGM */}
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -672,15 +735,6 @@ export function ScenesStep({
                     <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                       Narration
                     </span>
-                    <button
-                      type="button"
-                      aria-label="Generate narration"
-                      className="inline-flex items-center text-accent-deep disabled:opacity-40"
-                      onClick={() => regenerateNarration(id)}
-                      disabled={busyAny}
-                    >
-                      <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
-                    </button>
                     <span
                       className={`ml-auto text-[10px] tabular-nums ${
                         (scene.narration ?? "").length > 250
@@ -692,12 +746,23 @@ export function ScenesStep({
                     </span>
                   </div>
                   <textarea
-                    className={`${inputClsSm} min-h-24 flex-1`}
+                    className={`${inputClsSm} min-h-24`}
                     value={scene.narration ?? ""}
                     onChange={(e) => applyScene(id, { narration: e.target.value })}
                     readOnly={narSt === "running"}
                     placeholder="(narration)"
                   />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Image Description
+                    </span>
+                    <textarea
+                      className={`${inputClsSm} min-h-24`}
+                      value={sceneMeta.scenes[id]?.setting ?? ""}
+                      onChange={(e) => setImagePrompt(id, e.target.value)}
+                      placeholder="Describe the illustration for this page"
+                    />
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                       Voice

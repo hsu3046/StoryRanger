@@ -20,6 +20,20 @@ const RequestSchema = z.object({
   concept: ConceptSchema,
   storyboard: StoryboardSchema,
   authorRequest: z.string().max(4000).optional(),
+  /** Soft target for how many main characters (hero + key NPCs) to design. */
+  castCount: z.number().int().min(1).max(10).optional(),
+  /** Author-locked cast members the model must NOT recreate — they already
+   *  exist and the client keeps them. Design only the rest of the cast. */
+  lockedCharacters: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        isHero: z.boolean(),
+        bio: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 // Auto-cast a voice by matching the LLM's classified profile against the
@@ -129,6 +143,7 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
       id,
       name: g.name,
       ...(isHero ? { isHero: true } : {}),
+      gender: g.voiceGender,
       voice,
       voiceSpeed: 1,
       color,
@@ -156,6 +171,7 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
     characters.unshift({
       id: "narrator",
       name: "Narrator",
+      gender: "neutral",
       voice: pickVoiceByTags(
         { gender: "", age: "adult", tone: "calm", feature: "" },
         usedVoices,
@@ -170,6 +186,7 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
       id: "hero",
       name: "Hero",
       isHero: true,
+      gender: "neutral",
       voice: pickVoiceByTags(
         { gender: "", age: "adult", tone: "warm", feature: "" },
         usedVoices,
@@ -213,6 +230,22 @@ export async function POST(req: Request) {
     sb.beats.map((b) => `- [${b.id}] ${b.synopsis}`).join("\n"),
     "",
   ];
+  if (body.castCount) {
+    userLines.push(
+      `CAST SIZE: aim for about ${body.castCount} main character${body.castCount === 1 ? "" : "s"} (the hero + the key NPCs the story needs, plus the narrator). Don't pad with extras.`,
+      "",
+    );
+  }
+  if (body.lockedCharacters && body.lockedCharacters.length > 0) {
+    userLines.push(
+      "ALREADY EXIST — these cast members are FIXED. Do NOT recreate them, reuse their ids, or add another character with the same role (if the hero is listed, do NOT create a hero). Design ONLY the rest of the cast the story needs, and keep them distinct from these:",
+      ...body.lockedCharacters.map(
+        (lc) =>
+          `- ${lc.name}${lc.isHero ? " (hero)" : ""}${lc.bio ? ` — ${lc.bio}` : ""}`,
+      ),
+      "",
+    );
+  }
   if (body.authorRequest && body.authorRequest.trim()) {
     userLines.push("REVISION REQUEST (incorporate):", body.authorRequest.trim(), "");
   }

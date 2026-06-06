@@ -20,6 +20,8 @@ const RequestSchema = z.object({
   characters: CharactersFileSchema,
   /** Target number of pages (scenes). Clamped to [beats, PAGE_MAX]. */
   sceneCount: z.number().int().optional(),
+  /** Optional revision instruction to steer the re-pagination. */
+  authorRequest: z.string().max(4000).optional(),
 });
 
 export const PAGE_MIN = 12;
@@ -53,7 +55,7 @@ You are given the STORYBOARD — an ordered list of BEATS (the high-level story 
 
 PAGINATION RULES:
 - Follow the beats IN ORDER. Each page belongs to exactly ONE beat — set parentBeatId to that beat's id. All pages of a beat come before any page of a later beat. Never reorder, skip, or merge beats.
-- Distribute the pages across the beats by importance: give the climax and emotionally rich beats MORE pages so the moment breathes across spreads; give quick transitions ONE page. EVERY beat gets at least one page.
+- Distribute the pages across the beats by each beat's stated importance (1–5): a 5 (climax / emotional peak) gets several pages so the moment breathes across spreads; a 1–2 (quick transition) gets one. Scale the share to importance, not just instinct. EVERY beat still gets at least one page.
 - Each page is a single page-turn's worth — advance the story a little. Don't cram a multi-page beat onto one page.
 - The FIRST page opens the story; the LAST page is the ending (its parentBeatId is the ending beat).
 - For each page output: parentBeatId, speaker ("narrator" or a cast id), setting (location + time — for the illustration), synopsis (one line, what this page shows), and narration.
@@ -113,9 +115,12 @@ export async function POST(req: Request) {
   ].filter(Boolean);
   sb.beats.forEach((b, i) => {
     userLines.push(
-      `${i + 1}. id=${b.id}${b.isEnding ? " [ENDING]" : ""}: ${b.synopsis}`,
+      `${i + 1}. id=${b.id} (importance ${b.importance}/5)${b.isEnding ? " [ENDING]" : ""}: ${b.synopsis}`,
     );
   });
+  if (body.authorRequest && body.authorRequest.trim()) {
+    userLines.push("", "REVISION REQUEST (incorporate):", body.authorRequest.trim());
+  }
   userLines.push(
     "",
     `Paginate into EXACTLY ${sceneCount} ordered pages and write each page's narration, in ${c.language}.`,

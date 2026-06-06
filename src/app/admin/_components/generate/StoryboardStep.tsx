@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { CaretDown, CaretUp, DotsSixVertical } from "@phosphor-icons/react";
+import {
+  CaretDown,
+  CaretUp,
+  DotsSixVertical,
+  Lock,
+  LockOpen,
+} from "@phosphor-icons/react";
 
 import type {
   ConceptT,
@@ -35,7 +41,15 @@ function freshBeatId(existing: Set<string>): string {
   return id;
 }
 function emptyBeat(id: string): StoryboardBeatT {
-  return { id, title: "", synopsis: "", isEnding: false, endingLabel: "", branches: [] };
+  return {
+    id,
+    title: "",
+    synopsis: "",
+    importance: 3,
+    isEnding: false,
+    endingLabel: "",
+    branches: [],
+  };
 }
 
 /** Linear-flow normalization applied on save: start = first beat, ending =
@@ -100,6 +114,10 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: {
   const [err, setErr] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  // Beats the author locked — kept verbatim when Generate re-rolls the rest.
+  const [locks, setLocks] = useState<Record<string, boolean>>({});
+  const toggleLock = (id: string) =>
+    setLocks((l) => ({ ...l, [id]: !l[id] }));
 
   useAutosave(sb, (s) => (s ? saveStoryboardAction(draftId, normalizeStoryboard(s)) : undefined), {
     enabled: !!sb,
@@ -110,14 +128,36 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: {
     setErr(null);
     setBusy("gen");
     try {
-      const beatCount = count ?? (sb ? sb.beats.length : genCount);
+      // Partial mode: if any beat is locked, keep the whole arc length and feed
+      // the current beats (with lock flags) so the AI only re-writes the open
+      // ones around the locked waypoints.
+      const lockedSb = sb && sb.beats.some((b) => locks[b.id]) ? sb : null;
+      const beatCount = lockedSb
+        ? lockedSb.beats.length
+        : (count ?? (sb ? sb.beats.length : genCount));
+      const currentBeats = lockedSb
+        ? lockedSb.beats.map((b) => ({
+            synopsis: b.synopsis,
+            importance: b.importance,
+            isEnding: b.isEnding,
+            locked: !!locks[b.id],
+          }))
+        : undefined;
       const res = await postJson<{ storyboard: StoryboardT }>(
         "/api/admin/generate/storyboard",
-        { concept, beatCount, authorRequest },
+        { concept, beatCount, authorRequest, currentBeats },
       );
-      setSb(res.storyboard);
-      setGenCount(res.storyboard.beats.length);
-      void saveStoryboardAction(draftId, normalizeStoryboard(res.storyboard));
+      // Position-anchored merge: locked beats stay exactly; open slots take the
+      // AI output (falling back to the original if the AI returned fewer).
+      const beats = lockedSb
+        ? lockedSb.beats.map((ob, i) =>
+            locks[ob.id] ? ob : (res.storyboard.beats[i] ?? ob),
+          )
+        : res.storyboard.beats;
+      const next = { ...res.storyboard, beats };
+      setSb(next);
+      setGenCount(next.beats.length);
+      void saveStoryboardAction(draftId, normalizeStoryboard(next));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -206,12 +246,15 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: {
           busy={busy === "gen"}
           disabled={busyAny}
           title="Revise the storyboard"
-          examples={[
-            "Add a twist in the middle",
-            "A bittersweet ending",
-            "More about the friendship",
-            "Slower build-up",
-          ]}
+          hint={
+            <>
+              Re-writes only the open (
+              <LockOpen weight="regular" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) beats to fit your locked (
+              <Lock weight="fill" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) ones. Lock a beat to keep it; open it to let the AI re-write it.
+            </>
+          }
           count={{
             initial: Math.min(Math.max(sb.beats.length, GEN_MIN), GEN_MAX),
             min: GEN_MIN,
@@ -276,6 +319,54 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: {
               >
                 <CaretDown weight="bold" className="h-3.5 w-3.5" />
               </button>
+              <button
+                type="button"
+                onClick={() => toggleLock(beat.id)}
+                aria-pressed={!!locks[beat.id]}
+                title={
+                  locks[beat.id]
+                    ? "Locked — kept when you Generate"
+                    : "Open — Generate may re-write this beat"
+                }
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-pill transition-colors ${
+                  locks[beat.id]
+                    ? "bg-paper-deep/60 text-accent-deep"
+                    : "text-ink-soft/40 hover:text-ink-soft"
+                }`}
+              >
+                {locks[beat.id] ? (
+                  <Lock weight="fill" className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <LockOpen className="h-3.5 w-3.5" aria-hidden />
+                )}
+              </button>
+              <div className="ml-auto flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-soft/70">
+                  Importance
+                </span>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => patchBeat(idx, { importance: n })}
+                    aria-label={`Importance ${n}`}
+                    title={
+                      n === 5
+                        ? "Climax — most pages"
+                        : n === 1
+                          ? "Quick transition — one page"
+                          : `Importance ${n}`
+                    }
+                    className={`h-5 w-5 rounded-pill text-[11px] font-semibold tabular-nums transition-colors ${
+                      beat.importance === n
+                        ? "bg-paper text-ink shadow-soft ring-1 ring-ink-soft/15"
+                        : "bg-paper-deep/50 text-ink-soft hover:bg-paper-deep"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
             <textarea
               className={`${inputClsSm} min-h-20 ${

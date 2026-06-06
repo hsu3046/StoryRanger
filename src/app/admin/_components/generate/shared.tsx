@@ -175,17 +175,24 @@ export function GhostButton({
   children,
   onClick,
   disabled,
+  accent,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  /** Filled accent background — used for "Generate" actions so they stand out. */
+  accent?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-1.5 rounded-pill bg-paper-deep/60 px-3 py-1.5 text-sm font-medium text-ink ring-1 ring-ink-soft/10 transition hover:bg-paper-deep active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+      className={`inline-flex items-center justify-center gap-1.5 rounded-pill px-3 py-1.5 text-sm font-medium ring-1 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${
+        accent
+          ? "bg-accent text-paper ring-accent-deep/20 hover:bg-accent-deep"
+          : "bg-paper-deep/60 text-ink ring-ink-soft/10 hover:bg-paper-deep"
+      }`}
     >
       {children}
     </button>

@@ -2,7 +2,23 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { chat, hasLLMKey } from "@/lib/llm";
-import { ConceptSchema, StoryboardSchema, type StoryboardT } from "@/data/schemas";
+import {
+  ConceptSchema,
+  StoryboardBeatSchema,
+  StoryboardSchema,
+  type StoryboardT,
+} from "@/data/schemas";
+
+// Art-style is author-picked, importance steers pagination — force the LLM to
+// emit `importance` (its schema default would otherwise make it optional and the
+// model could skip it, flattening every beat to 3).
+const LLMStoryboardSchema = StoryboardSchema.extend({
+  beats: z.array(
+    StoryboardBeatSchema.omit({ importance: true }).extend({
+      importance: z.number().int().min(1).max(5),
+    }),
+  ),
+});
 
 export const runtime = "nodejs";
 
@@ -11,6 +27,19 @@ const RequestSchema = z.object({
   /** Desired number of storyboard beats (the arc's resolution). Clamped 5–12. */
   beatCount: z.number().int().optional(),
   authorRequest: z.string().max(4000).optional(),
+  /** Partial regeneration: the current arc with per-beat lock flags. When any
+   *  beat is locked, the model keeps the locked beats and only re-writes the
+   *  open ones around them (the client re-applies the locked beats too). */
+  currentBeats: z
+    .array(
+      z.object({
+        synopsis: z.string(),
+        importance: z.number().int().min(1).max(5),
+        isEnding: z.boolean(),
+        locked: z.boolean(),
+      }),
+    )
+    .optional(),
 });
 
 export const BEAT_MIN = 5;
@@ -31,6 +60,7 @@ Produce an ordered, LINEAR list of BEATS — the major story moments from openin
 - id: a short unique lowercase kebab-case slug (e.g. "kitchen-morning"). Stable.
 - title: a brief editor label (not shown to the child).
 - synopsis: 1-2 lines on what happens in this beat. This is the only content — who speaks and where it's set are decided later, when the beat is expanded into pages.
+- importance: an integer 1-5 for how pivotal this beat is — 5 = the climax / most emotionally important moment, 3 = a normal story beat, 1 = a quick transition. The scene stage gives higher-importance beats MORE pages. Shape the arc honestly: usually one (occasionally two) 5s around the climax, lower numbers for setup/transition beats.
 - isEnding: true ONLY for the final beat; set endingLabel (e.g. "A Happy Homecoming") when true, else "".
 - branches: ALWAYS an empty array []. Do NOT create choices — this storyboard is a straight, linear flow. (Branching, choices, and battles are authored LATER in the story graph, not here.)
 
@@ -109,15 +139,35 @@ export async function POST(req: Request) {
       "",
     );
   }
-  userLines.push(
-    `Lay out the storyboard now as EXACTLY ${beatCount} linear beats, in ${c.language}.`,
-  );
+  const partial =
+    body.currentBeats && body.currentBeats.some((b) => b.locked)
+      ? body.currentBeats
+      : null;
+  if (partial) {
+    userLines.push(
+      `CURRENT ARC (${partial.length} beats, in order). Keep every [LOCKED] beat EXACTLY as written — same meaning, importance, and position; echo it back unchanged. Re-write ONLY the [OPEN] beats so the whole arc still flows (setup → rising action → climax → resolution) and connects the locked beats naturally. Output ALL ${partial.length} beats, in order.`,
+      "",
+      ...partial.map(
+        (b, i) =>
+          `${i + 1}. [${b.locked ? "LOCKED" : "OPEN"}] (importance ${b.importance}/5)${b.isEnding ? " [ENDING]" : ""}: ${b.synopsis}`,
+      ),
+      "",
+      `Output EXACTLY ${partial.length} beats, in ${c.language}.`,
+    );
+  } else {
+    userLines.push(
+      `Lay out the storyboard now as EXACTLY ${beatCount} linear beats, in ${c.language}.`,
+    );
+  }
 
   try {
     const storyboard = await chat({
-      system: systemPrompt(beatCount),
+      // In partial (locked) mode the arc length is fixed to the current beats —
+      // use it for the system prompt too, so it doesn't conflict with the
+      // per-beat list when the author's count is outside the 5–12 clamp.
+      system: systemPrompt(partial ? partial.length : beatCount),
       messages: [{ role: "user", content: userLines.join("\n") }],
-      schema: StoryboardSchema,
+      schema: LLMStoryboardSchema,
       schemaName: "storyboard",
     });
     const lint = lintStoryboard(storyboard);

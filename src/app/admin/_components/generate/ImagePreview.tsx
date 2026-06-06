@@ -49,8 +49,10 @@ export function ImagePreview({
         type="button"
         onClick={() => present && setOpen(true)}
         aria-label={present ? `Open ${alt}` : "No image"}
-        className={`relative overflow-hidden rounded-button bg-paper ring-1 ring-ink-soft/10 ${
-          present ? "transition-opacity hover:opacity-90" : "cursor-default"
+        className={`relative overflow-hidden rounded-button ${
+          present
+            ? "transition-opacity hover:opacity-90"
+            : "cursor-default bg-paper ring-1 ring-ink-soft/10"
         } ${className ?? ""}`}
       >
         {present ? (

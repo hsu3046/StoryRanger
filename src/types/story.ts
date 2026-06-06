@@ -188,6 +188,9 @@ export interface Character {
    *  default/fallback), no dialogue persona, sprite at `characters/hero.*`.
    *  At most one per story. */
   isHero?: boolean;
+  /** Character gender — voice auto-pick (at generation) + illustration prompt.
+   *  Distinct from HeroGender (the player's runtime pronoun choice). */
+  gender: "male" | "female" | "neutral";
   /** ElevenLabs voice id (e.g. "21m00Tcm4TlvDq8ikWAM"). */
   voice: string;
   /** TTS playback speed (0.25–4.0). Mapped to ElevenLabs voice_settings.speed. */

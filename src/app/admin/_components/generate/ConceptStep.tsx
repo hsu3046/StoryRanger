@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CaretLeft, CaretRight, Check, X } from "@phosphor-icons/react";
+import {
+  CaretLeft,
+  CaretRight,
+  Check,
+  Lock,
+  LockOpen,
+  X,
+} from "@phosphor-icons/react";
 
 import type { ConceptT, DraftMetaT } from "@/data/schemas";
 import { ART_STYLES } from "@/data/art-styles";
@@ -15,6 +22,102 @@ import { useAutosave, useStageVisit } from "./useAutosave";
 
 /** Narrow, centred variant of `inputCls` for the small numeric age inputs. */
 const ageInputCls = inputCls.replace("w-full", "w-16 text-center");
+const labelCls = "text-xs font-semibold uppercase tracking-wide text-ink-soft";
+
+/** Fields the author can lock (kept on Generate) or leave open (AI writes). */
+type LockKey = "targetAge" | "themes" | "lesson" | "title" | "subtitle" | "premise" | "tone";
+const LOCK_KEYS: LockKey[] = ["targetAge", "themes", "lesson", "title", "subtitle", "premise", "tone"];
+// Author-intent fields start LOCKED (you set them); craft fields start OPEN.
+const DEFAULT_LOCKS: Record<LockKey, boolean> = {
+  targetAge: true,
+  themes: true,
+  lesson: true,
+  title: false,
+  subtitle: false,
+  premise: false,
+  tone: false,
+};
+
+function skeletonConcept(language: string): ConceptT {
+  return {
+    title: "",
+    subtitle: "",
+    premise: "",
+    lesson: "",
+    tone: "",
+    targetAge: { min: 5, max: 8 },
+    themes: [],
+    language,
+    estimatedMinutes: 10,
+    artStyleId: "",
+    artStylePrompt: "",
+  };
+}
+
+/** A concept is "real" (worth persisting / past the input stage) once the AI
+ *  craft fields or any author input carry content. */
+function isMeaningful(c: ConceptT): boolean {
+  return (
+    c.title.trim() !== "" ||
+    c.premise.trim() !== "" ||
+    c.lesson.trim() !== "" ||
+    c.tone.trim() !== "" ||
+    c.themes.length > 0
+  );
+}
+
+/** Lock / unlock toggle shown beside a field label. */
+function LockToggle({
+  locked,
+  onToggle,
+}: {
+  locked: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = locked ? Lock : LockOpen;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={locked}
+      title={
+        locked
+          ? "Locked — you set this; Generate keeps it"
+          : "Open — Generate (re)writes this"
+      }
+      className={`inline-flex h-6 w-6 items-center justify-center rounded-pill transition-colors ${
+        locked
+          ? "bg-paper-deep/60 text-accent-deep"
+          : "text-ink-soft/40 hover:text-ink-soft"
+      }`}
+    >
+      <Icon weight={locked ? "fill" : "regular"} className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  );
+}
+
+/** Labelled field row with a lock toggle on the right. */
+function LockedField({
+  label,
+  locked,
+  onToggle,
+  children,
+}: {
+  label: string;
+  locked: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <span className={labelCls}>{label}</span>
+        <LockToggle locked={locked} onToggle={onToggle} />
+      </div>
+      {children}
+    </div>
+  );
+}
 
 interface Props {
   draftId: string;
@@ -25,12 +128,20 @@ interface Props {
 }
 
 export function ConceptStep({ draftId, brief, language, meta, initialConcept }: Props) {
-  const [concept, setConcept] = useState<ConceptT | null>(initialConcept);
+  // A concept always exists in memory (skeleton before first generation) so the
+  // author-input fields are editable from the start; it's only persisted once
+  // it carries real content (isMeaningful).
+  const [concept, setConcept] = useState<ConceptT>(
+    initialConcept ?? skeletonConcept(language),
+  );
   const [briefText, setBriefText] = useState(brief);
   const [busy, setBusy] = useState<"gen" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [locks, setLocks] = useState<Record<LockKey, boolean>>(DEFAULT_LOCKS);
   // Index of the art-style being previewed in the enlarge modal (null = closed).
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+
+  const generated = isMeaningful(concept) && concept.title.trim() !== "";
 
   const N_STYLES = ART_STYLES.length;
   /** Step the preview to the prev/next style, wrapping around the gallery. */
@@ -56,32 +167,37 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
     };
   }, [previewIdx, N_STYLES]);
 
-  useAutosave(concept, (c) => (c ? saveConceptAction(draftId, c) : undefined), {
-    enabled: !!concept,
+  useAutosave(concept, (c) => saveConceptAction(draftId, c), {
+    enabled: isMeaningful(concept),
   });
   // Persist the story idea (brief) to meta so it survives navigation.
-  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { brief: t }), {
-    enabled: briefText !== brief,
-  });
+  // (useAutosave skips the seed value, so clearing back to the original saves.)
+  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { brief: t }));
   useStageVisit(draftId, meta, "concept");
 
   async function generate(authorRequest?: string) {
     setErr(null);
     setBusy("gen");
     try {
+      // Send the LOCKED fields as constraints so the AI writes the open fields to
+      // fit them (the author's intent — age/lesson/themes — is never re-rolled).
+      const constraints: Partial<Record<LockKey, unknown>> = {};
+      for (const key of LOCK_KEYS) if (locks[key]) constraints[key] = concept[key];
+
       const res = await postJson<{ concept: ConceptT }>("/api/admin/generate/concept", {
         brief: briefText,
         language,
         authorRequest,
+        constraints,
       });
-      // The LLM omits the art-style fields (author-picked from the gallery), so
-      // preserve the current selection across a regenerate instead of letting
-      // the returned concept reset it to empty defaults.
-      const merged: ConceptT = {
-        ...res.concept,
-        artStyleId: concept?.artStyleId ?? "",
-        artStylePrompt: concept?.artStylePrompt ?? "",
-      };
+      // Merge: keep every locked field + the author-picked art style; take the AI
+      // output only for open fields.
+      const merged: ConceptT = { ...res.concept };
+      for (const key of LOCK_KEYS) {
+        if (locks[key]) (merged[key] as ConceptT[LockKey]) = concept[key];
+      }
+      merged.artStyleId = concept.artStyleId;
+      merged.artStylePrompt = concept.artStylePrompt;
       setConcept(merged);
       void saveConceptAction(draftId, merged);
     } catch (e) {
@@ -92,33 +208,87 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
   }
 
   function set<K extends keyof ConceptT>(key: K, value: ConceptT[K]) {
-    setConcept((c) => (c ? { ...c, [key]: value } : c));
+    setConcept((c) => ({ ...c, [key]: value }));
+  }
+  function toggleLock(key: LockKey) {
+    setLocks((l) => ({ ...l, [key]: !l[key] }));
   }
   /** Pick an art-style template — stores its id (for highlight) + prompt (the
    *  text injected into every image prompt). */
   function setStyle(id: string, prompt: string) {
-    setConcept((c) => (c ? { ...c, artStyleId: id, artStylePrompt: prompt } : c));
+    setConcept((c) => ({ ...c, artStyleId: id, artStylePrompt: prompt }));
   }
 
-  if (!concept) {
+  const targetAgeField = (
+    <LockedField label="Target age" locked={locks.targetAge} onToggle={() => toggleLock("targetAge")}>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          className={ageInputCls}
+          value={concept.targetAge.min}
+          onChange={(e) => set("targetAge", { ...concept.targetAge, min: Number(e.target.value) || 0 })}
+        />
+        <span className="text-ink-soft">–</span>
+        <input
+          type="number"
+          className={ageInputCls}
+          value={concept.targetAge.max}
+          onChange={(e) => set("targetAge", { ...concept.targetAge, max: Number(e.target.value) || 0 })}
+        />
+      </div>
+    </LockedField>
+  );
+  const themesField = (
+    <LockedField label="Themes" locked={locks.themes} onToggle={() => toggleLock("themes")}>
+      <input
+        className={inputCls}
+        value={concept.themes.join(", ")}
+        onChange={(e) => set("themes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+        placeholder="Exploration, Friendship, Courage"
+      />
+    </LockedField>
+  );
+  const lessonField = (
+    <LockedField label="Lesson" locked={locks.lesson} onToggle={() => toggleLock("lesson")}>
+      <textarea
+        className={`${inputCls} min-h-20`}
+        value={concept.lesson ?? ""}
+        onChange={(e) => set("lesson", e.target.value)}
+        placeholder="What you want children to learn or feel by the end"
+      />
+    </LockedField>
+  );
+
+  // ── Input stage — author fills the required intent, AI hasn't run yet ──
+  if (!generated) {
+    // A locked field is author-owned, so it must be filled before generating;
+    // an open field the AI will write, so it isn't required here.
+    const ready =
+      briefText.trim() !== "" &&
+      (!locks.themes || concept.themes.length > 0) &&
+      (!locks.lesson || concept.lesson.trim() !== "") &&
+      (!locks.targetAge || (concept.targetAge.min > 0 && concept.targetAge.max > 0));
     return (
       <Card title="Concept">
         <p className="text-sm text-ink-soft">
-          Describe your story idea, then generate the concept — title, premise,
-          and themes. You&apos;ll pick an art style next.
+          Set the target age, themes, and lesson — the AI writes the title,
+          premise, and tone to fit. You&apos;ll pick an art style next.
         </p>
         <Field label="Story idea">
           <textarea
-            className={`${inputCls} min-h-32`}
+            className={`${inputCls} min-h-28`}
             value={briefText}
             onChange={(e) => setBriefText(e.target.value)}
             placeholder="e.g. A shy octopus afraid of the dark learns to make its own light…"
           />
         </Field>
+        {targetAgeField}
+        {lessonField}
+        {themesField}
         {err && <ErrorNote>{err}</ErrorNote>}
         <div className="flex justify-end">
-          <PrimaryButton onClick={() => generate()} disabled={busy === "gen" || !briefText.trim()}>
-            {busy === "gen" ? "Generating…" : "✨ Generate concept"}
+          <PrimaryButton onClick={() => generate()} disabled={busy === "gen" || !ready}>
+            {busy === "gen" ? "Generating…" : "✨ Generate"}
           </PrimaryButton>
         </div>
       </Card>
@@ -133,70 +303,44 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
           busy={busy === "gen"}
           disabled={busy !== null}
           title="Revise the concept"
-          examples={[
-            "Make it more adventurous",
-            "Aim younger",
-            "A different setting",
-            "Gentler, cozier tone",
-          ]}
+          hint={
+            <>
+              Re-writes only the open (
+              <LockOpen weight="regular" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) fields to fit your locked (
+              <Lock weight="fill" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) ones. Lock a field to keep it; open it to let the AI re-write it.
+            </>
+          }
           onRegenerate={generate}
         />
       }
     >
-      <Field label="Title">
+      <LockedField label="Title" locked={locks.title} onToggle={() => toggleLock("title")}>
         <input className={inputCls} value={concept.title} onChange={(e) => set("title", e.target.value)} />
-      </Field>
-      <Field label="Subtitle">
+      </LockedField>
+      <LockedField label="Subtitle" locked={locks.subtitle} onToggle={() => toggleLock("subtitle")}>
         <input className={inputCls} value={concept.subtitle} onChange={(e) => set("subtitle", e.target.value)} />
-      </Field>
-      <Field label="Target age">
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            className={ageInputCls}
-            value={concept.targetAge.min}
-            onChange={(e) => set("targetAge", { ...concept.targetAge, min: Number(e.target.value) || 0 })}
-          />
-          <span className="text-ink-soft">–</span>
-          <input
-            type="number"
-            className={ageInputCls}
-            value={concept.targetAge.max}
-            onChange={(e) => set("targetAge", { ...concept.targetAge, max: Number(e.target.value) || 0 })}
-          />
-        </div>
-      </Field>
-      <Field label="Themes">
-        <input
-          className={inputCls}
-          value={concept.themes.join(", ")}
-          onChange={(e) => set("themes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
-        />
-      </Field>
-      <Field label="Premise">
+      </LockedField>
+      {targetAgeField}
+      {lessonField}
+      {themesField}
+      <LockedField label="Premise" locked={locks.premise} onToggle={() => toggleLock("premise")}>
         <textarea
           className={`${inputCls} min-h-28`}
           value={concept.premise}
           onChange={(e) => set("premise", e.target.value)}
           placeholder="What happens — who the hero is and the situation that starts the story"
         />
-      </Field>
-      <Field label="Lesson">
-        <textarea
-          className={`${inputCls} min-h-20`}
-          value={concept.lesson ?? ""}
-          onChange={(e) => set("lesson", e.target.value)}
-          placeholder="What you want children to learn or feel by the end"
-        />
-      </Field>
-      <Field label="Tone">
+      </LockedField>
+      <LockedField label="Tone" locked={locks.tone} onToggle={() => toggleLock("tone")}>
         <input
           className={inputCls}
           value={concept.tone ?? ""}
           onChange={(e) => set("tone", e.target.value)}
           placeholder="cozy, gentle, a little mysterious"
         />
-      </Field>
+      </LockedField>
 
       <h4 className="mt-5 text-sm font-semibold text-accent-deep">Art Style</h4>
       <div className="grid grid-cols-4 gap-2">

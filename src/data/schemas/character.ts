@@ -32,6 +32,10 @@ export const CharacterPersonaSchema = z.object({
   giftableItems: z.array(z.string()).default([]),
 });
 
+/** Character gender — drives voice auto-pick (at generation) + the illustration
+ *  prompt. Distinct from HeroGender (the player's runtime pronoun choice). */
+export const CharacterGenderSchema = z.enum(["male", "female", "neutral"]);
+
 export const CharacterSchema = z.object({
   id: SpeakerIdSchema,
   name: z.string(),
@@ -42,6 +46,9 @@ export const CharacterSchema = z.object({
    *  (Phase A: admin-facing source of truth; runtime still keys on the
    *  "dorothy" speaker id.) */
   isHero: z.boolean().optional(),
+  /** Character gender — voice auto-pick + illustration prompt. `.default
+   *  ("neutral")` keeps characters authored before this field back-compatible. */
+  gender: CharacterGenderSchema.default("neutral"),
   voice: TtsVoiceSchema,
   // ElevenLabs speed range (see clampSpeed) — out-of-range values 422.
   voiceSpeed: z.number().min(SPEED_MIN).max(SPEED_MAX),
@@ -72,6 +79,7 @@ export const CharactersFileSchema = z.object({
   characters: z.array(CharacterSchema),
 });
 
+export type CharacterGenderT = z.infer<typeof CharacterGenderSchema>;
 export type CharacterPersonaT = z.infer<typeof CharacterPersonaSchema>;
 export type CharacterT = z.infer<typeof CharacterSchema>;
 export type CharactersFileT = z.infer<typeof CharactersFileSchema>;

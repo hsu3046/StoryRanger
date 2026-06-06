@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Sparkle } from "@phosphor-icons/react";
 
 import { inputClsSm } from "../form";
-import { GhostButton, PrimaryButton } from "./shared";
+import { GhostButton } from "./shared";
 
 /**
  * Regenerate control that first asks the author HOW to revise. The instruction
@@ -16,17 +16,23 @@ import { GhostButton, PrimaryButton } from "./shared";
 export function RegenerateButton({
   busy,
   disabled,
+  label = "Generate",
   title = "Revise & regenerate",
   hint,
-  examples = [],
   count,
+  allowEmpty = false,
   onRegenerate,
 }: {
   busy: boolean;
   disabled?: boolean;
+  /** Trigger button label (default "Generate"). */
+  label?: string;
   title?: string;
-  hint?: string;
-  examples?: string[];
+  /** Description line — should state exactly which fields get rewritten. */
+  hint?: React.ReactNode;
+  /** Allow generating with no instruction even without an in-modal count
+   *  control (e.g. the Scene step, whose page count lives outside this modal). */
+  allowEmpty?: boolean;
   /** Optional "how many" control (e.g. beat count) shown in the modal. The
    *  chosen value is passed as the 2nd arg of onRegenerate. */
   count?: { initial: number; min: number; max: number; label?: string };
@@ -68,9 +74,9 @@ export function RegenerateButton({
 
   return (
     <>
-      <GhostButton onClick={openModal} disabled={disabled}>
+      <GhostButton onClick={openModal} disabled={disabled} accent>
         <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
-        {busy ? "Generating…" : "Generate"}
+        {busy ? "Generating…" : label}
       </GhostButton>
       {mounted &&
         open &&
@@ -88,7 +94,7 @@ export function RegenerateButton({
             >
               <h2 className="mb-1 font-handwritten text-lg text-accent-deep">{title}</h2>
               <p className="mb-3 text-sm text-ink-soft">
-                {hint ?? "Describe what to change. Leave empty for a fresh take."}
+                {hint ?? "Describe what to change."}
               </p>
               <textarea
                 value={text}
@@ -96,20 +102,6 @@ export function RegenerateButton({
                 placeholder="e.g. add a twist in the middle…"
                 className={`${inputClsSm} min-h-24 w-full`}
               />
-              {examples.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {examples.map((ex) => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => setText(ex)}
-                      className="rounded-pill bg-paper-deep/60 px-2.5 py-1 text-xs text-ink-soft ring-1 ring-ink-soft/10 hover:bg-paper-deep hover:text-ink"
-                    >
-                      {ex}
-                    </button>
-                  ))}
-                </div>
-              )}
               <div className="mt-5 flex items-center justify-between gap-2">
                 {count ? (
                   <div className="flex items-center gap-1.5 text-xs text-ink-soft">
@@ -149,10 +141,14 @@ export function RegenerateButton({
                   >
                     Cancel
                   </button>
-                  <PrimaryButton onClick={submit}>
+                  <GhostButton
+                    accent
+                    onClick={submit}
+                    disabled={!text.trim() && !count && !allowEmpty}
+                  >
                     <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
                     Generate
-                  </PrimaryButton>
+                  </GhostButton>
                 </div>
               </div>
             </div>

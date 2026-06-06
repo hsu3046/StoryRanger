@@ -9,7 +9,11 @@ import { loadReferenceImage, saveStoryImage } from "@/app/admin/_lib/saveImage";
 
 export const runtime = "nodejs";
 
-const RequestSchema = z.object({ storyId: z.string() });
+const RequestSchema = z.object({
+  storyId: z.string(),
+  /** Optional author description steering what the cover shows. */
+  description: z.string().max(4000).optional(),
+});
 
 export async function POST(req: Request) {
   if (process.env.NODE_ENV === "production") {
@@ -38,7 +42,7 @@ export async function POST(req: Request) {
 
   try {
     const png = await generateImageResilient({
-      prompt: coverPrompt(concept),
+      prompt: coverPrompt(concept, body.description),
       referenceImages: refs.length ? refs : undefined,
       aspectRatio: "16:9",
       size: "2K",

@@ -17,6 +17,21 @@ const RequestSchema = z.object({
   /** On regenerate: the admin's edited concept (as JSON text) or instructions
    *  to steer the re-roll. */
   authorRequest: z.string().max(4000).optional(),
+  /** Author-locked fields the model must HONOR exactly (and write the rest to
+   *  fit). The client keeps these values regardless; passing them here keeps the
+   *  generated fields consistent with the author's intent. */
+  constraints: z
+    .object({
+      title: z.string(),
+      subtitle: z.string(),
+      premise: z.string(),
+      lesson: z.string(),
+      tone: z.string(),
+      themes: z.array(z.string()),
+      targetAge: z.object({ min: z.number().int(), max: z.number().int() }),
+    })
+    .partial()
+    .optional(),
 });
 
 const SYSTEM_PROMPT = `You are a children's picture-book editor. Turn the author's brief into a tight, production-ready CONCEPT for an interactive storybook for young children (roughly ages 4-9).
@@ -59,6 +74,26 @@ export async function POST(req: Request) {
   lines.push("AUTHOR BRIEF:", body.brief.trim(), "");
   if (body.targetAgeHint) lines.push(`TARGET AGE HINT: ${body.targetAgeHint}`);
   if (body.lengthHint) lines.push(`LENGTH HINT: ${body.lengthHint}`);
+  // Author-locked fields: the model must keep these EXACTLY and shape the rest
+  // around them (the client re-applies them too, so they never drift).
+  const k = body.constraints;
+  if (k) {
+    const fixed: string[] = [];
+    if (k.targetAge) fixed.push(`- target age: ${k.targetAge.min}-${k.targetAge.max}`);
+    if (k.themes?.length) fixed.push(`- themes: ${k.themes.join(", ")}`);
+    if (k.lesson?.trim()) fixed.push(`- lesson (the heart): ${k.lesson.trim()}`);
+    if (k.title?.trim()) fixed.push(`- title: ${k.title.trim()}`);
+    if (k.subtitle?.trim()) fixed.push(`- subtitle: ${k.subtitle.trim()}`);
+    if (k.premise?.trim()) fixed.push(`- premise: ${k.premise.trim()}`);
+    if (k.tone?.trim()) fixed.push(`- tone: ${k.tone.trim()}`);
+    if (fixed.length) {
+      lines.push(
+        "",
+        "FIXED (the author set these — keep them EXACTLY, echo them back unchanged, and write every other field to fit them):",
+        ...fixed,
+      );
+    }
+  }
   if (body.authorRequest && body.authorRequest.trim()) {
     lines.push(
       "",

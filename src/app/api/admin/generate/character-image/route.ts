@@ -48,9 +48,9 @@ export async function POST(req: Request) {
   const chars = await readDraftCharacters(body.storyId);
   const visualDescription =
     art?.entries.find((e) => e.id === body.characterId)?.visualDescription ?? "";
-  const name =
-    chars?.characters.find((c) => c.id === body.characterId)?.name ??
-    body.characterId;
+  const character = chars?.characters.find((c) => c.id === body.characterId);
+  const name = character?.name ?? body.characterId;
+  const gender = character?.gender ?? "neutral";
 
   // Anchor non-hero art to the hero sprite (one illustrator's hand).
   const refs = [];
@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       ? characterPortraitPrompt({
           concept,
           name,
+          gender,
           visualDescription,
           hasReferences: refs.length > 0,
           // The hero ref is a STYLE anchor only — never copy the hero's identity
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
       : characterSpritePrompt({
           concept,
           name,
+          gender,
           visualDescription,
           hasReferences: refs.length > 0,
           referenceMode: "style",

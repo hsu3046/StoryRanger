@@ -65,7 +65,7 @@ export default async function WizardStepPage({
     );
   } else if (stage === "storyboard") {
     const concept = await readConcept(draftId);
-    if (!concept) redirect(`${base}/concept`);
+    if (!concept || !concept.title.trim()) redirect(`${base}/concept`);
     const storyboard = await readStoryboard(draftId);
     body = (
       <StoryboardStep
@@ -78,7 +78,7 @@ export default async function WizardStepPage({
   } else if (stage === "characters") {
     const concept = await readConcept(draftId);
     const storyboard = await readStoryboard(draftId);
-    if (!concept) redirect(`${base}/concept`);
+    if (!concept || !concept.title.trim()) redirect(`${base}/concept`);
     if (!storyboard) redirect(`${base}/storyboard`);
     const [characters, art, characterStems] = await Promise.all([
       readDraftCharacters(draftId),
@@ -100,7 +100,7 @@ export default async function WizardStepPage({
     const concept = await readConcept(draftId);
     const storyboard = await readStoryboard(draftId);
     const characters = await readDraftCharacters(draftId);
-    if (!concept) redirect(`${base}/concept`);
+    if (!concept || !concept.title.trim()) redirect(`${base}/concept`);
     if (!storyboard) redirect(`${base}/storyboard`);
     if (!characters) redirect(`${base}/characters`);
     const [scenes, sceneMeta, bgmOptions, sceneStems, cover] = await Promise.all([
