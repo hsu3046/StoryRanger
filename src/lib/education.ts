@@ -1067,9 +1067,13 @@ function makeAnalogy(age: number): Challenge {
   const pool = useSyn ? synonymsForAge(age) : antonymsForAge(age);
   if (pool.length < 2) return makeOpposite(age); // safety fallback
   const [p1, p2] = shuffle(pool);
+  // The answer is p2.b, so any other word in p2.a's connected group (another
+  // valid synonym/opposite of p2.a) would be a SECOND valid answer — exclude
+  // the whole group, plus p1's two words so the prompt pair isn't echoed.
+  const group = connectedWords(pool, p2.a, p2.b);
   const others = pool
     .flatMap((q) => [q.a, q.b])
-    .filter((w) => w !== p1.a && w !== p1.b && w !== p2.a && w !== p2.b);
+    .filter((w) => !group.has(w) && w !== p1.a && w !== p1.b);
   return stringChallenge(
     "analogy",
     `${p1.a} → ${p1.b},  so  ${p2.a} → ___?`,
