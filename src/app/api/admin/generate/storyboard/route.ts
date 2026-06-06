@@ -2,7 +2,23 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { chat, hasLLMKey } from "@/lib/llm";
-import { ConceptSchema, StoryboardSchema, type StoryboardT } from "@/data/schemas";
+import {
+  ConceptSchema,
+  StoryboardBeatSchema,
+  StoryboardSchema,
+  type StoryboardT,
+} from "@/data/schemas";
+
+// Art-style is author-picked, importance steers pagination — force the LLM to
+// emit `importance` (its schema default would otherwise make it optional and the
+// model could skip it, flattening every beat to 3).
+const LLMStoryboardSchema = StoryboardSchema.extend({
+  beats: z.array(
+    StoryboardBeatSchema.omit({ importance: true }).extend({
+      importance: z.number().int().min(1).max(5),
+    }),
+  ),
+});
 
 export const runtime = "nodejs";
 
@@ -31,6 +47,7 @@ Produce an ordered, LINEAR list of BEATS — the major story moments from openin
 - id: a short unique lowercase kebab-case slug (e.g. "kitchen-morning"). Stable.
 - title: a brief editor label (not shown to the child).
 - synopsis: 1-2 lines on what happens in this beat. This is the only content — who speaks and where it's set are decided later, when the beat is expanded into pages.
+- importance: an integer 1-5 for how pivotal this beat is — 5 = the climax / most emotionally important moment, 3 = a normal story beat, 1 = a quick transition. The scene stage gives higher-importance beats MORE pages. Shape the arc honestly: usually one (occasionally two) 5s around the climax, lower numbers for setup/transition beats.
 - isEnding: true ONLY for the final beat; set endingLabel (e.g. "A Happy Homecoming") when true, else "".
 - branches: ALWAYS an empty array []. Do NOT create choices — this storyboard is a straight, linear flow. (Branching, choices, and battles are authored LATER in the story graph, not here.)
 
@@ -117,7 +134,7 @@ export async function POST(req: Request) {
     const storyboard = await chat({
       system: systemPrompt(beatCount),
       messages: [{ role: "user", content: userLines.join("\n") }],
-      schema: StoryboardSchema,
+      schema: LLMStoryboardSchema,
       schemaName: "storyboard",
     });
     const lint = lintStoryboard(storyboard);

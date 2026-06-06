@@ -91,6 +91,10 @@ export const StoryboardBeatSchema = z.object({
   /** 1-2 lines — what happens in this beat (the story flow). The page stage
    *  decides per-page speaker/setting from this + the cast + premise. */
   synopsis: z.string(),
+  /** How pivotal this beat is, 1–5 (5 = climax). The scene stage gives higher-
+   *  importance beats MORE pages so the key moments breathe. `.default(3)` for
+   *  back-compat with storyboards authored before this field. */
+  importance: z.number().int().min(1).max(5).default(3),
   /** Terminal beat (the last beat — an ending). */
   isEnding: z.boolean(),
   /** Ending tag label when isEnding ("" otherwise). */

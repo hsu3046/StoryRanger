@@ -35,7 +35,15 @@ function freshBeatId(existing: Set<string>): string {
   return id;
 }
 function emptyBeat(id: string): StoryboardBeatT {
-  return { id, title: "", synopsis: "", isEnding: false, endingLabel: "", branches: [] };
+  return {
+    id,
+    title: "",
+    synopsis: "",
+    importance: 3,
+    isEnding: false,
+    endingLabel: "",
+    branches: [],
+  };
 }
 
 /** Linear-flow normalization applied on save: start = first beat, ending =
@@ -276,6 +284,33 @@ export function StoryboardStep({ draftId, concept, meta, initialStoryboard }: {
               >
                 <CaretDown weight="bold" className="h-3.5 w-3.5" />
               </button>
+              <div className="ml-auto flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-soft/70">
+                  Importance
+                </span>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => patchBeat(idx, { importance: n })}
+                    aria-label={`Importance ${n}`}
+                    title={
+                      n === 5
+                        ? "Climax — most pages"
+                        : n === 1
+                          ? "Quick transition — one page"
+                          : `Importance ${n}`
+                    }
+                    className={`h-5 w-5 rounded-pill text-[11px] font-semibold tabular-nums transition-colors ${
+                      beat.importance === n
+                        ? "bg-accent text-paper"
+                        : "bg-paper-deep/50 text-ink-soft hover:bg-paper-deep"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
             <textarea
               className={`${inputClsSm} min-h-20 ${
