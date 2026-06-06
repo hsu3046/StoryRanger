@@ -173,11 +173,7 @@
           "outcome": "You and the Tin Woodman set off down the yellow brick road until you spotted a strange sight in a field of corn."
         }
       ],
-      "reward": {
-        "items": [
-          "oil"
-        ]
-      },
+      "reward": {},
       "dialogueCharacters": [
         "tinman",
         "toto"
@@ -432,11 +428,7 @@
           "outcome": "You gathered your friends and began the long journey back to the capital, eager to claim the rewards the Wizard had promised."
         }
       ],
-      "reward": {
-        "items": [
-          "broomstick-of-the-wicked-witch"
-        ]
-      },
+      "reward": {},
       "dialogueCharacters": [
         "scarecrow",
         "tinman",

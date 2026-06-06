@@ -53,6 +53,7 @@ export interface BattleLogEntry {
     | "hit"
     | "miss"
     | "crit"
+    | "counter"
     | "fumble"
     | "victory"
     | "defeat";
@@ -471,7 +472,7 @@ export function applyItemEffect(
 
 /**
  * Resolve the math puzzle.
- *  - correct + ≤3s   → critical (2 hits)
+ *  - correct + ≤5s   → critical (2 hits)
  *  - correct         → normal (1 hit)
  *  - streak ≥ 3      → +1 extra hit on next correct
  *  - wrong / timeout → miss (0 hits)
@@ -507,7 +508,7 @@ export function resolvePuzzleAttack(
 
   if (outcome.correct) {
     streak += 1;
-    const isCrit = !wasFrozen && outcome.durationMs <= 3000;
+    const isCrit = !wasFrozen && outcome.durationMs <= 5000;
     // +X from an attack-boost item, on top of crit/streak (crit damage + X).
     let hitsDone =
       1 + (isCrit ? 1 : 0) + (streak >= 3 ? 1 : 0) + (state.attackBoost ?? 0);
@@ -652,12 +653,34 @@ export function resolveDefense(
   const frontId = state.activeAttacker;
   const startHp = state.partyLives[frontId] ?? state.heroLives;
   let livesAfter = startHp;
+  // Defense can now damage a monster (the Counter Attack), so monsters is
+  // mutable here — previously a defense never touched the monster roster.
+  let monsters = state.monsters;
+  let counterKill = false;
 
   if (outcome.correct) {
     log.push({
       text: `You answer in time — ${attacker.name}'s blow whiffs past ${attackerName(frontId)}.`,
       tone: "miss",
     });
+    // Counter Attack — a FAST defense (≤5s, timer not frozen) lets the
+    // front-liner strike the attacker back for 1 hit. Mirrors the attack
+    // crit's "no bonus while time is frozen" rule.
+    const counters =
+      !timerFrozen(state, "defend") && outcome.durationMs <= 5000;
+    if (counters) {
+      const hitsRemaining = Math.max(0, attacker.hitsRemaining - 1);
+      counterKill = hitsRemaining <= 0;
+      monsters = monsters.map((m, i) =>
+        i === idx ? { ...m, hitsRemaining, defeated: counterKill } : m,
+      );
+      log.push({
+        text: counterKill
+          ? `⚡ Counter! ${attackerName(frontId)} strikes back and downs ${attacker.name}!`
+          : `⚡ Counter! ${attackerName(frontId)} strikes back at ${attacker.name} (−1 hit).`,
+        tone: "counter",
+      });
+    }
   } else {
     livesAfter = Math.max(0, startHp - 1);
     log.push({
@@ -738,16 +761,42 @@ export function resolveDefense(
     return base;
   }
 
+  // A Counter that downs the LAST standing monster ends the battle right here.
+  if (monsters.every((m) => m.defeated)) {
+    const catalog = monstersFor(state.storyId);
+    const rewards = monsters.flatMap((m) => {
+      const meta = catalog[m.monsterId];
+      return (meta?.drops ?? [])
+        .map(normalizeDrop)
+        .filter((d) => Math.random() * 100 < d.chance)
+        .map((d) => d.item);
+    });
+    return {
+      ...state,
+      monsters,
+      heroLives: livesAfter,
+      partyLives,
+      log: [...log, { text: "You stand victorious!", tone: "victory" }],
+      rewards,
+      defendingMonsterIdx: undefined,
+      phase: "victory",
+    };
+  }
+
+  // When a Counter kills the attacker, that monster drops out of the alive
+  // list, shifting every later monster down one slot — so KEEP the index (no
+  // +1) to land on the next monster instead of skipping it. Otherwise advance.
   const next: BattleState = {
     ...state,
+    monsters,
     heroLives: livesAfter,
     partyLives,
     log,
-    monsterIdxThisRound: state.monsterIdxThisRound + 1,
+    monsterIdxThisRound: state.monsterIdxThisRound + (counterKill ? 0 : 1),
     defendingMonsterIdx: undefined,
   };
 
-  const alive = state.monsters.filter((m) => !m.defeated);
+  const alive = monsters.filter((m) => !m.defeated);
   if (next.monsterIdxThisRound >= alive.length) {
     return {
       ...next,

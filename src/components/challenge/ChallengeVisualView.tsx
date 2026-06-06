@@ -101,23 +101,29 @@ export function ChallengeVisualView({
   }
 
   if (visual.kind === "rect") {
-    const pad = size === "lg" ? 26 : 16;
-    const maxSide = px - pad * 2;
+    // Content-fit canvas: size the SVG to the rectangle's own aspect ratio (+
+    // label room) instead of a fixed square, so a flat rect (e.g. 14×5) doesn't
+    // sit in a mostly-empty box. Scale the LONGER side to a larger target so the
+    // figure actually fills the space.
+    const target = size === "lg" ? 240 : 90;
     const longer = Math.max(visual.w, visual.h);
-    const rw = (visual.w / longer) * maxSide;
-    const rh = (visual.h / longer) * maxSide;
-    const x = (px - rw) / 2;
-    const y = (px - rh) / 2;
+    const rw = (visual.w / longer) * target;
+    const rh = (visual.h / longer) * target;
+    const lab = visual.showDims ? fontSize + 8 : 4; // room for edge labels
+    const x = lab;
+    const y = 4;
+    const W = x + rw + 4;
+    const H = y + rh + lab;
     return (
-      <svg width={px} height={px} viewBox={`0 0 ${px} ${px}`} aria-hidden>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden>
         {/* Sharp right-angle corners — no rx. */}
         <rect x={x} y={y} width={rw} height={rh} fill={FILL} stroke={STROKE} strokeWidth={2.5} />
         {visual.showDims && (
           <>
-            <text x={px / 2} y={y + rh + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
+            <text x={x + rw / 2} y={y + rh + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
               {visual.w}
             </text>
-            <text x={x - 4} y={px / 2} textAnchor="end" dominantBaseline="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
+            <text x={x - 4} y={y + rh / 2} textAnchor="end" dominantBaseline="middle" fontSize={fontSize} fill={STROKE} fontWeight="700">
               {visual.h}
             </text>
           </>

@@ -94,19 +94,30 @@ export function ChallengePreviewer() {
     setMounted(true);
   }, []);
 
-  // Only the categories this age actually produces (the auto pool) + an "auto"
-  // mix card — so the sheet never shows level-inappropriate types (e.g. no
-  // counting/shapes at age 12).
-  const ageCategories = useMemo<
-    ("auto" | "english" | "logic" | ChallengeCategory)[]
+  // Group the age-appropriate categories by SUBJECT so each gets its own
+  // section + sticky heading — otherwise all math cards stack on top and
+  // English/Logic get buried below the fold (looks like "math only"). Each
+  // subject leads with its "mixed" meta card. The age plan keeps types
+  // level-appropriate (e.g. no counting/shapes at age 12).
+  const subjects = useMemo<
+    {
+      key: string;
+      title: string;
+      categories: ("auto" | "english" | "logic" | ChallengeCategory)[];
+    }[]
   >(
     () => [
-      "auto",
-      ...categoriesForAge(age),
-      "english",
-      ...englishCategoriesForAge(age),
-      "logic",
-      ...logicCategoriesForAge(age),
+      { key: "math", title: "Math", categories: ["auto", ...categoriesForAge(age)] },
+      {
+        key: "english",
+        title: "English",
+        categories: ["english", ...englishCategoriesForAge(age)],
+      },
+      {
+        key: "logic",
+        title: "Logic",
+        categories: ["logic", ...logicCategoriesForAge(age)],
+      },
     ],
     [age],
   );
@@ -115,18 +126,24 @@ export function ChallengePreviewer() {
   const sheet = useMemo(() => {
     if (!mounted) return [];
     void seed; // dep only — forces regeneration on "Regenerate"
-    return ageCategories.map((value) => ({
-      value,
-      label: CATEGORY_LABEL[value] ?? value,
-      samples: Array.from({ length: SAMPLES_PER_CATEGORY }, () =>
-        generateChallenge({ age, category: value }),
-      ),
+    return subjects.map((s) => ({
+      ...s,
+      cards: s.categories.map((value) => ({
+        value,
+        label: CATEGORY_LABEL[value] ?? value,
+        samples: Array.from({ length: SAMPLES_PER_CATEGORY }, () =>
+          generateChallenge({ age, category: value }),
+        ),
+      })),
     }));
-  }, [mounted, age, seed, ageCategories]);
+  }, [mounted, age, seed, subjects]);
 
   function openPreview() {
     setPreviewNonce((n) => n + 1);
-    setPreview(generateChallenge({ age, category: "auto" }));
+    // "mixed" pulls from all three subjects (math + English + logic); "auto"
+    // would be math-only. The overlay is the real in-game experience, so it
+    // should reflect the full subject mix, not just math.
+    setPreview(generateChallenge({ age, category: "mixed" }));
   }
 
   return (
@@ -156,9 +173,12 @@ export function ChallengePreviewer() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      {/* No top padding on the scroll container — a sticky child can't cover the
+          container's own padding-top, so it would float with a gap. Spacing
+          lives on the children instead. */}
+      <div className="flex-1 overflow-y-auto px-4 pb-6">
         {/* Age selector */}
-        <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="mb-3 flex flex-wrap items-center gap-3 pt-3">
           <span className="text-xs font-semibold uppercase text-ink-soft">
             Age
           </span>
@@ -183,22 +203,35 @@ export function ChallengePreviewer() {
           </span>
         </div>
 
-        {/* Sample sheet — one card per category. */}
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {sheet.map(({ value, label, samples }) => (
-            <div
-              key={value}
-              className="rounded-card-lg bg-paper ring-1 ring-ink-soft/10"
-            >
-              <div className="border-b border-ink-soft/10 px-3 py-2">
-                <p className="text-sm font-semibold text-ink">{label}</p>
-              </div>
-              <ul className="flex flex-col divide-y divide-ink-soft/5">
-                {samples.map((c, i) => (
-                  <SampleRow key={i} challenge={c} />
+        {/* Sample sheet — grouped by subject (Math / English / Logic), each
+            with a sticky heading so no subject hides below a wall of math. */}
+        <div className="flex flex-col gap-6">
+          {sheet.map(({ key, title, cards }) => (
+            <section key={key}>
+              <h2 className="sticky top-0 z-10 -mx-4 mb-3 flex items-baseline gap-2 border-b border-ink-soft/10 bg-paper px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-accent-deep">
+                {title}
+                <span className="text-xs font-medium normal-case text-ink-soft">
+                  {cards.length} types
+                </span>
+              </h2>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {cards.map(({ value, label, samples }) => (
+                  <div
+                    key={value}
+                    className="rounded-card-lg bg-paper ring-1 ring-ink-soft/10"
+                  >
+                    <div className="border-b border-ink-soft/10 px-3 py-2">
+                      <p className="text-sm font-semibold text-ink">{label}</p>
+                    </div>
+                    <ul className="flex flex-col divide-y divide-ink-soft/5">
+                      {samples.map((c, i) => (
+                        <SampleRow key={i} challenge={c} />
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
-            </div>
+              </div>
+            </section>
           ))}
         </div>
       </div>
@@ -259,7 +292,7 @@ function SampleRow({ challenge }: { challenge: Challenge }) {
         {challenge.choices.map((ch, i) => (
           <span
             key={i}
-            className={`rounded-pill px-2 py-0.5 text-xs font-semibold ${
+            className={`max-w-full [overflow-wrap:anywhere] rounded-pill px-2 py-0.5 text-xs font-semibold ${
               i === challenge.correctIndex
                 ? "bg-emerald/20 text-emerald ring-1 ring-emerald/40"
                 : "bg-paper-deep/40 text-ink-soft"
