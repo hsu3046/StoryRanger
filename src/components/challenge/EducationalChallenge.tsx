@@ -34,8 +34,8 @@ interface Props {
   placement?: "fixed" | "inline";
 }
 
-const HARD_TIMEOUT_MS = 10_000;
-const CRIT_WINDOW_MS = 3_000;
+const HARD_TIMEOUT_MS = 20_000;
+const CRIT_WINDOW_MS = 5_000;
 /** How long the correct/wrong feedback shows before the result is committed. */
 const FEEDBACK_MS = 850;
 
@@ -123,6 +123,12 @@ export function EducationalChallenge({
     if (i === pickedIdx) return "bg-ruby/20 text-ruby ring-ruby/50";
     return "bg-paper-deep/40 text-ink-soft/50 ring-ink-soft/10";
   }
+
+  // Long answers (emoji sequences for loops, text for logic) overflow the tight
+  // fixed-size grid, so switch to a roomier wrapping layout: fewer columns,
+  // auto-growing cells, smaller text, and word wrap. `[...c].length` counts
+  // glyphs (≈ emoji/char count) rather than UTF-16 units.
+  const longChoices = challenge.choices.some((c) => [...c].length > 5);
 
   return (
     <motion.div
@@ -227,9 +233,11 @@ export function EducationalChallenge({
       {/* Choices */}
       <div
         className={`grid gap-3 sm:gap-4 ${
-          challenge.choices.length <= 3
-            ? "grid-cols-3"
-            : "grid-cols-2 sm:grid-cols-4"
+          longChoices
+            ? "grid-cols-1 sm:grid-cols-2"
+            : challenge.choices.length <= 3
+              ? "grid-cols-3"
+              : "grid-cols-2 sm:grid-cols-4"
         }`}
       >
         {challenge.choices.map((c, i) => (
@@ -244,9 +252,11 @@ export function EducationalChallenge({
                 : {}
             }
             transition={{ duration: 0.35 }}
-            className={`flex h-20 items-center justify-center rounded-card-lg text-2xl font-bold tabular-nums ring-1 transition-all disabled:cursor-default ${choiceTone(
-              i,
-            )}`}
+            className={`flex items-center justify-center rounded-card-lg text-center font-bold tabular-nums ring-1 transition-all disabled:cursor-default ${
+              longChoices
+                ? "min-h-16 [overflow-wrap:anywhere] whitespace-normal px-3 py-3 text-lg leading-snug sm:text-xl"
+                : "h-20 text-2xl"
+            } ${choiceTone(i)}`}
           >
             {c}
           </motion.button>
