@@ -53,6 +53,7 @@ export interface BattleLogEntry {
     | "hit"
     | "miss"
     | "crit"
+    | "counter"
     | "fumble"
     | "victory"
     | "defeat";
@@ -677,7 +678,7 @@ export function resolveDefense(
         text: counterKill
           ? `⚡ Counter! ${attackerName(frontId)} strikes back and downs ${attacker.name}!`
           : `⚡ Counter! ${attackerName(frontId)} strikes back at ${attacker.name} (−1 hit).`,
-        tone: "hit",
+        tone: "counter",
       });
     }
   } else {

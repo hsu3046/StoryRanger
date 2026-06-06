@@ -232,7 +232,11 @@ export function BattleScreen({
       [...state.log]
         .reverse()
         .find(
-          (e) => e.tone === "crit" || e.tone === "hit" || e.tone === "miss",
+          (e) =>
+            e.tone === "crit" ||
+            e.tone === "hit" ||
+            e.tone === "miss" ||
+            e.tone === "counter",
         )?.tone ?? lastTone;
 
     // The active attacker sits in the right-most party slot (frontline).
@@ -254,7 +258,12 @@ export function BattleScreen({
           anchor: m.position,
           airborne: !!monsters[m.monsterId]?.airborne,
           amount: delta,
-          kind: fxTone === "crit" ? "crit" : "hit",
+          kind:
+            fxTone === "crit"
+              ? "crit"
+              : fxTone === "counter"
+                ? "counter"
+                : "hit",
         });
       }
     });
@@ -400,7 +409,7 @@ export function BattleScreen({
     prevLogLen.current = state.log.length;
     for (let i = fresh.length - 1; i >= 0; i--) {
       const t = fresh[i].tone;
-      if (t === "hit" || t === "crit") {
+      if (t === "hit" || t === "crit" || t === "counter") {
         getAudio().playSfx(SFX.ATTACK);
         break;
       }

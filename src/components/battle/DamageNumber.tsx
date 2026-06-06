@@ -14,7 +14,13 @@ const POS_X: Record<StagePosition, number> = {
   "far-right": 88,
 };
 
-export type EffectKind = "hit" | "crit" | "miss" | "heal" | "defend";
+export type EffectKind =
+  | "hit"
+  | "crit"
+  | "counter"
+  | "miss"
+  | "heal"
+  | "defend";
 
 export interface FloatingEffect {
   id: number;
@@ -63,15 +69,18 @@ export function DamageNumber({ effect }: Props) {
         paintOrder: "stroke fill",
       }}
     >
-      {effect.kind === "crit" && (
+      {(effect.kind === "crit" || effect.kind === "counter") && (
         <motion.span
           initial={{ scale: 0.6, rotate: -6 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 14 }}
           className="font-handwritten leading-none"
-          style={{ fontSize: "2rem", color: "#fff15a" }}
+          style={{
+            fontSize: "2rem",
+            color: effect.kind === "counter" ? "#bfe3ff" : "#fff15a",
+          }}
         >
-          Critical!
+          {effect.kind === "counter" ? "Counter!" : "Critical!"}
         </motion.span>
       )}
       <span
@@ -98,6 +107,14 @@ const palettes: Record<EffectKind, { color: string; shadow: string; stroke: stri
     shadow:
       "0 4px 14px rgba(20,12,4,0.95), 0 2px 6px rgba(20,12,4,1)",
     stroke: "4px rgba(176, 51, 51, 1)",
+  },
+  // Counter — a defensive riposte, so it reads in the blue "defend" family
+  // (distinct from the gold attack hit) while still showing the −damage number.
+  counter: {
+    color: "#bfe3ff",
+    shadow:
+      "0 4px 12px rgba(20,12,4,0.9), 0 2px 4px rgba(20,12,4,0.95)",
+    stroke: "3px rgba(46, 92, 138, 0.95)",
   },
   miss: {
     color: "#fdf6e3",
