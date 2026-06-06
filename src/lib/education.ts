@@ -916,9 +916,11 @@ function makeOpposite(age: number): Challenge {
   const pool = antonymsForAge(age);
   const p = pick(pool) ?? pool[0];
   const [a, b] = Math.random() < 0.5 ? [p.a, p.b] : [p.b, p.a];
-  // Distractors = other antonym words at the same tier (real words, not THE
-  // opposite of `a`), excluding this pair.
-  const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => w !== a && w !== b);
+  // Distractors = other antonym words at the same tier — exclude EVERY word in
+  // `a`'s connected group (a word can have more than one valid opposite, e.g.
+  // short/tall + short/long), so a distractor can't be a second valid answer.
+  const group = connectedWords(pool, a, b);
+  const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => !group.has(w));
   return stringChallenge(
     "opposite",
     `What is the opposite of "${a}"?`,
@@ -927,13 +929,43 @@ function makeOpposite(age: number): Challenge {
   );
 }
 
+/** Every word transitively connected to `a` through the pair graph (the whole
+ *  synonym/antonym cluster). Words appear in MULTIPLE pairs (e.g. "huge" in
+ *  big/huge, huge/massive, tremendous/huge), so excluding only the prompt's own
+ *  pair would let a SECOND valid answer slip in as a distractor. Excluding the
+ *  full connected component guarantees exactly one correct choice. */
+function connectedWords(
+  pool: ReadonlyArray<{ a: string; b: string }>,
+  a: string,
+  b: string,
+): Set<string> {
+  const group = new Set<string>([a, b]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const q of pool) {
+      if (group.has(q.a) && !group.has(q.b)) {
+        group.add(q.b);
+        grew = true;
+      }
+      if (group.has(q.b) && !group.has(q.a)) {
+        group.add(q.a);
+        grew = true;
+      }
+    }
+  }
+  return group;
+}
+
 function makeSynonym(age: number): Challenge {
   const pool = synonymsForAge(age);
   const p = pick(pool) ?? pool[0];
   const [a, b] = Math.random() < 0.5 ? [p.a, p.b] : [p.b, p.a];
-  // Distractors = words from OTHER synonym pairs (real words that don't mean
-  // the same as `a`), excluding this pair's two words.
-  const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => w !== a && w !== b);
+  // Distractors = words from OTHER synonym clusters — exclude EVERY word that
+  // means the same as `a` (the full connected group), not just this pair, so a
+  // distractor can't be a second valid synonym.
+  const group = connectedWords(pool, a, b);
+  const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => !group.has(w));
   return stringChallenge(
     "synonym",
     `Which word means the same as "${a}"?`,
