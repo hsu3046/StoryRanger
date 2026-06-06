@@ -334,9 +334,10 @@ export function ScenesStep({
     enabled: !!story,
   });
   // Persist the cover description to draft meta so it survives navigation.
-  useAutosave(coverDesc, (t) => saveDraftMetaAction(draftId, { coverDescription: t }), {
-    enabled: coverDesc !== (meta.coverDescription ?? ""),
-  });
+  // (useAutosave skips the seed value, so clearing back to "" still saves.)
+  useAutosave(coverDesc, (t) =>
+    saveDraftMetaAction(draftId, { coverDescription: t }),
+  );
   useStageVisit(draftId, meta, "scene");
 
   function applyScene(id: string, patch: Partial<Story["scenes"][string]>) {

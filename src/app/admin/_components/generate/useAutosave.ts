@@ -40,6 +40,7 @@ export function useAutosave<T>(
   const dataRef = useRef(data);
   const saveRef = useRef(save);
   const enabledRef = useRef(enabled);
+  const mountedRef = useRef(false);
 
   // Keep refs current (after each render) so flushes see the latest.
   useEffect(() => {
@@ -50,6 +51,14 @@ export function useAutosave<T>(
 
   // Debounced save while editing.
   useEffect(() => {
+    // Skip the seed value (already on disk from the initial render). This also
+    // lets callers use `enabled: true` without a fragile "differs from initial"
+    // gate — a field edited and then reset back to its initial value still
+    // re-saves, instead of silently leaving stale text on disk.
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
     if (!enabled) return;
     const t = setTimeout(() => {
       if (enabledRef.current) saveRef.current(dataRef.current);

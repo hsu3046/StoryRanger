@@ -171,9 +171,8 @@ export function ConceptStep({ draftId, brief, language, meta, initialConcept }: 
     enabled: isMeaningful(concept),
   });
   // Persist the story idea (brief) to meta so it survives navigation.
-  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { brief: t }), {
-    enabled: briefText !== brief,
-  });
+  // (useAutosave skips the seed value, so clearing back to the original saves.)
+  useAutosave(briefText, (t) => saveDraftMetaAction(draftId, { brief: t }));
   useStageVisit(draftId, meta, "concept");
 
   async function generate(authorRequest?: string) {
