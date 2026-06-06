@@ -27,6 +27,19 @@ const RequestSchema = z.object({
   /** Desired number of storyboard beats (the arc's resolution). Clamped 5–12. */
   beatCount: z.number().int().optional(),
   authorRequest: z.string().max(4000).optional(),
+  /** Partial regeneration: the current arc with per-beat lock flags. When any
+   *  beat is locked, the model keeps the locked beats and only re-writes the
+   *  open ones around them (the client re-applies the locked beats too). */
+  currentBeats: z
+    .array(
+      z.object({
+        synopsis: z.string(),
+        importance: z.number().int().min(1).max(5),
+        isEnding: z.boolean(),
+        locked: z.boolean(),
+      }),
+    )
+    .optional(),
 });
 
 export const BEAT_MIN = 5;
@@ -126,9 +139,26 @@ export async function POST(req: Request) {
       "",
     );
   }
-  userLines.push(
-    `Lay out the storyboard now as EXACTLY ${beatCount} linear beats, in ${c.language}.`,
-  );
+  const partial =
+    body.currentBeats && body.currentBeats.some((b) => b.locked)
+      ? body.currentBeats
+      : null;
+  if (partial) {
+    userLines.push(
+      `CURRENT ARC (${partial.length} beats, in order). Keep every [LOCKED] beat EXACTLY as written — same meaning, importance, and position; echo it back unchanged. Re-write ONLY the [OPEN] beats so the whole arc still flows (setup → rising action → climax → resolution) and connects the locked beats naturally. Output ALL ${partial.length} beats, in order.`,
+      "",
+      ...partial.map(
+        (b, i) =>
+          `${i + 1}. [${b.locked ? "LOCKED" : "OPEN"}] (importance ${b.importance}/5)${b.isEnding ? " [ENDING]" : ""}: ${b.synopsis}`,
+      ),
+      "",
+      `Output EXACTLY ${partial.length} beats, in ${c.language}.`,
+    );
+  } else {
+    userLines.push(
+      `Lay out the storyboard now as EXACTLY ${beatCount} linear beats, in ${c.language}.`,
+    );
+  }
 
   try {
     const storyboard = await chat({

@@ -211,6 +211,8 @@ export const DraftMetaSchema = z.object({
   stageStatuses: z.record(z.string(), StageStatusSchema).default({}),
   /** The original author brief (for regenerate steering + resume display). */
   brief: z.string().default(""),
+  /** Author description steering the cover illustration (Scene stage). */
+  coverDescription: z.string().default(""),
   language: z.string().default("en"),
   /** ISO timestamps — stamped by the server actions. */
   createdAt: z.string().default(""),

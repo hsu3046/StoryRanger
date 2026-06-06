@@ -20,6 +20,8 @@ const RequestSchema = z.object({
   characters: CharactersFileSchema,
   /** Target number of pages (scenes). Clamped to [beats, PAGE_MAX]. */
   sceneCount: z.number().int().optional(),
+  /** Optional revision instruction to steer the re-pagination. */
+  authorRequest: z.string().max(4000).optional(),
 });
 
 export const PAGE_MIN = 12;
@@ -116,6 +118,9 @@ export async function POST(req: Request) {
       `${i + 1}. id=${b.id} (importance ${b.importance}/5)${b.isEnding ? " [ENDING]" : ""}: ${b.synopsis}`,
     );
   });
+  if (body.authorRequest && body.authorRequest.trim()) {
+    userLines.push("", "REVISION REQUEST (incorporate):", body.authorRequest.trim());
+  }
   userLines.push(
     "",
     `Paginate into EXACTLY ${sceneCount} ordered pages and write each page's narration, in ${c.language}.`,

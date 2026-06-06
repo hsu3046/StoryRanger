@@ -82,6 +82,7 @@ function placeholderCharacters(): CharactersFile {
       {
         id: "narrator",
         name: "Narrator",
+        gender: "neutral",
         voice: DEFAULT_NARRATOR_VOICE,
         voiceSpeed: 1,
         color: "#6b7280",
@@ -91,6 +92,7 @@ function placeholderCharacters(): CharactersFile {
         id: "hero",
         name: "Hero",
         isHero: true,
+        gender: "neutral",
         voice: DEFAULT_HERO_VOICE,
         voiceSpeed: 1,
         color: "#c9a23a",

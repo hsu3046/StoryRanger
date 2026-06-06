@@ -32,13 +32,16 @@ function referenceLine(hasReferences: boolean, mode: ReferenceMode): string | nu
   return mode === "style" ? STYLE_ANCHOR_INSTRUCTION : REFERENCE_INSTRUCTION;
 }
 
-export function coverPrompt(concept: ConceptT): string {
+export function coverPrompt(concept: ConceptT, description?: string): string {
   return [
     `Children's picture-book COVER illustration, full-bleed, cinematic, 16:9.`,
     styleText(concept.artStylePrompt),
     `TITLE FEELING: "${concept.title}". ${concept.premise}`,
+    description?.trim() ? `COVER SHOWS: ${description.trim()}` : "",
     `An inviting, atmospheric key image that captures the story's heart. Leave gentle space (the title is added separately — do NOT draw any text).`,
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function scenePrompt(args: {
@@ -69,11 +72,22 @@ export function scenePrompt(args: {
 const SPRITE_BG =
   "PURE WHITE (#FFFFFF) background, perfectly flat and clean, NO ground shadow, NO props, NO scenery — the character isolated on white so the background can be removed.";
 
+/** A short gender cue for a character image prompt. "neutral"/undefined adds
+ *  nothing — the visual description decides. */
+function genderNote(gender?: "male" | "female" | "neutral"): string {
+  return gender === "male" || gender === "female"
+    ? ` This character is ${gender}.`
+    : "";
+}
+
 export function characterSpritePrompt(args: {
   concept: ConceptT;
   name: string;
   visualDescription: string;
   hasReferences: boolean;
+  /** Character gender — reinforces a consistent gendered design ("neutral"
+   *  leaves it to the visual description). */
+  gender?: "male" | "female" | "neutral";
   /** "style" anchors to the book's hand without copying the referenced
    *  character; "identity" (default) requires an exact match. */
   referenceMode?: ReferenceMode;
@@ -82,7 +96,7 @@ export function characterSpritePrompt(args: {
     `Full-body character sprite for a children's picture book — 3/4 front view, standing, friendly, centered, feet near the bottom of the frame, the WHOLE body inside the frame.`,
     SPRITE_BG,
     styleText(args.concept.artStylePrompt),
-    `CHARACTER: ${args.name}. ${args.visualDescription}`,
+    `CHARACTER: ${args.name}.${genderNote(args.gender)} ${args.visualDescription}`,
   ];
   const ref = referenceLine(args.hasReferences, args.referenceMode ?? "identity");
   if (ref) parts.push(ref);
@@ -95,13 +109,14 @@ export function characterPortraitPrompt(args: {
   name: string;
   visualDescription: string;
   hasReferences: boolean;
+  gender?: "male" | "female" | "neutral";
   referenceMode?: ReferenceMode;
 }): string {
   const parts = [
     `Head-and-shoulders PORTRAIT of a children's picture-book character, facing forward, warm friendly expression, centered.`,
     SPRITE_BG,
     styleText(args.concept.artStylePrompt),
-    `CHARACTER: ${args.name}. ${args.visualDescription}`,
+    `CHARACTER: ${args.name}.${genderNote(args.gender)} ${args.visualDescription}`,
   ];
   const ref = referenceLine(args.hasReferences, args.referenceMode ?? "identity");
   if (ref) parts.push(ref);

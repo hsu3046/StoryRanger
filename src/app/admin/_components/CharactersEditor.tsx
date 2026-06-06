@@ -22,6 +22,7 @@ import { ClickableImageThumb } from "./ClickableImageThumb";
 import { useConfirm } from "./ConfirmDialog";
 import { Field, StyledSelect, inputCls } from "./form";
 import { ItemChipPicker } from "./ItemChipPicker";
+import { GenderSelect } from "./GenderSelect";
 import { VoiceSelectWithPreview } from "./VoiceSelectWithPreview";
 
 /** Placeholder ElevenLabs voice id for new characters — replace with a real
@@ -140,6 +141,7 @@ export function CharactersEditor({
     const placeholder: CharacterT = {
       id,
       name: id.replace(/[-_]/g, " "),
+      gender: "neutral",
       voice: DEFAULT_VOICE_ID,
       voiceSpeed: 1.0,
       color: "#777777",
@@ -544,13 +546,21 @@ function CharacterForm({
         onPick={(v) => onChange((c) => ({ ...c, battleImage: v }))}
       />
 
-      <Field label="Voice">
-        <VoiceSelectWithPreview
-          value={character.voice}
-          options={VOICES}
-          placeholder="(choose a voice)"
-          onChange={(v) => onChange((c) => ({ ...c, voice: v }))}
-        />
+      <div className="flex items-start gap-3">
+        <Field label="Gender">
+          <GenderSelect
+            value={character.gender}
+            onChange={(g) => onChange((c) => ({ ...c, gender: g }))}
+          />
+        </Field>
+        <div className="min-w-0 flex-1">
+          <Field label="Voice">
+            <VoiceSelectWithPreview
+              value={character.voice}
+              options={VOICES}
+              placeholder="(choose a voice)"
+              onChange={(v) => onChange((c) => ({ ...c, voice: v }))}
+            />
         <p className="mt-1 text-xs text-ink-soft/70">
           ▶ plays a free sample. The list + display names are curated in{" "}
           <span className="font-mono text-[0.7rem]">
@@ -568,7 +578,9 @@ function CharacterForm({
           , added to your workspace) or rename one. Avoid child-like voices for
           kid characters — they&apos;re disallowed in the library.
         </p>
-      </Field>
+          </Field>
+        </div>
+      </div>
 
       <Field label={`Voice speed (${SPEED_MIN} – ${SPEED_MAX})`}>
         <input

@@ -1,9 +1,14 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkle } from "@phosphor-icons/react";
+import { ImageSquare, Lock, LockOpen } from "@phosphor-icons/react";
 
-import type { CharacterArtFileT, ConceptT, DraftMetaT, StoryboardT } from "@/data/schemas";
+import type {
+  CharacterArtFileT,
+  ConceptT,
+  DraftMetaT,
+  StoryboardT,
+} from "@/data/schemas";
 import type { Character, CharacterPersona, CharactersFile } from "@/types/story";
 import { VOICES } from "@/data/voices";
 import {
@@ -12,8 +17,10 @@ import {
 } from "../../_actions/generateDraft";
 import { useConfirm } from "../ConfirmDialog";
 import { inputClsSm } from "../form";
+import { GenderSelect } from "../GenderSelect";
 import { VoiceSelectWithPreview } from "../VoiceSelectWithPreview";
 import { ImagePreview } from "./ImagePreview";
+import { RegenerateButton } from "./RegenerateButton";
 import { Card, ErrorNote, postJson, PrimaryButton } from "./shared";
 import { useAutosave, useStageVisit } from "./useAutosave";
 import { useGenerationPool } from "./useGenerationPool";
@@ -37,6 +44,7 @@ function newNpc(id: string): Character {
   return {
     id,
     name: "",
+    gender: "neutral",
     voice: DEFAULT_NPC_VOICE,
     voiceSpeed: 1,
     color: DEFAULT_NPC_COLOR,
@@ -98,6 +106,9 @@ export function CharactersStep({
   const [busy, setBusy] = useState<"gen" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [versions, setVersions] = useState<Record<string, number>>({});
+  // Characters the author locked — kept verbatim when "Generate All" re-rolls.
+  const [locks, setLocks] = useState<Record<string, boolean>>({});
+  const toggleLock = (id: string) => setLocks((l) => ({ ...l, [id]: !l[id] }));
   const img = useGenerationPool();
   const doneRef = useRef<Set<string>>(new Set());
 
@@ -134,18 +145,56 @@ export function CharactersStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function generate(authorRequest?: string) {
+  async function generate(authorRequest?: string, count?: number) {
     setErr(null);
     setBusy("gen");
     try {
+      // Locked characters are kept verbatim; the route is told they already
+      // exist so it designs only the rest (no duplicates / extra hero).
+      const lockedChars = (chars?.characters ?? []).filter((c) => locks[c.id]);
       const res = await postJson<{ characters: CharactersFile; characterArt: CharacterArtFileT }>(
         "/api/admin/generate/characters",
-        { concept, storyboard, authorRequest },
+        {
+          concept,
+          storyboard,
+          authorRequest,
+          castCount: count,
+          lockedCharacters: lockedChars.map((c) => ({
+            id: c.id,
+            name: c.name,
+            isHero: !!c.isHero,
+            bio: c.persona?.shortBio ?? "",
+          })),
+        },
       );
-      setChars(res.characters);
-      setArt(res.characterArt);
-      void saveDraftCharactersAction(draftId, res.characters);
-      void saveCharacterArtAction(draftId, res.characterArt);
+
+      let nextChars = res.characters;
+      let nextArt = res.characterArt;
+      if (lockedChars.length > 0) {
+        // id-based merge: locked characters kept exactly; AI's cast added,
+        // dropping any that collide with a locked id or its unique role.
+        const lockedIds = new Set(lockedChars.map((c) => c.id));
+        const lockedHero = lockedChars.some((c) => c.isHero);
+        const lockedNarrator = lockedChars.some((c) => c.id === "narrator");
+        const aiChars = res.characters.characters.filter(
+          (c) =>
+            !lockedIds.has(c.id) &&
+            !(lockedHero && c.isHero) &&
+            !(lockedNarrator && c.id === "narrator"),
+        );
+        nextChars = { characters: [...lockedChars, ...aiChars] };
+        const keepIds = new Set(nextChars.characters.map((c) => c.id));
+        const lockedArt = (art?.entries ?? []).filter((e) => lockedIds.has(e.id));
+        const aiArt = res.characterArt.entries.filter(
+          (e) => keepIds.has(e.id) && !lockedIds.has(e.id),
+        );
+        nextArt = { entries: [...lockedArt, ...aiArt] };
+      }
+
+      setChars(nextChars);
+      setArt(nextArt);
+      void saveDraftCharactersAction(draftId, nextChars);
+      void saveCharacterArtAction(draftId, nextArt);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -176,6 +225,11 @@ export function CharactersStep({
   function setVoice(id: string, voice: string) {
     setChars((c) =>
       c ? { characters: c.characters.map((ch) => (ch.id === id ? { ...ch, voice } : ch)) } : c,
+    );
+  }
+  function setGender(id: string, gender: Character["gender"]) {
+    setChars((c) =>
+      c ? { characters: c.characters.map((ch) => (ch.id === id ? { ...ch, gender } : ch)) } : c,
     );
   }
   function setVisual(id: string, visualDescription: string) {
@@ -264,6 +318,7 @@ export function CharactersStep({
     await img.run([slug], imgWorker, 1);
   }
 
+
   // A freshly-created draft ships a placeholder characters.json (narrator +
   // hero) but no characterArt, so `chars` is always truthy. Treat "no art yet"
   // as not-yet-generated and show the Generate action — otherwise the LLM cast
@@ -305,17 +360,44 @@ export function CharactersStep({
           />
         </>
       }
+      actions={
+        <RegenerateButton
+          busy={busy === "gen"}
+          disabled={busyAny}
+          title="Revise the cast"
+          hint={
+            <>
+              Re-designs the open (
+              <LockOpen weight="regular" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) characters; keeps your locked (
+              <Lock weight="fill" className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden />
+              ) ones. Lock a character to protect it from Generate.
+            </>
+          }
+          count={{
+            initial: Math.min(Math.max(shown.length, 1), CHAR_MAX),
+            min: 1,
+            max: CHAR_MAX,
+            label: "Cast",
+          }}
+          onRegenerate={generate}
+        />
+      }
     >
       <div className="flex flex-col gap-3">
-        {shown.map((ch) => {
+        {shown.map((ch, idx) => {
           const slug = slugOf(ch);
           const imgSt = img.entries[slug]?.status;
           const imgPresent = imgSt === "done" || initialImgDone.has(slug);
           const imgBase = `/stories/${draftId}/characters/${slug}`;
           return (
             <Fragment key={ch.id}>
-            <div className="flex gap-3 rounded-card bg-paper-deep/20 p-2.5">
-              <div className="flex w-40 shrink-0 flex-col gap-1">
+            <div
+              className={`flex gap-3 rounded-card bg-paper-deep/20 p-2.5 ${
+                locks[ch.id] ? "ring-2 ring-accent/40" : ""
+              }`}
+            >
+              <div className="flex w-40 shrink-0 flex-col gap-3">
                 <ImagePreview
                   base={imgBase}
                   version={versions[slug] ?? 0}
@@ -326,24 +408,47 @@ export function CharactersStep({
                 />
                 <button
                   type="button"
-                  className="inline-flex w-full items-center justify-center gap-1 rounded-pill bg-paper-deep/60 px-2 py-1 text-xs font-medium text-accent-deep ring-1 ring-ink-soft/10 transition-colors hover:bg-paper-deep active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-pill bg-accent px-3 py-1.5 text-sm font-medium text-paper ring-1 ring-accent-deep/20 transition hover:bg-accent-deep active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
                   onClick={() => void onGenerateImage(slug, imgPresent)}
                   disabled={busyAny}
                 >
-                  <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
+                  <ImageSquare weight="fill" className="h-4 w-4" aria-hidden />
                   {imgSt === "running" ? "Generating…" : "Generate"}
                 </button>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <label className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1">
                   <span className={fieldLabelCls}>Name</span>
-                  <input
-                    className={`${inputClsSm} font-semibold`}
-                    value={ch.name}
-                    onChange={(e) => setName(ch.id, e.target.value)}
-                    placeholder="Name"
-                  />
-                </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className={`${inputClsSm} min-w-0 flex-1 font-semibold`}
+                      value={ch.name}
+                      onChange={(e) => setName(ch.id, e.target.value)}
+                      placeholder="Name"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleLock(ch.id)}
+                      aria-pressed={!!locks[ch.id]}
+                      title={
+                        locks[ch.id]
+                          ? "Locked — kept when you Generate All"
+                          : "Open — Generate All may replace this character"
+                      }
+                      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-button transition-colors ${
+                        locks[ch.id]
+                          ? "bg-paper-deep/60 text-accent-deep ring-1 ring-ink-soft/10"
+                          : "text-ink-soft/40 hover:text-ink-soft"
+                      }`}
+                    >
+                      {locks[ch.id] ? (
+                        <Lock weight="fill" className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <LockOpen className="h-4 w-4" aria-hidden />
+                      )}
+                    </button>
+                  </div>
+                </div>
                 <label className="flex flex-col gap-1">
                   <span className={fieldLabelCls}>Bio</span>
                   <textarea
@@ -362,18 +467,29 @@ export function CharactersStep({
                     placeholder="Face, hair, outfit, palette…"
                   />
                 </label>
-                <div className="flex flex-col gap-1">
-                  <span className={fieldLabelCls}>Voice</span>
-                  <VoiceSelectWithPreview
-                    value={ch.voice}
-                    options={VOICES}
-                    placeholder="(choose a voice)"
-                    onChange={(v) => setVoice(ch.id, v)}
-                  />
+                <div className="flex items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <span className={fieldLabelCls}>Gender</span>
+                    <GenderSelect
+                      value={ch.gender}
+                      onChange={(g) => setGender(ch.id, g)}
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className={fieldLabelCls}>Voice</span>
+                    <VoiceSelectWithPreview
+                      value={ch.voice}
+                      options={VOICES}
+                      placeholder="(choose a voice)"
+                      onChange={(v) => setVoice(ch.id, v)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-            <hr className="border-t border-ink-soft/15" />
+            {idx < shown.length - 1 && (
+              <hr className="border-t border-ink-soft/15" />
+            )}
             </Fragment>
           );
         })}
