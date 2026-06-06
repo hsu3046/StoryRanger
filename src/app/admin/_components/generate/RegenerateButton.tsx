@@ -20,6 +20,7 @@ export function RegenerateButton({
   title = "Revise & regenerate",
   hint,
   count,
+  allowEmpty = false,
   onRegenerate,
 }: {
   busy: boolean;
@@ -29,6 +30,9 @@ export function RegenerateButton({
   title?: string;
   /** Description line — should state exactly which fields get rewritten. */
   hint?: React.ReactNode;
+  /** Allow generating with no instruction even without an in-modal count
+   *  control (e.g. the Scene step, whose page count lives outside this modal). */
+  allowEmpty?: boolean;
   /** Optional "how many" control (e.g. beat count) shown in the modal. The
    *  chosen value is passed as the 2nd arg of onRegenerate. */
   count?: { initial: number; min: number; max: number; label?: string };
@@ -137,7 +141,11 @@ export function RegenerateButton({
                   >
                     Cancel
                   </button>
-                  <GhostButton accent onClick={submit} disabled={!text.trim() && !count}>
+                  <GhostButton
+                    accent
+                    onClick={submit}
+                    disabled={!text.trim() && !count && !allowEmpty}
+                  >
                     <Sparkle weight="fill" className="h-4 w-4" aria-hidden />
                     Generate
                   </GhostButton>

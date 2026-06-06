@@ -601,6 +601,7 @@ export function ScenesStep({
         <RegenerateButton
           busy={busy === "gen"}
           disabled={busyAny}
+          allowEmpty
           title="Revise the pages"
           hint={
             <>
