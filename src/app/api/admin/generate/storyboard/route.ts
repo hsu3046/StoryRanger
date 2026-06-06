@@ -162,7 +162,10 @@ export async function POST(req: Request) {
 
   try {
     const storyboard = await chat({
-      system: systemPrompt(beatCount),
+      // In partial (locked) mode the arc length is fixed to the current beats —
+      // use it for the system prompt too, so it doesn't conflict with the
+      // per-beat list when the author's count is outside the 5–12 clamp.
+      system: systemPrompt(partial ? partial.length : beatCount),
       messages: [{ role: "user", content: userLines.join("\n") }],
       schema: LLMStoryboardSchema,
       schemaName: "storyboard",
