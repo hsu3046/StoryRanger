@@ -11,7 +11,7 @@
       "image": "/stories/twenty-thousand-leagues-under-the-sea/scenes/scene-1",
       "bgm": "",
       "speaker": "narrator",
-      "narration": "The ship shuddered as a metallic force struck from below. {{They}} tumbled over the railing, falling into the icy, churning foam of the midnight sea.",
+      "narration": "A sudden, thunderous impact rocked the deck of the Abraham Lincoln, throwing {{name}} into the dark, churning waves. The cold water pulled at {{their}} boots as the great ship vanished into the midnight mist. {{They}} struggled to stay afloat, searching the stormy horizon for any sign of hope.",
       "branches": [
         {
           "id": "continue",
