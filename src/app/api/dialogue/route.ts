@@ -10,6 +10,7 @@ import {
   trimDialogueHistory,
 } from "@/lib/dialogue-personas";
 import { SpeakerIdSchema } from "@/data/schemas";
+import { requireSessionOr401 } from "@/lib/supabase/guard";
 import type { DialogueResponse } from "@/types/story";
 
 export const runtime = "nodejs";
@@ -103,6 +104,10 @@ const SAFE_FALLBACK: DialogueResponse = {
 };
 
 export async function POST(req: Request) {
+  // Paid LLM — gate behind login (the proxy can't, it excludes /api).
+  const gate = await requireSessionOr401();
+  if (gate) return gate;
+
   let body;
   try {
     body = RequestSchema.parse(await req.json());

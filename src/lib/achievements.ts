@@ -7,6 +7,9 @@
  * to migrate to a per-player server store (Supabase) later — the read/write
  * surface here is deliberately small so that swap is easy.
  */
+import { createClient, isSupabaseConfigured } from "./supabase/client";
+import { TABLES } from "./supabase/tables";
+
 const KEY = "storyranger:achievements";
 
 export function loadEarnedAchievements(): string[] {
@@ -40,5 +43,80 @@ export function recordEarnedAchievements(ids: string[]): void {
     }
   } catch {
     // Quota exceeded / private mode — non-fatal.
+  }
+}
+
+function writeLocal(ids: string[]): void {
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(ids));
+  } catch {
+    /* ignore */
+  }
+}
+
+async function currentUser() {
+  if (!isSupabaseConfigured() || typeof window === "undefined") return null;
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user ? { supabase, id: user.id } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Union the given medal ids into the signed-in user's profile.achievements
+ *  (cross-device). Best-effort; localStorage already has them. */
+export async function recordEarnedAchievementsRemote(
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const u = await currentUser();
+  if (!u) return;
+  try {
+    const { data } = await u.supabase
+      .from(TABLES.profiles)
+      .select("achievements")
+      .eq("id", u.id)
+      .maybeSingle();
+    const current = new Set<string>(
+      (data?.achievements as string[] | undefined) ?? [],
+    );
+    let changed = false;
+    for (const id of ids)
+      if (!current.has(id)) {
+        current.add(id);
+        changed = true;
+      }
+    if (changed) {
+      await u.supabase
+        .from(TABLES.profiles)
+        .update({ achievements: [...current] })
+        .eq("id", u.id);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** On login: pull the profile's achievements into the local cache (union) so a
+ *  fresh device shows medals earned elsewhere. */
+export async function pullAchievementsToLocal(): Promise<void> {
+  const u = await currentUser();
+  if (!u) return;
+  try {
+    const { data } = await u.supabase
+      .from(TABLES.profiles)
+      .select("achievements")
+      .eq("id", u.id)
+      .maybeSingle();
+    const remote = (data?.achievements as string[] | undefined) ?? [];
+    if (remote.length === 0) return;
+    const merged = new Set<string>([...loadEarnedAchievements(), ...remote]);
+    writeLocal([...merged]);
+  } catch {
+    /* ignore */
   }
 }

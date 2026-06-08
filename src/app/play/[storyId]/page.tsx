@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { getStory } from "@/lib/stories";
+import { getSessionUser, ensureProfile } from "@/lib/supabase/queries";
 import { MEDALS } from "@/data/medals";
 import { StoryPlayer } from "@/components/play/StoryPlayer";
 import { sceneImageWebpUrl } from "@/lib/asset-paths";
@@ -55,6 +56,12 @@ export default async function PlayPage({ params }: Props) {
   const { storyId } = await params;
   const loaded = getStory(storyId);
   if (!loaded) notFound();
+
+  // The proxy gates this route, so a logged-in user is expected. Direct /play
+  // deep-links bypass the home screen, so guarantee a profile row here too (the
+  // client-side migration + sync depend on it). Tolerates Supabase being unset.
+  const user = await getSessionUser().catch(() => null);
+  if (user) await ensureProfile(user).catch(() => null);
   const [bgmKeys, commonBgmKeys, mapImage] = await Promise.all([
     listBgmKeysAt("stories", storyId, "audio", "bgm"),
     listBgmKeysAt("audio", "bgm"),

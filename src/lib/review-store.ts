@@ -14,6 +14,8 @@
  * handlers), keeping this module pure.
  */
 import type { Challenge } from "./education";
+import { createClient, isSupabaseConfigured } from "./supabase/client";
+import { TABLES } from "./supabase/tables";
 
 const KEY_PREFIX = "storyranger:review";
 const SCHEMA_VERSION = 1;
@@ -105,6 +107,67 @@ function writeFile(storyId: string, file: ReviewFile): void {
   }
 }
 
+/** Push the current review list to the signed-in user's play_states row
+ *  (`review` column). UPSERT — if no row exists yet (a wrong answer before the
+ *  first PlayState save), create a review-only row (state stays null until the
+ *  play-state sync fills it); on conflict only the `review`/`updated_at`
+ *  columns are written, so the existing `state` is untouched. Best-effort. */
+async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
+  if (!isSupabaseConfigured() || typeof window === "undefined") return;
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const nowIso = new Date().toISOString();
+    await supabase.from(TABLES.playStates).upsert(
+      {
+        user_id: user.id,
+        story_id: storyId,
+        review: items,
+        updated_at: nowIso,
+        review_updated_at: nowIso,
+      },
+      { onConflict: "user_id,story_id" },
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Reconcile the local review cache with the remote list on login / hydration,
+ * returning the merged items. Remote is authoritative for what it knows about
+ * (so masters/clears on another device — incl. an empty list — propagate), BUT
+ * a local item recorded AFTER the remote row was last written is an unsynced
+ * miss (a fire-and-forget push that failed) and is preserved + re-pushed. Items
+ * absent from remote and older than the remote write were mastered/cleared
+ * elsewhere and are dropped. `remoteReviewUpdatedAt` is the row's
+ * review_updated_at (bumped ONLY by review writes, not state-only saves), so a
+ * miss recorded after the last review push is correctly kept even if a later
+ * state save advanced the row's general updated_at.
+ */
+export function mergeRemoteReview(
+  storyId: string,
+  remoteItems: ReviewItem[],
+  remoteReviewUpdatedAt: string | null,
+): ReviewItem[] {
+  const remote = remoteItems.filter(isValidItem);
+  const remoteKeys = new Set(remote.map((it) => it.key));
+  const remoteT = Date.parse(remoteReviewUpdatedAt ?? "") || 0;
+  const localExtras = readFile(storyId).items.filter(
+    (it) => !remoteKeys.has(it.key) && (Date.parse(it.lastSeen) || 0) > remoteT,
+  );
+  const merged = [...remote, ...localExtras];
+  if (typeof window !== "undefined") {
+    writeFile(storyId, { version: SCHEMA_VERSION, items: merged });
+  }
+  // Re-push the unsynced local misses so they finally reach the DB.
+  if (localExtras.length > 0) void pushRemote(storyId, merged);
+  return merged;
+}
+
 /** All wrong questions stored for a story (oldest → most-recently-missed). */
 export function loadReview(storyId: string): ReviewItem[] {
   return readFile(storyId).items;
@@ -148,6 +211,7 @@ export function recordWrong(
     file.items = file.items.slice(file.items.length - MAX_ITEMS);
   }
   writeFile(storyId, file);
+  void pushRemote(storyId, file.items);
 }
 
 /** Remove a question once the player solves it correctly in review ("mastered"). */
@@ -156,6 +220,7 @@ export function markMastered(storyId: string, key: string): void {
   const next = file.items.filter((it) => it.key !== key);
   if (next.length !== file.items.length) {
     writeFile(storyId, { ...file, items: next });
+    void pushRemote(storyId, next);
   }
 }
 
@@ -169,4 +234,5 @@ export function clearReview(storyId: string): void {
   } catch {
     // ignore
   }
+  void pushRemote(storyId, []);
 }

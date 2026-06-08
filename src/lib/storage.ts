@@ -28,6 +28,60 @@ function keyFor(slot: string, storyId: string): string {
   return `${KEY_PREFIX}:${slot}:${storyId}`;
 }
 
+const OWNER_KEY = `${KEY_PREFIX}:owner`;
+
+/** Ensure the per-account localStorage caches belong to `uid`. On a different
+ *  (or absent) owner — e.g. a shared browser where another account signed in —
+ *  wipe the previous account's play/review/achievements caches so they can't
+ *  leak into, or overwrite, this account's remote progress; then record the new
+ *  owner. No-op when the owner already matches (same account). */
+export function claimLocalCacheForUser(uid: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const owner = window.localStorage.getItem(OWNER_KEY);
+    if (owner === uid) return;
+    // ONLY wipe when a DIFFERENT, known account previously owned this browser.
+    // A MISSING owner is the normal first sign-in of an anonymous/local player —
+    // keep their local progress so migrateLocalToRemoteOnce() can import it
+    // (wiping here would erase progress instead of migrating it).
+    if (owner) {
+      const kill: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (
+          k &&
+          (k.startsWith(`${KEY_PREFIX}:play:`) ||
+            k.startsWith(`${KEY_PREFIX}:review:`))
+        ) {
+          kill.push(k);
+        }
+      }
+      kill.push(`${KEY_PREFIX}:achievements`);
+      kill.forEach((k) => window.localStorage.removeItem(k));
+    }
+    window.localStorage.setItem(OWNER_KEY, uid);
+  } catch {
+    /* private mode — non-fatal */
+  }
+}
+
+/** Story ids that have a local "play"-slot save (used by the one-time
+ *  localStorage → Supabase migration on first login). */
+export function localPlayStoryIds(): string[] {
+  if (typeof window === "undefined") return [];
+  const prefix = `${KEY_PREFIX}:play:`;
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(prefix)) ids.push(k.slice(prefix.length));
+    }
+  } catch {
+    /* private mode */
+  }
+  return ids;
+}
+
 export function saveState(state: PlayState, slot: string = "play"): void {
   if (typeof window === "undefined") return;
   try {
@@ -40,15 +94,20 @@ export function saveState(state: PlayState, slot: string = "play"): void {
   }
 }
 
-export function loadState(
+/**
+ * Backfill + sanitize a raw PlayState (from localStorage OR Supabase) so old
+ * saves stay coherent: default missing fields, rewrite renamed medal ids, drop
+ * stale medals/encounters, and sanity-check the interaction overlay. Returns a
+ * mutated-in-place PlayState, or null if the input is unusable.
+ *
+ * Shared by both the local (`loadState`) and remote (`loadRemotePlayState`)
+ * load paths — DB saves carry the same legacy shapes, so they need it too.
+ */
+export function sanitizePlayState(
+  parsed: PlayState,
   storyId: string,
-  slot: string = "play",
 ): PlayState | null {
-  if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(slot, storyId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PlayState;
     // Backfill hero for saves created before the personalization feature.
     if (!parsed.hero) {
       parsed.hero = { ...DEFAULT_HERO };
@@ -130,6 +189,21 @@ export function loadState(
       }
     }
     return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Load + sanitize the local (localStorage) save for a story/slot, or null. */
+export function loadState(
+  storyId: string,
+  slot: string = "play",
+): PlayState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(keyFor(slot, storyId));
+    if (!raw) return null;
+    return sanitizePlayState(JSON.parse(raw) as PlayState, storyId);
   } catch {
     return null;
   }
