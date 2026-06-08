@@ -4,14 +4,14 @@ import { contentRepo } from "@/lib/content-repo";
 import { getProfile, getSessionUser, ensureProfile } from "@/lib/supabase/queries";
 
 export default async function HomePage() {
-  // The proxy already redirects logged-out visitors to /login, so a profile is
-  // expected here. Defensively create it if the auth-callback creation missed
-  // (e.g. a transient failure). Tolerate absence when Supabase isn't set up yet.
-  let profile = await getProfile().catch(() => null);
-  if (!profile) {
-    const user = await getSessionUser().catch(() => null);
-    if (user) profile = await ensureProfile(user).catch(() => null);
-  }
+  // Resolve the signed-in user FIRST. When Supabase isn't configured yet (env
+  // absent) getSessionUser throws → null, so the home renders as a plain
+  // anonymous page with NO sign-out control. Only fetch/create the profile —
+  // and only show AuthStatus — when there's an actual session. (Defensively
+  // create the profile if the auth-callback creation missed.)
+  const user = await getSessionUser().catch(() => null);
+  let profile = user ? await getProfile().catch(() => null) : null;
+  if (user && !profile) profile = await ensureProfile(user).catch(() => null);
   const repo = contentRepo();
   // Source-of-truth for the carousel is now the same scenes.json each
   // admin Basic page edits — title + subtitle propagate immediately.
@@ -36,7 +36,7 @@ export default async function HomePage() {
   return (
     <>
       <HomeOnboarding stories={stories} initialHero={profile?.hero ?? null} />
-      <AuthStatus displayName={profile?.display_name ?? null} />
+      {user && <AuthStatus displayName={profile?.display_name ?? null} />}
     </>
   );
 }
