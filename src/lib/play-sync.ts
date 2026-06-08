@@ -85,17 +85,13 @@ export async function upsertRemotePlayState(state: PlayState): Promise<void> {
   const uid = await currentUserId();
   if (!uid) return;
   try {
-    await createClient()
-      .from(TABLES.playStates)
-      .upsert(
-        {
-          user_id: uid,
-          story_id: state.storyId,
-          state,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,story_id" },
-      );
+    // Stale-write-guarded save: the RPC only overwrites when this state's
+    // updatedAt is >= the stored one, so a late out-of-order flush can't roll
+    // back newer progress (or newer cross-device progress).
+    await createClient().rpc("storyranger_save_play_state", {
+      p_story_id: state.storyId,
+      p_state: state,
+    });
   } catch {
     /* best-effort — localStorage already has it */
   }
@@ -258,22 +254,29 @@ async function runMigration(): Promise<void> {
       .select("hero, achievements")
       .eq("id", uid)
       .maybeSingle();
-    if (profErr) failedAny = true;
-    const update: { hero?: unknown; achievements?: string[] } = {};
-    if (prof && !prof.hero && heroSeed) update.hero = heroSeed;
-    if (localAch.length) {
-      const merged = new Set<string>([
-        ...((prof?.achievements as string[] | undefined) ?? []),
-        ...localAch,
-      ]);
-      update.achievements = [...merged];
-    }
-    if (Object.keys(update).length) {
-      const { error } = await supabase
-        .from(TABLES.profiles)
-        .update(update)
-        .eq("id", uid);
-      if (error) failedAny = true;
+    if (profErr || !prof) {
+      // No profile row yet (e.g. the auth-callback ensureProfile failed and the
+      // direct /play path skipped the home fallback). Don't seed hero/
+      // achievements against a missing row and DON'T mark migration complete —
+      // leave the flag unset so it retries once the profile exists.
+      failedAny = true;
+    } else {
+      const update: { hero?: unknown; achievements?: string[] } = {};
+      if (!prof.hero && heroSeed) update.hero = heroSeed;
+      if (localAch.length) {
+        const merged = new Set<string>([
+          ...((prof.achievements as string[] | undefined) ?? []),
+          ...localAch,
+        ]);
+        update.achievements = [...merged];
+      }
+      if (Object.keys(update).length) {
+        const { error } = await supabase
+          .from(TABLES.profiles)
+          .update(update)
+          .eq("id", uid);
+        if (error) failedAny = true;
+      }
     }
 
     if (!failedAny) {
