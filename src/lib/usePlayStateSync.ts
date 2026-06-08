@@ -47,14 +47,25 @@ export function usePlayStateSync(slot: string, syncToDb: boolean) {
     };
   }, [syncToDb, flush]);
 
-  /** DB-first load (cross-device), falling back to the local save. */
+  /** Load progress, newest-wins. The DB is the cross-device source of truth,
+   *  but a failed prior upsert or offline play can leave a FRESHER local save —
+   *  so compare `updatedAt` and don't let a stale remote copy clobber newer
+   *  local progress. When local wins, re-upload so the DB catches up. */
   const load = useCallback(
     async (storyId: string): Promise<PlayState | null> => {
-      if (syncToDb) {
-        const remote = await loadRemotePlayState(storyId);
-        if (remote) return remote;
+      if (!syncToDb) return loadState(storyId, slot);
+      const remote = await loadRemotePlayState(storyId);
+      const local = loadState(storyId, slot);
+      if (remote && local) {
+        const localT = Date.parse(local.updatedAt ?? "") || 0;
+        const remoteT = Date.parse(remote.updatedAt ?? "") || 0;
+        if (localT > remoteT) {
+          void upsertRemotePlayState(local);
+          return local;
+        }
+        return remote;
       }
-      return loadState(storyId, slot);
+      return remote ?? local;
     },
     [slot, syncToDb],
   );
