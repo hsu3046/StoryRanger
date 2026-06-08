@@ -162,32 +162,50 @@ async function runMigration(): Promise<void> {
 
     const { data: existing, error: exErr } = await supabase
       .from(TABLES.playStates)
-      .select("story_id")
+      .select("story_id, state")
       .eq("user_id", uid);
     if (exErr) return; // can't read the baseline → bail, retry next mount
-    const have = new Set(
-      (existing ?? []).map((r: { story_id: string }) => r.story_id),
+    const rows = (existing ?? []) as Array<{
+      story_id: string;
+      state: unknown;
+    }>;
+    // Rows that already hold a real PlayState → DB wins, skip. A row with
+    // state=null is review-only (review synced before any save), so we still
+    // import this device's local state into it (without touching its review).
+    const haveState = new Set(
+      rows.filter((r) => r.state != null).map((r) => r.story_id),
     );
+    const haveRow = new Set(rows.map((r) => r.story_id));
 
     let heroSeed: PlayState["hero"] | null = null;
     for (const storyId of localPlayStoryIds()) {
       const state = loadState(storyId);
       if (state?.hero && !heroSeed) heroSeed = state.hero;
-      if (have.has(storyId) || !state) continue;
-      // upsert + ignoreDuplicates: if the row appeared since the select (race /
-      // second tab), keep the DB copy instead of erroring or clobbering it.
-      const { error } = await supabase
-        .from(TABLES.playStates)
-        .upsert(
-          {
-            user_id: uid,
-            story_id: storyId,
-            state,
-            review: loadReview(storyId),
-          },
-          { onConflict: "user_id,story_id", ignoreDuplicates: true },
-        );
-      if (error) failedAny = true;
+      if (!state || haveState.has(storyId)) continue;
+      if (haveRow.has(storyId)) {
+        // Review-only remote row → fill `state`, keep the remote review.
+        const { error } = await supabase
+          .from(TABLES.playStates)
+          .update({ state, updated_at: new Date().toISOString() })
+          .eq("user_id", uid)
+          .eq("story_id", storyId);
+        if (error) failedAny = true;
+      } else {
+        // No remote row → insert state + local review. ignoreDuplicates keeps
+        // the DB copy if the row appeared since the select (race / second tab).
+        const { error } = await supabase
+          .from(TABLES.playStates)
+          .upsert(
+            {
+              user_id: uid,
+              story_id: storyId,
+              state,
+              review: loadReview(storyId),
+            },
+            { onConflict: "user_id,story_id", ignoreDuplicates: true },
+          );
+        if (error) failedAny = true;
+      }
     }
 
     // Seed profile hero (if unset) + union local achievements.
