@@ -63,9 +63,16 @@ export function usePlayStateSync(slot: string, syncToDb: boolean) {
           void upsertRemotePlayState(local);
           return local;
         }
+      }
+      if (remote) {
+        // Mirror the chosen remote into the local slot so a later offline /
+        // signed-out load keeps it (StoryPlayer skips persisting the just-loaded
+        // object, so without this the localStorage copy would stay stale). No DB
+        // re-upsert — the DB already has this exact state.
+        saveState(remote, slot);
         return remote;
       }
-      return remote ?? local;
+      return local;
     },
     [slot, syncToDb],
   );
