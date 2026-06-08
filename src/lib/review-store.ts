@@ -134,14 +134,21 @@ async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
   }
 }
 
-/** Seed the local review cache from a remote-fetched list (used on login so a
- *  fresh device's "Check Your Answers" shows questions missed elsewhere). Only
- *  overwrites when the local cache is empty, so unsynced local misses survive. */
-export function seedLocalReview(storyId: string, items: ReviewItem[]): void {
-  if (typeof window === "undefined" || items.length === 0) return;
-  const local = readFile(storyId);
-  if (local.items.length > 0) return;
-  writeFile(storyId, { version: SCHEMA_VERSION, items: items.filter(isValidItem) });
+/** Overwrite the local review cache with the authoritative remote list (used on
+ *  login / home hydration). Remote is write-through-synced on every
+ *  recordWrong/markMastered, so it's the cross-device source of truth — this
+ *  reflects masters/clears done on another device, INCLUDING an empty list.
+ *  Callers only invoke this for stories that actually have a remote row, so a
+ *  truly offline-unsynced local miss (no remote row yet) is left untouched. */
+export function syncLocalReviewFromRemote(
+  storyId: string,
+  items: ReviewItem[],
+): void {
+  if (typeof window === "undefined") return;
+  writeFile(storyId, {
+    version: SCHEMA_VERSION,
+    items: items.filter(isValidItem),
+  });
 }
 
 /** All wrong questions stored for a story (oldest → most-recently-missed). */

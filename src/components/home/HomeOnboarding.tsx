@@ -9,7 +9,7 @@ import { CaretLeft, CaretRight, Minus, Plus } from "@phosphor-icons/react";
 import type { Hero, HeroGender, PlayState } from "@/types/story";
 import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
-import { reviewCount, seedLocalReview } from "@/lib/review-store";
+import { reviewCount, syncLocalReviewFromRemote } from "@/lib/review-store";
 import {
   loadAllRemotePlay,
   upsertRemotePlayState,
@@ -92,10 +92,12 @@ export function HomeOnboarding({ stories: STORIES, initialHero }: Props) {
       await pullAchievementsToLocal();
       const remote = await loadAllRemotePlay();
       if (cancelled) return;
-      // Seed local review caches from the DB so the local-reading study tool
-      // shows questions missed on another device.
+      // The DB is authoritative for review: overwrite the local cache for every
+      // story that has a remote row (reflects masters/clears from other devices,
+      // including an empty list). Stories with no remote row keep their local
+      // cache (a truly offline-unsynced miss).
       for (const [sid, save] of Object.entries(remote)) {
-        if (save.review.length) seedLocalReview(sid, save.review);
+        syncLocalReviewFromRemote(sid, save.review);
       }
       // DB is source of truth; fall back to localStorage per story.
       setSavedMap(
@@ -106,8 +108,9 @@ export function HomeOnboarding({ stories: STORIES, initialHero }: Props) {
       setReviewMap(
         Object.fromEntries(
           STORIES.map((s) => {
-            const remoteN = remote[s.id]?.review.length ?? 0;
-            return [s.id, remoteN > 0 ? remoteN : reviewCount(s.id)];
+            const r = remote[s.id];
+            // Remote row → its count is authoritative (even 0); else local.
+            return [s.id, r ? r.review.length : reviewCount(s.id)];
           }),
         ),
       );
