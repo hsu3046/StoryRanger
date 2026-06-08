@@ -9,7 +9,14 @@ import { CaretLeft, CaretRight, Minus, Plus } from "@phosphor-icons/react";
 import type { Hero, HeroGender, PlayState } from "@/types/story";
 import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
-import { reviewCount } from "@/lib/review-store";
+import { reviewCount, seedLocalReview } from "@/lib/review-store";
+import {
+  loadAllRemotePlay,
+  upsertRemotePlayState,
+  migrateLocalToRemoteOnce,
+  saveProfileHero,
+} from "@/lib/play-sync";
+import { pullAchievementsToLocal } from "@/lib/achievements";
 import { newPlayState } from "@/lib/story-engine";
 import { getStory } from "@/lib/stories";
 import { SecretGate } from "./SecretGate";
@@ -46,9 +53,12 @@ interface Props {
    *  source of truth. Each entry mirrors `story.title`,
    *  `story.subtitle`, and `story.coverImage` (extension stripped). */
   stories: StoryCardMeta[];
+  /** The signed-in player's saved hero (from their profile), used to pre-fill
+   *  the "new adventure" form. Null on first run / when not configured. */
+  initialHero?: Hero | null;
 }
 
-export function HomeOnboarding({ stories: STORIES }: Props) {
+export function HomeOnboarding({ stories: STORIES, initialHero }: Props) {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [savedMap, setSavedMap] = useState<Record<string, PlayState | null>>(
@@ -56,9 +66,9 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   );
   const [activeIdx, setActiveIdx] = useState(0);
   const [showNewHero, setShowNewHero] = useState(false);
-  const [name, setName] = useState("");
-  const [gender, setGender] = useState<HeroGender>("girl");
-  const [age, setAge] = useState(AGE_DEFAULT);
+  const [name, setName] = useState(initialHero?.name ?? "");
+  const [gender, setGender] = useState<HeroGender>(initialHero?.gender ?? "girl");
+  const [age, setAge] = useState(initialHero?.age ?? AGE_DEFAULT);
   /** Non-null while the "dive into the page" transition runs — holds the
    *  play route to push to once the screen has darkened. */
   const [diveTo, setDiveTo] = useState<string | null>(null);
@@ -74,14 +84,40 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
-    setSavedMap(
-      Object.fromEntries(STORIES.map((s) => [s.id, loadState(s.id)])),
-    );
-    setReviewMap(
-      Object.fromEntries(STORIES.map((s) => [s.id, reviewCount(s.id)])),
-    );
-    setHydrated(true);
+    let cancelled = false;
+    async function hydrate() {
+      // First login: import any local saves into the DB, then pull the global
+      // achievements down. Both no-op when not signed in / not configured.
+      await migrateLocalToRemoteOnce();
+      await pullAchievementsToLocal();
+      const remote = await loadAllRemotePlay();
+      if (cancelled) return;
+      // Seed local review caches from the DB so the local-reading study tool
+      // shows questions missed on another device.
+      for (const [sid, save] of Object.entries(remote)) {
+        if (save.review.length) seedLocalReview(sid, save.review);
+      }
+      // DB is source of truth; fall back to localStorage per story.
+      setSavedMap(
+        Object.fromEntries(
+          STORIES.map((s) => [s.id, remote[s.id]?.state ?? loadState(s.id)]),
+        ),
+      );
+      setReviewMap(
+        Object.fromEntries(
+          STORIES.map((s) => {
+            const remoteN = remote[s.id]?.review.length ?? 0;
+            return [s.id, remoteN > 0 ? remoteN : reviewCount(s.id)];
+          }),
+        ),
+      );
+      setHydrated(true);
+    }
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount hydration
   }, []);
 
   const active = STORIES[activeIdx];
@@ -134,7 +170,12 @@ export function HomeOnboarding({ stories: STORIES }: Props) {
   function commitNewGame(hero: Hero, href: string) {
     if (!story) return;
     clearState(active.id);
-    saveState(newPlayState(story, hero));
+    const fresh = newPlayState(story, hero);
+    saveState(fresh);
+    // Mirror to the DB (cross-device) + remember the hero on the profile so the
+    // next "new adventure" pre-fills it. Best-effort; localStorage already has it.
+    void upsertRemotePlayState(fresh);
+    void saveProfileHero(hero);
     beginDive(href);
   }
 

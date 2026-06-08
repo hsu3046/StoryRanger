@@ -14,6 +14,8 @@
  * handlers), keeping this module pure.
  */
 import type { Challenge } from "./education";
+import { createClient, isSupabaseConfigured } from "./supabase/client";
+import { TABLES } from "./supabase/tables";
 
 const KEY_PREFIX = "storyranger:review";
 const SCHEMA_VERSION = 1;
@@ -105,6 +107,37 @@ function writeFile(storyId: string, file: ReviewFile): void {
   }
 }
 
+/** Push the current review list to the signed-in user's play_states row
+ *  (`review` column). Update-only — the row exists once a play state has been
+ *  saved; best-effort, fire-and-forget. */
+async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
+  if (!isSupabaseConfigured() || typeof window === "undefined") return;
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase
+      .from(TABLES.playStates)
+      .update({ review: items, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .eq("story_id", storyId);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Seed the local review cache from a remote-fetched list (used on login so a
+ *  fresh device's "Check Your Answers" shows questions missed elsewhere). Only
+ *  overwrites when the local cache is empty, so unsynced local misses survive. */
+export function seedLocalReview(storyId: string, items: ReviewItem[]): void {
+  if (typeof window === "undefined" || items.length === 0) return;
+  const local = readFile(storyId);
+  if (local.items.length > 0) return;
+  writeFile(storyId, { version: SCHEMA_VERSION, items: items.filter(isValidItem) });
+}
+
 /** All wrong questions stored for a story (oldest → most-recently-missed). */
 export function loadReview(storyId: string): ReviewItem[] {
   return readFile(storyId).items;
@@ -148,6 +181,7 @@ export function recordWrong(
     file.items = file.items.slice(file.items.length - MAX_ITEMS);
   }
   writeFile(storyId, file);
+  void pushRemote(storyId, file.items);
 }
 
 /** Remove a question once the player solves it correctly in review ("mastered"). */
@@ -156,6 +190,7 @@ export function markMastered(storyId: string, key: string): void {
   const next = file.items.filter((it) => it.key !== key);
   if (next.length !== file.items.length) {
     writeFile(storyId, { ...file, items: next });
+    void pushRemote(storyId, next);
   }
 }
 
@@ -169,4 +204,5 @@ export function clearReview(storyId: string): void {
   } catch {
     // ignore
   }
+  void pushRemote(storyId, []);
 }

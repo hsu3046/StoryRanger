@@ -34,8 +34,11 @@ import {
 import { checkMedals } from "@/lib/medals-engine";
 import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
 import { ChallengeGate } from "../challenge/ChallengeGate";
-import { loadState, saveState } from "@/lib/storage";
-import { recordEarnedAchievements } from "@/lib/achievements";
+import { usePlayStateSync } from "@/lib/usePlayStateSync";
+import {
+  recordEarnedAchievements,
+  recordEarnedAchievementsRemote,
+} from "@/lib/achievements";
 import {
   characterAssetSlug,
   characterSpriteBase,
@@ -449,17 +452,29 @@ export function StoryPlayer({
     });
   }
 
-  // One-shot hydration from localStorage. Preview mode skips loading saved
-  // state (the parent passed an explicit starting scene); mute preference
-  // still applies so the per-scene preview respects the player's choice.
+  // Progress persistence: instant localStorage + (real "play" slot only)
+  // debounced Supabase sync, with a DB-first load so progress follows the
+  // signed-in player across devices. The admin "demo" slot and per-scene
+  // preview stay localStorage-only — they must never load from or overwrite
+  // the player's real cross-device save (`play_states` keys on user+story, not
+  // the slot), so gate DB sync on the real "play" slot.
+  const { load: loadSyncedState, persist: persistState } = usePlayStateSync(
+    slot,
+    slot === "play" && !previewMode,
+  );
+  // The exact state object just loaded from the DB/localStorage. The save
+  // effect skips persisting it straight back — otherwise merely opening a story
+  // would re-write (and bump updated_at on) the loaded snapshot, letting an
+  // idle tab clobber newer progress made on another device.
+  const skipPersistRef = useRef<PlayState | null>(null);
+
+  // One-shot hydration. Volumes restore SYNCHRONOUSLY (device prefs) so audio
+  // inits immediately even if the DB is slow; the PlayState load is async
+  // (DB-first, localStorage fallback) and only flips `hydrated` once it
+  // resolves — so the black veil (see the `!hydrated` early return) covers the
+  // round-trip and the player never flashes a fresh "new game" over real
+  // progress. Preview mode skips loading (the parent passed a start scene).
   useEffect(() => {
-    if (!previewMode) {
-      const saved = loadState(story.id, slot);
-      if (saved && story.scenes[saved.currentSceneId]) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration
-        setState(saved);
-      }
-    }
     // Restore saved channel volumes; migrate the legacy single mute toggle
     // (which silenced everything) by starting all channels at 0 if it was on.
     const ls = window.localStorage;
@@ -471,11 +486,28 @@ export function StoryPlayer({
       }
       return legacyMuted ? 0 : fallback;
     };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot restore of device audio prefs on mount
     setVoiceVolume(readVol("storyranger:voiceVolume", DEFAULT_VOLUMES.voice));
     setBgmVolume(readVol("storyranger:bgmVolume", DEFAULT_VOLUMES.bgm));
     setSfxVolume(readVol("storyranger:sfxVolume", DEFAULT_VOLUMES.sfx));
-    setHydrated(true);
-  }, [story, slot, previewMode]);
+
+    if (previewMode) {
+      setHydrated(true);
+      return;
+    }
+    let cancelled = false;
+    void loadSyncedState(story.id).then((saved) => {
+      if (cancelled) return;
+      if (saved && story.scenes[saved.currentSceneId]) {
+        skipPersistRef.current = saved;
+        setState(saved);
+      }
+      setHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [story, previewMode, loadSyncedState]);
 
   // Safety net for the arrival veil: if the first image never signals ready
   // (offline, decode failure, or a race), lift the veil anyway after a beat so
@@ -517,10 +549,18 @@ export function StoryPlayer({
   }, []);
 
   useEffect(() => {
-    // Preview mode is ephemeral — never write to localStorage so closing
-    // and re-opening the modal always starts fresh at the chosen scene.
-    if (hydrated && !previewMode) saveState(state, slot);
-  }, [state, hydrated, slot, previewMode]);
+    // Preview mode is ephemeral — never persist so closing and re-opening the
+    // modal always starts fresh at the chosen scene. persistState writes
+    // localStorage instantly and debounce-syncs the real "play" slot to the DB.
+    if (hydrated && !previewMode) {
+      // Skip persisting the just-loaded snapshot straight back (see skipPersistRef).
+      if (skipPersistRef.current === state) {
+        skipPersistRef.current = null;
+        return;
+      }
+      persistState(state);
+    }
+  }, [state, hydrated, previewMode, persistState]);
 
   // Mirror earned medals into the GLOBAL achievement record (cross-story,
   // separate localStorage key). Medals are achievements, not per-story
@@ -528,7 +568,10 @@ export function StoryPlayer({
   // also seeds the global store from an existing per-story save on mount.
   // Preview mode stays ephemeral.
   useEffect(() => {
-    if (hydrated && !previewMode) recordEarnedAchievements(state.earnedMedals);
+    if (hydrated && !previewMode) {
+      recordEarnedAchievements(state.earnedMedals);
+      void recordEarnedAchievementsRemote(state.earnedMedals);
+    }
   }, [state.earnedMedals, hydrated, previewMode]);
 
   // Surface every state change to the parent (Demo uses this to push undo
@@ -916,7 +959,7 @@ export function StoryPlayer({
         updatedAt: new Date().toISOString(),
       };
       setState(next);
-      if (!previewMode) saveState(next, slot);
+      if (!previewMode) persistState(next);
       router.push("/");
       return;
     }
