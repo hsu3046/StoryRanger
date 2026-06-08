@@ -9,6 +9,7 @@ import {
   upsertRemotePlayState,
   claimLocalCacheOwnership,
   migrateLocalToRemoteOnce,
+  reconcileReview,
 } from "./play-sync";
 
 /** Trailing debounce for the DB upsert. Local writes stay instant; the DB only
@@ -66,6 +67,10 @@ export function usePlayStateSync(slot: string, syncToDb: boolean) {
       // migration — run it here too so a first-login local save + review reaches
       // the DB before we read local. Idempotent (one-time flag + in-flight guard).
       await migrateLocalToRemoteOnce();
+      // Fold this story's local misses into a state-only / empty-review remote
+      // row (the home screen does this for all stories; direct /play needs it
+      // per-story). Fire-and-forget — review is independent of the play state.
+      void reconcileReview(storyId);
       const remote = await loadRemotePlayState(storyId);
       const local = loadState(storyId, slot);
       if (remote && local) {

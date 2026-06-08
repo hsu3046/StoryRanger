@@ -19,11 +19,12 @@ create table if not exists public.storyranger_play_states (
   review jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   -- When the `review` column was last written, SEPARATELY from `updated_at`
-  -- (which state-only saves also bump). Review reconciliation compares a local
-  -- item's lastSeen against THIS, so a missed question recorded after the last
-  -- review push isn't mistaken for "already synced" just because a state save
-  -- advanced updated_at.
-  review_updated_at timestamptz not null default now(),
+  -- (which state-only saves also bump). NULL until review is actually pushed —
+  -- a default of now() would make a state-only row (empty review) look like its
+  -- review was just written, causing reconciliation to drop unsynced local
+  -- misses. Review reconciliation compares a local item's lastSeen against THIS
+  -- (null → 0 → every local miss is preserved + re-pushed).
+  review_updated_at timestamptz,
   primary key (user_id, story_id)
 );
 

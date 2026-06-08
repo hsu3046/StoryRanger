@@ -14,7 +14,7 @@ import {
   localPlayStoryIds,
   claimLocalCacheForUser,
 } from "./storage";
-import { loadReview, type ReviewItem } from "./review-store";
+import { loadReview, mergeRemoteReview, type ReviewItem } from "./review-store";
 import { loadEarnedAchievements } from "./achievements";
 
 async function currentUserId(): Promise<string | null> {
@@ -35,6 +35,31 @@ async function currentUserId(): Promise<string | null> {
 export async function claimLocalCacheOwnership(): Promise<void> {
   const uid = await currentUserId();
   if (uid) claimLocalCacheForUser(uid);
+}
+
+/** Reconcile THIS story's review against the remote row (the per-story
+ *  equivalent of what the home screen does for all stories). Lets the direct
+ *  /play path fold local misses into a state-only / empty-review remote row,
+ *  not just the home path. No row → nothing remote to reconcile (local kept). */
+export async function reconcileReview(storyId: string): Promise<void> {
+  const uid = await currentUserId();
+  if (!uid) return;
+  try {
+    const { data } = await createClient()
+      .from(TABLES.playStates)
+      .select("review, review_updated_at")
+      .eq("user_id", uid)
+      .eq("story_id", storyId)
+      .maybeSingle();
+    if (!data) return;
+    mergeRemoteReview(
+      storyId,
+      Array.isArray(data.review) ? (data.review as ReviewItem[]) : [],
+      (data.review_updated_at as string | null) ?? null,
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function loadRemotePlayState(
