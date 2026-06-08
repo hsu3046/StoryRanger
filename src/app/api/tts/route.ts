@@ -4,6 +4,7 @@ import { z } from "zod";
 import { hasElevenLabsKey, isVoiceError, synthesizeSpeech } from "@/lib/elevenlabs";
 import { DEFAULT_TTS_VOICE, ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import { hasR2, r2Put } from "@/lib/r2";
+import { requireSessionOr401 } from "@/lib/supabase/guard";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,10 @@ const RequestSchema = z.object({
  * it can't be spoofed into writing arbitrary objects.
  */
 export async function POST(req: Request) {
+  // Paid TTS — gate behind login (the proxy can't, it excludes /api).
+  const gate = await requireSessionOr401();
+  if (gate) return gate;
+
   let body: z.infer<typeof RequestSchema>;
   try {
     body = RequestSchema.parse(await req.json());
