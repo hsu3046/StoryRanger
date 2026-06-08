@@ -8,7 +8,12 @@
 import type { PlayState } from "@/types/story";
 import { createClient, isSupabaseConfigured } from "./supabase/client";
 import { TABLES } from "./supabase/tables";
-import { sanitizePlayState, loadState, localPlayStoryIds } from "./storage";
+import {
+  sanitizePlayState,
+  loadState,
+  localPlayStoryIds,
+  claimLocalCacheForUser,
+} from "./storage";
 import { loadReview, type ReviewItem } from "./review-store";
 import { loadEarnedAchievements } from "./achievements";
 
@@ -22,6 +27,14 @@ async function currentUserId(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Claim the local caches for the signed-in user, wiping a previous account's
+ *  on a shared browser. MUST run before any code reads localStorage and lets it
+ *  win over / upload to the remote (sync load, migration). Idempotent. */
+export async function claimLocalCacheOwnership(): Promise<void> {
+  const uid = await currentUserId();
+  if (uid) claimLocalCacheForUser(uid);
 }
 
 export async function loadRemotePlayState(
@@ -94,6 +107,8 @@ export async function saveProfileHero(
 export interface RemoteSave {
   state: PlayState | null;
   review: ReviewItem[];
+  /** Row's last-write time — used to reconcile local vs remote review. */
+  updatedAt: string | null;
 }
 
 /** All of the signed-in user's saves, keyed by storyId (for the home carousel). */
@@ -103,17 +118,19 @@ export async function loadAllRemotePlay(): Promise<Record<string, RemoteSave>> {
   try {
     const { data } = await createClient()
       .from(TABLES.playStates)
-      .select("story_id, state, review")
+      .select("story_id, state, review, updated_at")
       .eq("user_id", uid);
     const out: Record<string, RemoteSave> = {};
     for (const row of (data ?? []) as Array<{
       story_id: string;
       state: PlayState | null;
       review: ReviewItem[] | null;
+      updated_at: string | null;
     }>) {
       out[row.story_id] = {
         state: row.state ? sanitizePlayState(row.state, row.story_id) : null,
         review: Array.isArray(row.review) ? row.review : [],
+        updatedAt: row.updated_at,
       };
     }
     return out;

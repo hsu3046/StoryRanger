@@ -134,21 +134,33 @@ async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
   }
 }
 
-/** Overwrite the local review cache with the authoritative remote list (used on
- *  login / home hydration). Remote is write-through-synced on every
- *  recordWrong/markMastered, so it's the cross-device source of truth — this
- *  reflects masters/clears done on another device, INCLUDING an empty list.
- *  Callers only invoke this for stories that actually have a remote row, so a
- *  truly offline-unsynced local miss (no remote row yet) is left untouched. */
-export function syncLocalReviewFromRemote(
+/**
+ * Reconcile the local review cache with the remote list on login / hydration,
+ * returning the merged items. Remote is authoritative for what it knows about
+ * (so masters/clears on another device — incl. an empty list — propagate), BUT
+ * a local item recorded AFTER the remote row was last written is an unsynced
+ * miss (a fire-and-forget push that failed) and is preserved + re-pushed. Items
+ * absent from remote and older than the remote write were mastered/cleared
+ * elsewhere and are dropped. `remoteUpdatedAt` is the remote row's updated_at.
+ */
+export function mergeRemoteReview(
   storyId: string,
-  items: ReviewItem[],
-): void {
-  if (typeof window === "undefined") return;
-  writeFile(storyId, {
-    version: SCHEMA_VERSION,
-    items: items.filter(isValidItem),
-  });
+  remoteItems: ReviewItem[],
+  remoteUpdatedAt: string | null,
+): ReviewItem[] {
+  const remote = remoteItems.filter(isValidItem);
+  const remoteKeys = new Set(remote.map((it) => it.key));
+  const remoteT = Date.parse(remoteUpdatedAt ?? "") || 0;
+  const localExtras = readFile(storyId).items.filter(
+    (it) => !remoteKeys.has(it.key) && (Date.parse(it.lastSeen) || 0) > remoteT,
+  );
+  const merged = [...remote, ...localExtras];
+  if (typeof window !== "undefined") {
+    writeFile(storyId, { version: SCHEMA_VERSION, items: merged });
+  }
+  // Re-push the unsynced local misses so they finally reach the DB.
+  if (localExtras.length > 0) void pushRemote(storyId, merged);
+  return merged;
 }
 
 /** All wrong questions stored for a story (oldest → most-recently-missed). */

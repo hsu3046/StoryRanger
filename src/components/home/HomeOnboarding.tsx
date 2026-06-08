@@ -9,12 +9,13 @@ import { CaretLeft, CaretRight, Minus, Plus } from "@phosphor-icons/react";
 import type { Hero, HeroGender, PlayState } from "@/types/story";
 import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
 import { loadState, saveState, clearState } from "@/lib/storage";
-import { reviewCount, syncLocalReviewFromRemote } from "@/lib/review-store";
+import { reviewCount, mergeRemoteReview } from "@/lib/review-store";
 import {
   loadAllRemotePlay,
   upsertRemotePlayState,
   migrateLocalToRemoteOnce,
   saveProfileHero,
+  claimLocalCacheOwnership,
 } from "@/lib/play-sync";
 import { pullAchievementsToLocal } from "@/lib/achievements";
 import { newPlayState } from "@/lib/story-engine";
@@ -86,18 +87,25 @@ export function HomeOnboarding({ stories: STORIES, initialHero }: Props) {
   useEffect(() => {
     let cancelled = false;
     async function hydrate() {
+      // Shared browser: drop a previous account's local cache BEFORE migrating
+      // or reading it, so it can't leak into this user's remote.
+      await claimLocalCacheOwnership();
       // First login: import any local saves into the DB, then pull the global
       // achievements down. Both no-op when not signed in / not configured.
       await migrateLocalToRemoteOnce();
       await pullAchievementsToLocal();
       const remote = await loadAllRemotePlay();
       if (cancelled) return;
-      // The DB is authoritative for review: overwrite the local cache for every
-      // story that has a remote row (reflects masters/clears from other devices,
-      // including an empty list). Stories with no remote row keep their local
-      // cache (a truly offline-unsynced miss).
+      // Reconcile review per story: remote is authoritative for masters/clears,
+      // but a local miss recorded after the remote write (failed push) is kept
+      // and re-pushed. Stories with no remote row keep their local cache.
+      const reviewCounts: Record<string, number> = {};
       for (const [sid, save] of Object.entries(remote)) {
-        syncLocalReviewFromRemote(sid, save.review);
+        reviewCounts[sid] = mergeRemoteReview(
+          sid,
+          save.review,
+          save.updatedAt,
+        ).length;
       }
       // DB is source of truth; fall back to localStorage per story.
       setSavedMap(
@@ -107,11 +115,10 @@ export function HomeOnboarding({ stories: STORIES, initialHero }: Props) {
       );
       setReviewMap(
         Object.fromEntries(
-          STORIES.map((s) => {
-            const r = remote[s.id];
-            // Remote row → its count is authoritative (even 0); else local.
-            return [s.id, r ? r.review.length : reviewCount(s.id)];
-          }),
+          STORIES.map((s) => [
+            s.id,
+            reviewCounts[s.id] ?? reviewCount(s.id),
+          ]),
         ),
       );
       setHydrated(true);

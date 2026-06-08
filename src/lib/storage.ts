@@ -28,6 +28,36 @@ function keyFor(slot: string, storyId: string): string {
   return `${KEY_PREFIX}:${slot}:${storyId}`;
 }
 
+const OWNER_KEY = `${KEY_PREFIX}:owner`;
+
+/** Ensure the per-account localStorage caches belong to `uid`. On a different
+ *  (or absent) owner — e.g. a shared browser where another account signed in —
+ *  wipe the previous account's play/review/achievements caches so they can't
+ *  leak into, or overwrite, this account's remote progress; then record the new
+ *  owner. No-op when the owner already matches (same account). */
+export function claimLocalCacheForUser(uid: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (window.localStorage.getItem(OWNER_KEY) === uid) return;
+    const kill: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (
+        k &&
+        (k.startsWith(`${KEY_PREFIX}:play:`) ||
+          k.startsWith(`${KEY_PREFIX}:review:`))
+      ) {
+        kill.push(k);
+      }
+    }
+    kill.push(`${KEY_PREFIX}:achievements`);
+    kill.forEach((k) => window.localStorage.removeItem(k));
+    window.localStorage.setItem(OWNER_KEY, uid);
+  } catch {
+    /* private mode — non-fatal */
+  }
+}
+
 /** Story ids that have a local "play"-slot save (used by the one-time
  *  localStorage → Supabase migration on first login). */
 export function localPlayStoryIds(): string[] {

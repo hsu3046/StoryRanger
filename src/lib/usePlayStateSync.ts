@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef } from "react";
 
 import type { PlayState } from "@/types/story";
 import { loadState, saveState } from "./storage";
-import { loadRemotePlayState, upsertRemotePlayState } from "./play-sync";
+import {
+  loadRemotePlayState,
+  upsertRemotePlayState,
+  claimLocalCacheOwnership,
+} from "./play-sync";
 
 /** Trailing debounce for the DB upsert. Local writes stay instant; the DB only
  *  needs the latest state, and state changes on nearly every interaction. */
@@ -54,6 +58,9 @@ export function usePlayStateSync(slot: string, syncToDb: boolean) {
   const load = useCallback(
     async (storyId: string): Promise<PlayState | null> => {
       if (!syncToDb) return loadState(storyId, slot);
+      // Wipe a previous account's local cache (shared browser) BEFORE reading it,
+      // so stale local can't win over / upload to this user's remote save.
+      await claimLocalCacheOwnership();
       const remote = await loadRemotePlayState(storyId);
       const local = loadState(storyId, slot);
       if (remote && local) {
