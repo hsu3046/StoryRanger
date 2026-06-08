@@ -122,44 +122,6 @@ export async function loadAllRemotePlay(): Promise<Record<string, RemoteSave>> {
   }
 }
 
-export async function loadRemoteReview(
-  storyId: string,
-): Promise<ReviewItem[] | null> {
-  const uid = await currentUserId();
-  if (!uid) return null;
-  try {
-    const { data } = await createClient()
-      .from(TABLES.playStates)
-      .select("review")
-      .eq("user_id", uid)
-      .eq("story_id", storyId)
-      .maybeSingle();
-    return Array.isArray(data?.review) ? (data.review as ReviewItem[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Update-only: the play_states row exists once the player has started, so the
- *  review column rides alongside it. (A wrong answer before any state save is
- *  the rare exception — localStorage still has it.) */
-export async function saveRemoteReview(
-  storyId: string,
-  items: ReviewItem[],
-): Promise<void> {
-  const uid = await currentUserId();
-  if (!uid) return;
-  try {
-    await createClient()
-      .from(TABLES.playStates)
-      .update({ review: items, updated_at: new Date().toISOString() })
-      .eq("user_id", uid)
-      .eq("story_id", storyId);
-  } catch {
-    /* ignore */
-  }
-}
-
 const MIGRATED_PREFIX = "storyranger:migrated:";
 
 /** Shared in-flight promise so a StrictMode double-invoke / two near-concurrent

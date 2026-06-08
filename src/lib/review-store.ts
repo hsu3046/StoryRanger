@@ -108,8 +108,10 @@ function writeFile(storyId: string, file: ReviewFile): void {
 }
 
 /** Push the current review list to the signed-in user's play_states row
- *  (`review` column). Update-only — the row exists once a play state has been
- *  saved; best-effort, fire-and-forget. */
+ *  (`review` column). UPSERT — if no row exists yet (a wrong answer before the
+ *  first PlayState save), create a review-only row (state stays null until the
+ *  play-state sync fills it); on conflict only the `review`/`updated_at`
+ *  columns are written, so the existing `state` is untouched. Best-effort. */
 async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
   if (!isSupabaseConfigured() || typeof window === "undefined") return;
   try {
@@ -118,11 +120,15 @@ async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase
-      .from(TABLES.playStates)
-      .update({ review: items, updated_at: new Date().toISOString() })
-      .eq("user_id", user.id)
-      .eq("story_id", storyId);
+    await supabase.from(TABLES.playStates).upsert(
+      {
+        user_id: user.id,
+        story_id: storyId,
+        review: items,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,story_id" },
+    );
   } catch {
     /* ignore */
   }

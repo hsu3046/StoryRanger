@@ -11,7 +11,11 @@
 create table if not exists public.storyranger_play_states (
   user_id uuid not null references auth.users (id) on delete cascade,
   story_id text not null,
-  state jsonb not null,
+  -- Nullable on purpose: a review-only row can exist before the first
+  -- PlayState save (a wrong answer in the first seconds of a fresh adventure).
+  -- The next play-state upsert fills `state`. Readers treat a null state as
+  -- "no save" and fall back to localStorage.
+  state jsonb,
   review jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   primary key (user_id, story_id)
