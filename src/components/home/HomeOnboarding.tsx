@@ -104,7 +104,7 @@ export function HomeOnboarding({ stories: STORIES, initialHero }: Props) {
         reviewCounts[sid] = mergeRemoteReview(
           sid,
           save.review,
-          save.updatedAt,
+          save.reviewUpdatedAt,
         ).length;
       }
       // DB is source of truth; fall back to localStorage per story.

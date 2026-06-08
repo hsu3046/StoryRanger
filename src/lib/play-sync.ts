@@ -107,8 +107,9 @@ export async function saveProfileHero(
 export interface RemoteSave {
   state: PlayState | null;
   review: ReviewItem[];
-  /** Row's last-write time — used to reconcile local vs remote review. */
-  updatedAt: string | null;
+  /** When the `review` column was last written (review_updated_at) — used to
+   *  reconcile local vs remote review without state-save contamination. */
+  reviewUpdatedAt: string | null;
 }
 
 /** All of the signed-in user's saves, keyed by storyId (for the home carousel). */
@@ -118,19 +119,19 @@ export async function loadAllRemotePlay(): Promise<Record<string, RemoteSave>> {
   try {
     const { data } = await createClient()
       .from(TABLES.playStates)
-      .select("story_id, state, review, updated_at")
+      .select("story_id, state, review, review_updated_at")
       .eq("user_id", uid);
     const out: Record<string, RemoteSave> = {};
     for (const row of (data ?? []) as Array<{
       story_id: string;
       state: PlayState | null;
       review: ReviewItem[] | null;
-      updated_at: string | null;
+      review_updated_at: string | null;
     }>) {
       out[row.story_id] = {
         state: row.state ? sanitizePlayState(row.state, row.story_id) : null,
         review: Array.isArray(row.review) ? row.review : [],
-        updatedAt: row.updated_at,
+        reviewUpdatedAt: row.review_updated_at,
       };
     }
     return out;

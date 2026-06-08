@@ -120,12 +120,14 @@ async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+    const nowIso = new Date().toISOString();
     await supabase.from(TABLES.playStates).upsert(
       {
         user_id: user.id,
         story_id: storyId,
         review: items,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
+        review_updated_at: nowIso,
       },
       { onConflict: "user_id,story_id" },
     );
@@ -141,16 +143,19 @@ async function pushRemote(storyId: string, items: ReviewItem[]): Promise<void> {
  * a local item recorded AFTER the remote row was last written is an unsynced
  * miss (a fire-and-forget push that failed) and is preserved + re-pushed. Items
  * absent from remote and older than the remote write were mastered/cleared
- * elsewhere and are dropped. `remoteUpdatedAt` is the remote row's updated_at.
+ * elsewhere and are dropped. `remoteReviewUpdatedAt` is the row's
+ * review_updated_at (bumped ONLY by review writes, not state-only saves), so a
+ * miss recorded after the last review push is correctly kept even if a later
+ * state save advanced the row's general updated_at.
  */
 export function mergeRemoteReview(
   storyId: string,
   remoteItems: ReviewItem[],
-  remoteUpdatedAt: string | null,
+  remoteReviewUpdatedAt: string | null,
 ): ReviewItem[] {
   const remote = remoteItems.filter(isValidItem);
   const remoteKeys = new Set(remote.map((it) => it.key));
-  const remoteT = Date.parse(remoteUpdatedAt ?? "") || 0;
+  const remoteT = Date.parse(remoteReviewUpdatedAt ?? "") || 0;
   const localExtras = readFile(storyId).items.filter(
     (it) => !remoteKeys.has(it.key) && (Date.parse(it.lastSeen) || 0) > remoteT,
   );

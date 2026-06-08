@@ -38,20 +38,27 @@ const OWNER_KEY = `${KEY_PREFIX}:owner`;
 export function claimLocalCacheForUser(uid: string): void {
   if (typeof window === "undefined") return;
   try {
-    if (window.localStorage.getItem(OWNER_KEY) === uid) return;
-    const kill: string[] = [];
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const k = window.localStorage.key(i);
-      if (
-        k &&
-        (k.startsWith(`${KEY_PREFIX}:play:`) ||
-          k.startsWith(`${KEY_PREFIX}:review:`))
-      ) {
-        kill.push(k);
+    const owner = window.localStorage.getItem(OWNER_KEY);
+    if (owner === uid) return;
+    // ONLY wipe when a DIFFERENT, known account previously owned this browser.
+    // A MISSING owner is the normal first sign-in of an anonymous/local player —
+    // keep their local progress so migrateLocalToRemoteOnce() can import it
+    // (wiping here would erase progress instead of migrating it).
+    if (owner) {
+      const kill: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (
+          k &&
+          (k.startsWith(`${KEY_PREFIX}:play:`) ||
+            k.startsWith(`${KEY_PREFIX}:review:`))
+        ) {
+          kill.push(k);
+        }
       }
+      kill.push(`${KEY_PREFIX}:achievements`);
+      kill.forEach((k) => window.localStorage.removeItem(k));
     }
-    kill.push(`${KEY_PREFIX}:achievements`);
-    kill.forEach((k) => window.localStorage.removeItem(k));
     window.localStorage.setItem(OWNER_KEY, uid);
   } catch {
     /* private mode — non-fatal */
