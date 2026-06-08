@@ -8,6 +8,7 @@ import {
   loadRemotePlayState,
   upsertRemotePlayState,
   claimLocalCacheOwnership,
+  migrateLocalToRemoteOnce,
 } from "./play-sync";
 
 /** Trailing debounce for the DB upsert. Local writes stay instant; the DB only
@@ -61,6 +62,10 @@ export function usePlayStateSync(slot: string, syncToDb: boolean) {
       // Wipe a previous account's local cache (shared browser) BEFORE reading it,
       // so stale local can't win over / upload to this user's remote save.
       await claimLocalCacheOwnership();
+      // A direct /play deep-link after login bypasses the home screen's
+      // migration — run it here too so a first-login local save + review reaches
+      // the DB before we read local. Idempotent (one-time flag + in-flight guard).
+      await migrateLocalToRemoteOnce();
       const remote = await loadRemotePlayState(storyId);
       const local = loadState(storyId, slot);
       if (remote && local) {
