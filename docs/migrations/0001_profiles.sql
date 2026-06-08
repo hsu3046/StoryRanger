@@ -46,17 +46,24 @@ create policy "storyranger_profiles_update_own" on public.storyranger_profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
 
 -- ── role cannot be self-escalated (column privilege, fail-closed) ──────────
--- RLS can restrict ROWS but not a single COLUMN, so a `for update` policy
+-- RLS restricts ROWS, not a single COLUMN, so the `for update` policy above
 -- can't stop a user editing their own `role`. A trigger keyed on auth.role()
--- is fail-OPEN (auth.role() is NULL when the JWT role claim is absent, so the
--- guard silently lets the change through). Use a Postgres COLUMN privilege
--- instead: authenticated/anon may update their own row (hero, achievements,
--- display_name) but are physically unable to write `role`. This is fail-CLOSED
--- and independent of any JWT claim. The service-role key (admin user-management)
--- keeps full privileges, and a superuser (SQL editor) can bootstrap the first
--- admin. Combined with the INSERT policy's `role = 'player'`, a user can never
--- grant themselves a privileged role through PostgREST.
-revoke update (role) on public.storyranger_profiles from authenticated, anon;
+-- is fail-OPEN (NULL claim → guard skipped). The robust fix is a Postgres
+-- COLUMN privilege.
+--
+-- CAUTION: Supabase's default grants give `authenticated` a TABLE-LEVEL UPDATE,
+-- and a column-level `REVOKE UPDATE (role)` does NOT override that table grant
+-- (https://supabase.com/docs/guides/database/hardening-data-api). So we must
+-- revoke the WHOLE-TABLE update and re-grant only the user-mutable columns —
+-- `role` (and id/created_at) are deliberately excluded, so a Data API call with
+-- { role: 'admin' } is rejected ("permission denied for column role"). This is
+-- fail-CLOSED and independent of any JWT claim. The service-role key (admin
+-- user-management) keeps full privileges, and a superuser (SQL editor) can
+-- bootstrap the first admin. Combined with the INSERT policy's `role = 'player'`,
+-- a user can never grant themselves a privileged role through PostgREST.
+revoke update on public.storyranger_profiles from authenticated, anon;
+grant update (display_name, hero, achievements, updated_at)
+  on public.storyranger_profiles to authenticated;
 
 -- keep updated_at fresh
 create or replace function public.storyranger_touch_updated_at()
