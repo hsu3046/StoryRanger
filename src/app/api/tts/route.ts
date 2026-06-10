@@ -137,6 +137,7 @@ export async function POST(req: Request) {
   const flightKey =
     cacheKey ?? (await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed));
   let flight = inFlight.get(flightKey);
+  let created = false;
   if (!flight) {
     // Character-weighted budget — maps 1:1 to ElevenLabs credits. The
     // client treats 429 as "stay silent + cool down"; gameplay continues.
@@ -156,11 +157,20 @@ export async function POST(req: Request) {
 
     flight = inFlight.get(flightKey);
     if (!flight) {
+      created = true;
       flight = synthesizeWithVoiceFallback(
         body.text,
         body.voiceId,
         body.voiceSpeed,
-      ).finally(() => inFlight.delete(flightKey));
+      );
+      // A FAILED synthesis releases the key immediately so a retry starts
+      // fresh. A successful one must NOT release on settle: the R2 write
+      // happens post-response (after(), below), and deleting the flight
+      // before the object is visible in R2 reopens exactly the window this
+      // coalescing closes — a follower arriving after ElevenLabs returned
+      // but before the PUT landed would miss both and pay a second
+      // synthesis. The creator releases it after the cache step instead.
+      flight.catch(() => inFlight.delete(flightKey));
       inFlight.set(flightKey, flight);
     }
   }
@@ -184,15 +194,25 @@ export async function POST(req: Request) {
   // must not be stored under the requested voice's key (it'd serve the wrong
   // voice forever). Best-effort, scheduled with after() so it can't be killed.
   // The stored Cache-Control makes repeat R2 plays instant (no revalidation).
+  // Flight lifetime is the CREATOR's job: cacheable → release only after the
+  // PUT settles (late followers keep joining the resolved flight until the
+  // read-through can take over); otherwise → release now (nothing will be
+  // cached, identical future requests legitimately synthesize anew).
   const cacheable = body.cache && !usedFallbackVoice;
-  if (cacheable && cacheKey) {
-    after(async () => {
-      try {
-        await r2Put(cacheKey, buffer, "audio/mpeg", IMMUTABLE_CACHE);
-      } catch (e) {
-        console.warn("[tts] R2 cache write failed:", String(e));
-      }
-    });
+  if (created) {
+    if (cacheable && cacheKey) {
+      after(async () => {
+        try {
+          await r2Put(cacheKey, buffer, "audio/mpeg", IMMUTABLE_CACHE);
+        } catch (e) {
+          console.warn("[tts] R2 cache write failed:", String(e));
+        } finally {
+          inFlight.delete(flightKey);
+        }
+      });
+    } else {
+      inFlight.delete(flightKey);
+    }
   }
 
   return new NextResponse(new Uint8Array(buffer), {
