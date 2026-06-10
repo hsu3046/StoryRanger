@@ -353,12 +353,16 @@ async function chatGemini<T>(opts: ChatOptions<T>, model: string): Promise<T> {
       systemInstruction: opts.system,
       responseMimeType: "application/json",
       responseJsonSchema,
-      // Disable the implicit "thinking" pass on Gemini 2.5/3 Flash. We
-      // ask the model for short conversational replies + a one-line
-      // outcome bridge — neither benefits from internal reasoning
-      // tokens, and turning them off drops total latency by several
-      // seconds. Pro requires a minimum of 128; Flash supports 0.
-      thinkingConfig: { thinkingBudget: 0 },
+      // Disable the implicit "thinking" pass on Gemini Flash. We mostly ask
+      // for short conversational replies + a one-line outcome bridge —
+      // neither benefits from internal reasoning tokens, and turning them
+      // off drops total latency by several seconds. Pro models REJECT
+      // budget 0 (minimum 128 → every call would 400 non-retryably), so
+      // leave their default thinking on — Pro is an explicit author choice
+      // for quality anyway.
+      ...(/pro/i.test(model)
+        ? {}
+        : { thinkingConfig: { thinkingBudget: 0 } }),
     },
   });
 
@@ -402,7 +406,17 @@ async function chatAnthropic<T>(opts: ChatOptions<T>, model: string): Promise<T>
         cache_control: { type: "ephemeral" },
       },
     ],
-    messages: opts.messages.map((m) => ({
+    // Anthropic requires the FIRST message to be user-role (assistant-first
+    // → deterministic 400). Dialogue history legitimately starts with the
+    // character's greeting (assistant), so prepend a synthetic user beat
+    // instead of dropping the greeting from context.
+    messages: (opts.messages[0]?.role === "assistant"
+      ? [
+          { role: "user" as const, content: "(The hero approaches.)" },
+          ...opts.messages,
+        ]
+      : opts.messages
+    ).map((m) => ({
       role: m.role,
       content: m.content,
     })),

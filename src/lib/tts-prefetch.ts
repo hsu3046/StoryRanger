@@ -15,20 +15,35 @@ import { ttsObjectKey } from "./tts-config";
  *
  * Silent by design: errors, 5xx, no api key, network drop — all ignored.
  */
+/** Keys currently being warmed / already warmed this session. The warming
+ *  effect's deps re-fire on unrelated state ticks (e.g. dragging the voice
+ *  volume slider) — without this memory every re-run would re-POST the same
+ *  un-cached lines while the first synthesis is still running, paying
+ *  ElevenLabs once per tick. Module-level on purpose: scene changes remount
+ *  components, but the warmed set should survive the whole tab. */
+const inFlight = new Set<string>();
+const done = new Set<string>();
+
 export async function prefetchNarration(
   text: string,
   voiceId: string,
   voiceSpeed: number,
 ): Promise<void> {
+  let key: string | null = null;
   try {
     if (!text || !voiceId) return;
-    const key = await ttsObjectKey(text, voiceId, voiceSpeed);
+    key = await ttsObjectKey(text, voiceId, voiceSpeed);
+    if (inFlight.has(key) || done.has(key)) return;
+    inFlight.add(key);
 
     // Already cached in R2 → a GET warms the browser cache too; done.
     if (ASSET_BASE_URL) {
       try {
         const hit = await fetch(assetUrl(`/${key}`));
-        if (hit.ok) return;
+        if (hit.ok) {
+          done.add(key);
+          return;
+        }
       } catch {
         /* fall through to generate */
       }
@@ -44,7 +59,10 @@ export async function prefetchNarration(
       body: JSON.stringify({ text, voiceId, voiceSpeed }),
     });
     if (res.status === 429) startTtsCooldown(retryAfterSecondsFrom(res));
+    if (res.ok) done.add(key);
   } catch {
     /* prefetch is best-effort — swallow all errors */
+  } finally {
+    if (key) inFlight.delete(key);
   }
 }
