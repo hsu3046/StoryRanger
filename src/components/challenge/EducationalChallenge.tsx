@@ -144,10 +144,13 @@ export function EducationalChallenge({
         x: { duration: 0.45 },
         default: { type: "spring", stiffness: 260, damping: 22 },
       }}
-      className={`pointer-events-auto flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-5 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-2 backdrop-blur transition-colors sm:p-8 ${
+      className={`pointer-events-auto flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-5 rounded-card-lg bg-paper/90 p-6 shadow-overlay ring-2 backdrop-blur transition-colors lg:p-8 short:gap-3 short:p-4 ${
         placement === "inline"
           ? "relative"
-          : "fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2"
+          : // The dvh cap + inner scroll keep a long prompt / many choices
+            // from being clipped offscreen on landscape phones (a centered
+            // fixed card taller than the viewport has no other escape).
+            "fixed left-1/2 top-1/2 z-[60] max-h-[calc(100dvh-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto"
       } ${
         result === true
           ? "ring-emerald/60"
@@ -254,8 +257,8 @@ export function EducationalChallenge({
             transition={{ duration: 0.35 }}
             className={`flex items-center justify-center rounded-card-lg text-center font-bold tabular-nums ring-1 transition-all disabled:cursor-default ${
               longChoices
-                ? "min-h-16 [overflow-wrap:anywhere] whitespace-normal px-3 py-3 text-lg leading-snug sm:text-xl"
-                : "h-20 text-2xl"
+                ? "min-h-16 short:min-h-12 [overflow-wrap:anywhere] whitespace-normal px-3 py-3 text-lg leading-snug lg:text-xl short:text-base"
+                : "h-20 short:h-14 text-2xl short:text-xl"
             } ${choiceTone(i)}`}
           >
             {c}

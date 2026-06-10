@@ -68,11 +68,14 @@ export function SettingsModal({
             transition={{ type: "spring", stiffness: 260, damping: 22 }}
             role="dialog"
             aria-modal="true"
-            className="pointer-events-auto fixed left-1/2 top-1/2 z-[80] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-card-lg bg-paper/85 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur"
+            // dvh cap + inner scroll: on short windows the fixed centered
+            // card otherwise grows past the viewport and clips the bottom
+            // ("Leave the story" unreachable).
+            className="pointer-events-auto fixed left-1/2 top-1/2 z-[80] flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto rounded-card-lg bg-paper/85 p-6 shadow-overlay ring-1 ring-ink-soft/10 backdrop-blur short:gap-3 short:p-4"
           >
             <header className="flex items-center justify-between gap-3">
               <div className="flex flex-col">
-                <p className="font-handwritten text-2xl text-accent-deep">
+                <p className="font-handwritten text-2xl text-accent-deep short:text-xl">
                   Settings
                 </p>
                 <p className="text-sm text-ink-soft">
@@ -132,9 +135,13 @@ export function SettingsModal({
               <button
                 type="button"
                 onClick={onLeave}
-                className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-button bg-paper-deep/60 px-5 text-base font-medium text-ink ring-1 ring-ink-soft/10 transition-all hover:bg-paper-deep hover:ring-accent/40 active:scale-[0.98]"
+                className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-button bg-paper-deep/60 px-5 text-base font-medium text-ink ring-1 ring-ink-soft/10 transition-all hover:bg-paper-deep hover:ring-accent/40 active:scale-[0.98] short:min-h-11 short:px-4 short:text-sm"
               >
-                <House size={20} weight="duotone" className="text-accent" />
+                <House
+                  size={20}
+                  weight="duotone"
+                  className="text-accent short:size-4"
+                />
                 <span>Leave the story</span>
               </button>
               <p className="px-1 text-xs text-ink-soft/70">
@@ -164,13 +171,15 @@ function VolumeRow({
 }) {
   const off = value <= 0;
   return (
-    <div className="flex items-center gap-3 rounded-button bg-paper-deep/60 px-4 py-3 ring-1 ring-ink-soft/10">
+    <div className="flex items-center gap-3 rounded-button bg-paper-deep/60 px-4 py-3 ring-1 ring-ink-soft/10 short:gap-2 short:px-3 short:py-2">
       <IconComp
         size={20}
         weight="duotone"
-        className={off ? "text-ink-soft/45" : "text-accent"}
+        className={`short:size-4 ${off ? "text-ink-soft/45" : "text-accent"}`}
       />
-      <span className="w-16 shrink-0 text-sm font-medium text-ink">{label}</span>
+      <span className="w-16 shrink-0 text-sm font-medium text-ink short:w-14 short:text-xs">
+        {label}
+      </span>
       <input
         type="range"
         min={0}

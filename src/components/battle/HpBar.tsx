@@ -57,7 +57,7 @@ export function HitsBar({
 }: HitsProps) {
   return (
     <div
-      className={`flex h-11 items-center gap-1.5 rounded-pill bg-paper/85 px-1.5 ring-1 ring-ink-soft/10 backdrop-blur transition-opacity duration-300 ${
+      className={`flex h-11 items-center gap-1.5 rounded-pill bg-paper/85 px-1.5 ring-1 ring-ink-soft/10 backdrop-blur transition-opacity duration-300 short:h-9 ${
         defeated ? "opacity-30 grayscale" : "opacity-100"
       }`}
     >
@@ -126,7 +126,7 @@ function Portrait({ base, alt }: { base: string; alt: string }) {
     // Wrapper keeps the 32px circular frame; the inner image renders at
     // ~80% with `object-contain` so trimmed monster sprites don't get
     // clipped by the circle.
-    <span className="block h-8 w-8 overflow-hidden rounded-full">
+    <span className="block h-8 w-8 overflow-hidden rounded-full short:h-6 short:w-6">
       {/* eslint-disable-next-line @next/next/no-img-element -- extension fallback */}
       <img
         src={assetUrl(list[idx])}
