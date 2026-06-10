@@ -594,16 +594,30 @@ function makePercentage(age: number): Challenge {
   return numericChallenge("percentage", `${pct}% of ${base} = ?`, (base * pct) / 100, spreadFor((base * pct) / 100));
 }
 
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
 function makeRatio(age: number): Challenge {
   if (pick([true, false])) {
-    // Simplify a:b.
+    // Simplify a:b. x:y must be coprime or the "simplified" answer isn't
+    // actually in lowest terms (4:8 → "2:4" while the real 1:2 could appear
+    // as a distractor and mark a mathematically-right child wrong).
     const g = randInt(2, 6);
-    const x = randInt(1, 5);
+    let x = randInt(1, 5);
     let y = randInt(1, 5);
     if (x === y) y = y === 5 ? y - 1 : y + 1;
+    const d = gcd(x, y);
+    x /= d;
+    y /= d;
     const correct = `${x}:${y}`;
     const opts = new Set<string>([correct]);
-    for (let t = 0; opts.size < 4 && t < 200; t++) opts.add(`${randInt(1, 6)}:${randInt(1, 6)}`);
+    for (let t = 0; opts.size < 4 && t < 200; t++) {
+      const n1 = randInt(1, 6);
+      const n2 = randInt(1, 6);
+      if (n1 * y === n2 * x) continue; // equivalent ratio — a second right answer
+      opts.add(`${n1}:${n2}`);
+    }
     const choices = shuffle([...opts]);
     return { category: "ratio", prompt: `Simplify the ratio ${x * g} : ${y * g}`, choices, correctIndex: choices.indexOf(correct) };
   }
@@ -614,7 +628,33 @@ function makeRatio(age: number): Challenge {
 }
 
 function makeMoney(age: number): Challenge {
-  const mode = pick(age <= 7 ? ["add", "sub"] : ["add", "sub", "mul"]);
+  // Difficulty ladder (Singapore money strand):
+  //   P1 (≤6)  — whole dollars only ($5 + $3): the skill being tested is
+  //              money-as-quantity, not decimal regrouping.
+  //   P2 (7)   — 10¢ steps within $10 (no cent-level borrowing).
+  //   P3+ (8+) — cent-precision sums + unit-price multiplication.
+  if (age <= 6) {
+    const mode = pick(["add", "sub"]);
+    const a = randInt(3, 9) * 100;
+    const b =
+      mode === "sub" ? randInt(1, a / 100 - 1) * 100 : randInt(1, 9) * 100;
+    // ±$3 reach: the smallest answer ($1.00) still yields 3 positive
+    // distractors, keeping a full 4-choice set.
+    const dollarSteps = [-300, -200, -100, 100, 200, 300];
+    return mode === "sub"
+      ? moneyAnswer(`${money(a)} − ${money(b)} = ?`, a - b, dollarSteps)
+      : moneyAnswer(`${money(a)} + ${money(b)} = ?`, a + b, dollarSteps);
+  }
+  if (age <= 7) {
+    const mode = pick(["add", "sub"]);
+    const a = randInt(3, 90) * 10; // 30¢ .. $9.00 in 10¢ steps
+    const b =
+      mode === "sub" ? randInt(1, a / 10 - 1) * 10 : randInt(1, 60) * 10;
+    return mode === "sub"
+      ? moneyAnswer(`${money(a)} − ${money(b)} = ?`, a - b)
+      : moneyAnswer(`${money(a)} + ${money(b)} = ?`, a + b);
+  }
+  const mode = pick(["add", "sub", "mul"]);
   if (mode === "mul") {
     const unit = randInt(2, 9) * 5; // cents, multiple of 5
     const qty = randInt(2, 6);
@@ -627,10 +667,17 @@ function makeMoney(age: number): Challenge {
     : moneyAnswer(`${money(a)} + ${money(b)} = ?`, a + b);
 }
 
-function moneyAnswer(prompt: string, cents: number): Challenge {
+/** Distractor steps default to coin-sized nudges; whole-dollar drills pass
+ *  dollar-sized steps so the wrong choices look like the answer's format
+ *  (a lone "$7.10" among "$x.00" options would give itself away). */
+function moneyAnswer(
+  prompt: string,
+  cents: number,
+  steps: number[] = [-50, -20, -10, 10, 20, 50],
+): Challenge {
   const opts = new Set<string>([money(cents)]);
   for (let t = 0; opts.size < 4 && t < 200; t++) {
-    const cand = cents + pick([-50, -20, -10, 10, 20, 50])!;
+    const cand = cents + pick(steps)!;
     if (cand > 0) opts.add(money(cand));
   }
   const choices = shuffle([...opts]);
@@ -912,14 +959,22 @@ function makeRhyme(): Challenge {
   );
 }
 
+/** The full semantic pair graph — antonyms AND synonyms together, all tiers.
+ *  Clusters must be computed on this union: a second valid answer can hide
+ *  behind a synonym bridge the single pool can't see (begin–end + start–stop
+ *  only connect through the SYNONYM pair begin–start, so "stop" is a valid
+ *  opposite of "begin" yet looks unrelated inside ANTONYMS alone). */
+const SEMANTIC_PAIRS: ReadonlyArray<WordPair> = [...ANTONYMS, ...SYNONYMS];
+
 function makeOpposite(age: number): Challenge {
   const pool = antonymsForAge(age);
   const p = pick(pool) ?? pool[0];
   const [a, b] = Math.random() < 0.5 ? [p.a, p.b] : [p.b, p.a];
-  // Distractors = other antonym words at the same tier — exclude EVERY word in
-  // `a`'s connected group (a word can have more than one valid opposite, e.g.
-  // short/tall + short/long), so a distractor can't be a second valid answer.
-  const group = connectedWords(pool, a, b);
+  // Distractors = other antonym words at the same tier — exclude EVERY word
+  // semantically linked to `a` across the WHOLE antonym+synonym graph (a word
+  // can have more than one valid opposite, and a synonym of `a`'s opposite is
+  // itself a valid opposite), so a distractor can't be a second valid answer.
+  const group = connectedWords(SEMANTIC_PAIRS, a, b);
   const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => !group.has(w));
   return stringChallenge(
     "opposite",
@@ -961,10 +1016,11 @@ function makeSynonym(age: number): Challenge {
   const pool = synonymsForAge(age);
   const p = pick(pool) ?? pool[0];
   const [a, b] = Math.random() < 0.5 ? [p.a, p.b] : [p.b, p.a];
-  // Distractors = words from OTHER synonym clusters — exclude EVERY word that
-  // means the same as `a` (the full connected group), not just this pair, so a
-  // distractor can't be a second valid synonym.
-  const group = connectedWords(pool, a, b);
+  // Distractors = words from OTHER synonym clusters — exclude EVERY word
+  // semantically linked to `a` on the union graph (see SEMANTIC_PAIRS): two
+  // synonym pairs with no shared word (happy/glad vs jolly/merry) can still
+  // be the same meaning-cluster, so pool-local exclusion isn't enough.
+  const group = connectedWords(SEMANTIC_PAIRS, a, b);
   const others = pool.flatMap((q) => [q.a, q.b]).filter((w) => !group.has(w));
   return stringChallenge(
     "synonym",
@@ -1069,8 +1125,9 @@ function makeAnalogy(age: number): Challenge {
   const [p1, p2] = shuffle(pool);
   // The answer is p2.b, so any other word in p2.a's connected group (another
   // valid synonym/opposite of p2.a) would be a SECOND valid answer — exclude
-  // the whole group, plus p1's two words so the prompt pair isn't echoed.
-  const group = connectedWords(pool, p2.a, p2.b);
+  // the whole group (on the union graph, like makeOpposite/makeSynonym), plus
+  // p1's two words so the prompt pair isn't echoed.
+  const group = connectedWords(SEMANTIC_PAIRS, p2.a, p2.b);
   const others = pool
     .flatMap((q) => [q.a, q.b])
     .filter((w) => !group.has(w) && w !== p1.a && w !== p1.b);
@@ -1084,11 +1141,22 @@ function makeAnalogy(age: number): Challenge {
 
 /** Apply the regular English pluralization rules. */
 function regularPlural(w: string): string {
+  // Double-f (+ optional e) takes a plain s — giraffe → giraffes,
+  // cliff → cliffs. Only a single f/fe mutates to "ves" (leaf → leaves).
+  if (/ffe?$/.test(w)) return `${w}s`;
   if (/(s|x|z|ch|sh)$/.test(w)) return `${w}es`;
   if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
   if (/fe?$/.test(w)) return w.replace(/fe?$/, "ves");
   return `${w}s`;
 }
+
+/** Words the REGULAR plural branch must never draw. Irregular nouns would get
+ *  a wrong "regular" answer presented as correct (ox→oxes) while the true
+ *  plural (oxen) shows up as a distractor; plural-only / mass nouns have no
+ *  sensible "one X, two Xs" form at all. Irregulars still appear via the
+ *  dedicated IRREGULAR_PLURALS branch, which knows their real plurals. */
+const IRREGULAR_SINGULARS = new Set(IRREGULAR_PLURALS.map((p) => p.singular));
+const PLURAL_UNSAFE = new Set(["scissors", "milk", "bread"]);
 
 /** Plausible-wrong plural forms (the Set in stringChallenge dedups). */
 function pluralDistractorSource(
@@ -1116,7 +1184,10 @@ function makePlural(age: number): Challenge {
       pluralDistractorSource(e.singular, e.plural),
     );
   }
-  const e = pick(englishWordsForAge(age)) ?? WORD_BANK[0];
+  const pool = englishWordsForAge(age).filter(
+    (w) => !IRREGULAR_SINGULARS.has(w.word) && !PLURAL_UNSAFE.has(w.word),
+  );
+  const e = pick(pool) ?? WORD_BANK[0];
   const correct = regularPlural(e.word);
   return stringChallenge(
     "plural",
@@ -1214,8 +1285,12 @@ function makeSequence(): Challenge {
 /** Commands — run a 1-D instruction list; where does the robot land? */
 function makeCommands(age: number): Challenge {
   const lane = COMMAND_LANE;
-  const allowBack = age >= 8;
-  const n = randInt(2, age <= 7 ? 3 : 4);
+  // Forward-only runs are just "count the arrows" — fine for pre-schoolers,
+  // trivial beyond that. From age 6 mix in backward moves so the child must
+  // actually trace the path; longer runs as ages climb (lane has 6 squares,
+  // so even 5 forward moves stay on the board).
+  const allowBack = age >= 6;
+  const n = age <= 5 ? randInt(2, 3) : age <= 7 ? randInt(3, 4) : randInt(4, 5);
   let pos = 0;
   const moves: string[] = [];
   for (let i = 0; i < n; i++) {

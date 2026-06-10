@@ -355,6 +355,10 @@ export const SYNONYMS: WordPair[] = [
   { a: "help", b: "aid", tier: 1 },
   { a: "neat", b: "tidy", tier: 1 },
   { a: "jolly", b: "merry", tier: 1 },
+  // Bridge — links jolly/merry into the happy/glad/cheerful cluster so the
+  // drills' connected-group exclusion treats them as one meaning (a "happy"
+  // prompt must never offer "merry" as a wrong choice).
+  { a: "happy", b: "merry", tier: 1 },
   // tier 2
   { a: "smart", b: "wise", tier: 2 },
   { a: "strong", b: "powerful", tier: 2 },
@@ -368,6 +372,9 @@ export const SYNONYMS: WordPair[] = [
   { a: "huge", b: "massive", tier: 2 },
   // tier 3
   { a: "tremendous", b: "huge", tier: 3 },
+  // Bridge — links enormous/gigantic into the big/huge/massive cluster (same
+  // reason as the happy–merry bridge above).
+  { a: "huge", b: "gigantic", tier: 3 },
   { a: "vital", b: "essential", tier: 3 },
   { a: "hilarious", b: "funny", tier: 3 },
   { a: "miserable", b: "unhappy", tier: 3 },
