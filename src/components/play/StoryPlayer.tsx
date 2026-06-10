@@ -48,7 +48,7 @@ import {
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
 
-import { Backpack, GearSix, MapTrifold } from "@phosphor-icons/react";
+import { Backpack, DeviceRotate, GearSix, MapTrifold } from "@phosphor-icons/react";
 
 import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
@@ -1323,7 +1323,7 @@ export function StoryPlayer({
           passes `extraTopBar`); right slot holds the always-on Backpack +
           Settings buttons. */}
       <header
-        className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-4 sm:px-6"
+        className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-safe sm:px-safe-lg"
         style={{ paddingTop: "max(0.625rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-2 sm:gap-3">{extraTopBar}</div>
@@ -1365,14 +1365,11 @@ export function StoryPlayer({
           During an outcome page the whole region also acts as a tap
           target → continueFromOutcome(). */}
       <div
-        className={`absolute inset-x-0 bottom-0 z-10 flex flex-col items-stretch gap-3 px-4 pb-4 transition-opacity duration-200 sm:px-6 sm:pb-6 sm:gap-4 ${
+        className={`absolute inset-x-0 bottom-0 z-10 flex flex-col items-stretch gap-3 px-safe pb-safe transition-opacity duration-200 sm:px-safe-lg lg:pb-safe-lg lg:gap-4 short:gap-2 short:pb-safe-sm ${
           dialogueActive ? "pointer-events-none opacity-0" : "opacity-100"
         } ${showingOutcome ? "cursor-pointer" : ""}`}
         aria-hidden={dialogueActive}
         onClick={showingOutcome ? continueFromOutcome : undefined}
-        style={{
-          paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
-        }}
       >
         {/* Narration — cinematic subtitle style. Block centered + text
             centered so left/right margins look identical regardless of
@@ -1410,8 +1407,10 @@ export function StoryPlayer({
                 // flex-col`), so longer text simply raises its top Y while
                 // the choice row stays anchored at the bottom. A safety
                 // ceiling of 60dvh keeps a worst-case multi-paragraph
-                // narration from covering the whole scene.
-                className="max-h-[60dvh] overflow-y-auto pr-2"
+                // narration from covering the whole scene — tightened to
+                // 40dvh on landscape phones, where 60dvh of a 393px-tall
+                // viewport left almost no scene visible.
+                className="max-h-[60dvh] short:max-h-[40dvh] overflow-y-auto pr-2"
               >
                 <CharacterSpeechBox
                   speaker={displayedSpeakerId}
@@ -1509,7 +1508,7 @@ export function StoryPlayer({
               className={
                 choiceCount === 1
                   ? "flex justify-center"
-                  : "flex flex-col items-stretch gap-3 sm:flex-row sm:gap-4"
+                  : "flex flex-col items-stretch gap-3 sm:flex-row lg:gap-4 short:gap-2"
               }
             >
               {askChoices.map((ask, i) => {
@@ -1753,8 +1752,11 @@ export function StoryPlayer({
               type="button"
               onClick={() => setMapOpen(false)}
               aria-label="Close map"
-              className="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95"
-              style={{ top: "max(1rem, env(safe-area-inset-top))" }}
+              className="absolute flex h-11 w-11 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95"
+              style={{
+                top: "max(1rem, env(safe-area-inset-top))",
+                right: "max(1rem, env(safe-area-inset-right))",
+              }}
             >
               ✕
             </button>
@@ -1772,6 +1774,32 @@ export function StoryPlayer({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Landscape-only premise: the play layout is designed for landscape
+          (a 16:9 scene under cover-crop keeps ≥75% of the art there, vs 26%
+          in phone portrait). On portrait TOUCH devices show a rotate prompt
+          instead of a broken layout — `pointer-coarse` exempts tall desktop
+          windows, and admin preview panes skip it entirely. Pure CSS gate:
+          game state is untouched, rotating resumes play instantly. */}
+      {!previewMode && (
+        <div
+          role="status"
+          className="absolute inset-0 z-[110] hidden flex-col items-center justify-center gap-4 bg-ink/95 px-8 text-center backdrop-blur-sm portrait:pointer-coarse:flex"
+        >
+          <DeviceRotate
+            size={56}
+            weight="duotone"
+            className="text-accent"
+            aria-hidden
+          />
+          <p className="text-xl font-semibold text-paper">
+            Rotate your device
+          </p>
+          <p className="text-sm text-paper/70">
+            This story plays in landscape
+          </p>
+        </div>
+      )}
 
       {/* "Arriving in the world" veil — starts black (continuing the home
           dive's fade-out) and lifts ONLY once the first scene image is

@@ -43,19 +43,51 @@
 
 /* Fluid type — scale continuously with the viewport width (not stepped at
    breakpoints) for the three reading surfaces. font-size only; each call site
-   keeps its own leading-* so line-height is unaffected. "Aggressive" curve:
-   noticeably smaller on phones, larger on wide screens. */
+   keeps its own leading-* so line-height is unaffected.
+   Conservative curve (2026-06): sized against the worst-case 250-char
+   narration in the max-w-6xl box — ≤6 lines everywhere, so even a 1366×768
+   laptop keeps the bottom stack near a third of the screen (the old 36px cap
+   pushed it past 70%). Each utility also carries an svh ceiling so landscape
+   phones (393–440px tall) drop to print size; on tablets/desktop (≥720px
+   tall) the svh term sits far above the vw curve and never engages. svh, not
+   dvh, so the iOS URL bar showing/hiding can't reflow mid-read. */
 @utility text-fluid-narration {
-  /* 16px @360 → 26px @768 → 36px cap on wide screens */
-  font-size: clamp(1rem, calc(0.45rem + 2.45vw), 2.25rem);
+  /* 16px @360 → ~18px @768 → ~21px @1180 → 24px cap. ~18–20px on landscape phones. */
+  font-size: clamp(1rem, min(calc(0.85rem + 0.62vw), 4.5svh), 1.5rem);
 }
 @utility text-fluid-choice {
-  /* 14px @360 → 18px @768 → 22px cap */
-  font-size: clamp(0.875rem, calc(0.65rem + 1vw), 1.375rem);
+  /* 14px @360 → ~16px @768 → 18px cap. ~15px on landscape phones. */
+  font-size: clamp(0.875rem, min(calc(0.78rem + 0.45vw), 3.8svh), 1.125rem);
 }
 @utility text-fluid-question {
-  /* 16px @360 → 22px @768 → 28px cap */
-  font-size: clamp(1rem, calc(0.65rem + 1.5vw), 1.75rem);
+  /* 16px @360 → ~18px @768 → ~20px @1180 → 22px cap. ~16px on landscape phones. */
+  font-size: clamp(1rem, min(calc(0.85rem + 0.55vw), 4.2svh), 1.375rem);
+}
+
+/* `short:` — landscape phones (every recent iPhone is 393–440px tall held
+   sideways) and any window under 480px tall. Landscape tablets are ≥720px
+   tall so they never match; portrait is gated by the rotate prompt instead. */
+@custom-variant short (@media (max-height: 480px));
+
+/* Horizontal edge padding that clears the landscape notch / Dynamic Island
+   (safe-area-inset-left/right is 59–68px on recent iPhones) — plain px-4/6
+   leaves the bottom stack and header under the island. */
+@utility px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@utility px-safe-lg {
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+}
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+@utility pb-safe-lg {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+@utility pb-safe-sm {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 html,
