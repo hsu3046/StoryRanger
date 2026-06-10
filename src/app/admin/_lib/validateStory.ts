@@ -79,6 +79,15 @@ export async function validateStory(
   characterIds.add("narrator");
   const itemIds = new Set((itemsFile?.items ?? []).map((i) => i.id));
   const monsterIds = new Set((monstersFile?.monsters ?? []).map((m) => m.id));
+  // Keywords are ONLY produced by ask unlocks (Scene.asks[].unlock.keyword) —
+  // a branch gated on a keyword no ask defines can never appear. Collected
+  // across the WHOLE story first, since an unlock earned in one scene can
+  // gate a branch in any other.
+  const definedKeywords = new Set(
+    Object.values(story.scenes).flatMap((s) =>
+      (s.asks ?? []).flatMap((a) => (a.unlock ? [a.unlock.keyword] : [])),
+    ),
+  );
 
   // ── 2. Hero existence + uniqueness ─────────────────────────────
   const heroes = charsFile.characters.filter((c) => c.isHero);
@@ -155,6 +164,35 @@ export async function validateStory(
           where: `scene:${sid}.branch:${b.id}.next`,
           message: `next "${b.next}" is not a scene id`,
         });
+      }
+      // outcomeSpeaker picks a TTS voice exactly like scene.speaker — hold it
+      // to the same standard (a deleted character would otherwise silently
+      // fall back at runtime while scene.speaker errors).
+      if (b.outcomeSpeaker && !characterIds.has(b.outcomeSpeaker)) {
+        errors.push({
+          where: `scene:${sid}.branch:${b.id}.outcomeSpeaker`,
+          message: `outcomeSpeaker "${b.outcomeSpeaker}" is not a character`,
+        });
+      }
+      // A condition item missing from the catalog can never be held → the
+      // branch is permanently invisible and its subtree unreachable.
+      for (const itemId of b.condition?.hasItems ?? []) {
+        if (!itemIds.has(itemId)) {
+          errors.push({
+            where: `scene:${sid}.branch:${b.id}.condition.hasItems`,
+            message: `item "${itemId}" is not in the items catalog`,
+          });
+        }
+      }
+      // Warning (not error): the keyword may legitimately be authored before
+      // its ask exists, but shipping it means the branch can never appear.
+      for (const k of b.condition?.hasKeywords ?? []) {
+        if (!definedKeywords.has(k)) {
+          warnings.push({
+            where: `scene:${sid}.branch:${b.id}.condition.hasKeywords`,
+            message: `keyword "${k}" is never unlocked by any ask — branch can't appear`,
+          });
+        }
       }
     }
     if (scene.branches.length === 0 && !scene.ending) {

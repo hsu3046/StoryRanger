@@ -139,7 +139,12 @@ export function ItemsEditor({
   function changeId(value: string) {
     if (selectedIdx === null) return;
     idLink.detach(items[selectedIdx].id);
-    updateSelected((it) => ({ ...it, id: value }));
+    // Slug filter (same as CharactersEditor) — the id keys asset paths and
+    // drop / reward / condition references, so free text must not land on
+    // disk. The schema rejects "" too; this keeps the field from ever
+    // holding one.
+    const slug = value.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    updateSelected((it) => ({ ...it, id: slug }));
   }
 
   async function deleteSelected() {

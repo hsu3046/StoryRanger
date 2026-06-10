@@ -13,6 +13,7 @@ import {
   type ItemDefT,
 } from "@/data/schemas";
 import type { SpeakerId } from "@/types/story";
+import { referencesToCharacter } from "@/lib/content-repo";
 import { SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import { VOICES } from "@/data/voices";
 import { saveCharactersAction } from "../_actions/saveJson";
@@ -56,6 +57,9 @@ interface Props {
   /** Item catalogue — drives the persona's giftable-items toggle chips
    *  (same picker as the Monsters editor's drops). */
   itemCatalog: ItemDefT[];
+  /** Scene references to character ids NOT in the cast (server-side scan) —
+   *  shown as a header badge, mirroring the Items editor. */
+  missingRefs?: Array<{ where: string; id: string }>;
 }
 
 export function CharactersEditor({
@@ -67,6 +71,7 @@ export function CharactersEditor({
   dialogueImageOptions,
   battleImageOptions,
   itemCatalog,
+  missingRefs = [],
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -189,9 +194,23 @@ export function CharactersEditor({
   async function deleteSelected() {
     if (selectedIdx === null) return;
     const c = characters[selectedIdx];
+    // Surface what goes orphan BEFORE deleting — scenes keep referencing the
+    // id (speaker / dialogue / asks / outcome voice) and the runtime only
+    // degrades silently, so this confirm is the author's one chance to see it.
+    const refs = referencesToCharacter(storyId, c.id);
+    const refNote =
+      refs.length > 0
+        ? `\n\n⚠ Referenced by ${refs.length} place${refs.length === 1 ? "" : "s"} — these become orphans:\n${refs
+            .slice(0, 6)
+            .map((r) => `· ${r}`)
+            .join("\n")}${refs.length > 6 ? `\n· …and ${refs.length - 6} more` : ""}`
+        : "";
+    const heroNote = c.isHero
+      ? "\n\n🛑 This is the HERO — the engine requires exactly one. The story will not validate without a replacement."
+      : "";
     const ok = await confirm({
       title: "Delete character",
-      message: `Delete character "${c.name}"?\nThis cannot be undone.`,
+      message: `Delete character "${c.name}"?\nThis cannot be undone.${heroNote}${refNote}`,
     });
     if (!ok) return;
     idLink.detach(c.id);
@@ -215,6 +234,17 @@ export function CharactersEditor({
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
             characters.json
           </code>
+          {missingRefs.length > 0 && (
+            <span
+              className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs text-ruby"
+              title={missingRefs
+                .slice(0, 8)
+                .map((m) => `${m.id} @ ${m.where}`)
+                .join("\n")}
+            >
+              ⚠ {missingRefs.length} unknown refs
+            </span>
+          )}
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
               unsaved

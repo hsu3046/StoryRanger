@@ -10,7 +10,9 @@ import {
   type MonstersFileT,
 } from "@/data/schemas";
 import { normalizeDrop } from "@/data/monsters";
+import { referencesToMonster } from "@/lib/content-repo";
 import { saveMonstersAction } from "../_actions/saveJson";
+import { uniqueId } from "../_lib/uniqueId";
 import { useNameLinkedId } from "../_lib/useNameLinkedId";
 import { AssetThumb } from "./AssetThumb";
 import { ClickableImageThumb } from "./ClickableImageThumb";
@@ -29,6 +31,9 @@ interface Props {
   /** Image stems scanned from /public/stories/<id>/monsters/. Drives
    *  the in-form image picker. */
   imageOptions: { value: string; label: string }[];
+  /** Encounter references to monster ids NOT in the catalog (server-side
+   *  scan) — shown as a header badge, mirroring the Items editor. */
+  missingRefs?: Array<{ where: string; id: string }>;
 }
 
 function monsterImageBase(storyId: string, monsterId: string): string {
@@ -42,6 +47,7 @@ export function MonstersEditor({
   itemCatalog,
   assetMap,
   imageOptions,
+  missingRefs = [],
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -96,7 +102,11 @@ export function MonstersEditor({
   }
 
   function startCreate() {
-    const id = `new-monster-${monsters.length + 1}`;
+    // Collision-proof (like ItemsEditor): a length-based suffix can reuse a
+    // SAVED monster's id after deletions, and registering that string with
+    // idLink would auto-link the saved row's id to name edits — silently
+    // renaming an id that encounters + asset paths key on.
+    const id = uniqueId("new-monster", monsters.map((m) => m.id));
     const placeholder: MonsterStatsT = {
       id,
       name: "New Monster",
@@ -132,15 +142,31 @@ export function MonstersEditor({
   function changeId(value: string) {
     if (selectedIdx === null) return;
     idLink.detach(monsters[selectedIdx].id);
-    updateSelected((m) => ({ ...m, id: value }));
+    // Slug filter (same as CharactersEditor) — the id keys asset paths and
+    // encounter references, so free text (spaces, "", unicode) must not land
+    // on disk. The schema rejects "" too; this keeps the field from ever
+    // holding one.
+    const slug = value.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    updateSelected((m) => ({ ...m, id: slug }));
   }
 
   async function deleteSelected() {
     if (selectedIdx === null) return;
     const m = monsters[selectedIdx];
+    // Surface referencing encounters BEFORE deleting — the battle engine just
+    // drops unknown monster ids with a dev-only warning, so without this the
+    // author never learns the encounter went hollow.
+    const refs = referencesToMonster(storyId, m.id);
+    const refNote =
+      refs.length > 0
+        ? `\n\n⚠ Referenced by ${refs.length} place${refs.length === 1 ? "" : "s"} — these become orphans:\n${refs
+            .slice(0, 6)
+            .map((r) => `· ${r}`)
+            .join("\n")}${refs.length > 6 ? `\n· …and ${refs.length - 6} more` : ""}`
+        : "";
     const ok = await confirm({
       title: "Delete monster",
-      message: `Delete monster "${m.name}"?\nThis cannot be undone.`,
+      message: `Delete monster "${m.name}"?\nThis cannot be undone.${refNote}`,
     });
     if (!ok) return;
     idLink.detach(m.id);
@@ -165,6 +191,17 @@ export function MonstersEditor({
           <code className="rounded-pill bg-paper-deep/30 px-2 py-0.5 font-mono text-[10px] text-ink-soft/70">
             monsters.json
           </code>
+          {missingRefs.length > 0 && (
+            <span
+              className="rounded-pill bg-ruby/15 px-2 py-0.5 text-xs text-ruby"
+              title={missingRefs
+                .slice(0, 8)
+                .map((m) => `${m.id} @ ${m.where}`)
+                .join("\n")}
+            >
+              ⚠ {missingRefs.length} unknown refs
+            </span>
+          )}
           {dirty && (
             <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-xs text-accent-deep">
               unsaved

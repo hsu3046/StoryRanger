@@ -17,7 +17,10 @@ export const MonsterDropSchema = z.union([
 ]);
 
 export const MonsterStatsSchema = z.object({
-  id: z.string(),
+  // Non-empty: an empty id breaks asset paths (`…/monsters/`), drop /
+  // encounter references, and catalog map keys. SpeakerIdSchema already
+  // enforces this for characters — keep the catalogs consistent.
+  id: z.string().min(1),
   name: z.string(),
   // ≥ 1: a 0-hit monster can't be fought — it spawns pre-defeated and (before
   // the engine-side guard) could softlock the battle. Reject at authoring time.

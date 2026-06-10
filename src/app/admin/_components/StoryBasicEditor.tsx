@@ -213,7 +213,14 @@ export function StoryBasicEditor({ storyId, initialStory, coverOptions }: Props)
                 onChange={(e) =>
                   update((s) => ({
                     ...s,
-                    estimatedMinutes: Number(e.target.value),
+                    // Clamp like MedalsEditor's threshold: partial input
+                    // ("1e", "-", "") → NaN/0 would silently fail the Zod
+                    // save; negatives would save as-is. min/max HTML attrs
+                    // don't constrain typed/pasted text.
+                    estimatedMinutes: Math.min(
+                      999,
+                      Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                    ),
                   }))
                 }
                 className={`${inputCls} max-w-[8rem] tabular-nums`}

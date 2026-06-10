@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 
-import { contentRepo } from "@/lib/content-repo";
+import { contentRepo, scanCharacterReferences } from "@/lib/content-repo";
 import { CharactersEditor } from "@/app/admin/_components/CharactersEditor";
 import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
 import { characterAssetSlug } from "@/lib/narrative";
@@ -77,6 +77,7 @@ export default async function CharactersPage({
       dialogueImageOptions={dialogueImageOptions}
       battleImageOptions={battleImageOptions}
       itemCatalog={repo.listItems(storyId)}
+      missingRefs={scanCharacterReferences(storyId).missing}
     />
   );
 }
