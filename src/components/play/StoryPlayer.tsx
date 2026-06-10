@@ -194,6 +194,25 @@ export function StoryPlayer({
   /** True while a SceneDialogueLayer bubble is open — hides the
    *  underlying narration + branch UI to avoid visual overlap. */
   const [dialogueActive, setDialogueActive] = useState(false);
+  /** True while the portrait-touch rotate prompt covers the player. The
+   *  prompt itself is CSS-only (`portrait:pointer-coarse:`), but covering
+   *  is not pausing: the Typewriter would keep typing and SpeechAudio
+   *  would narrate behind the overlay, so after rotating the player lands
+   *  on an already-finished line (Codex P2). This mirrors the same media
+   *  query into state so narration + TTS unmount while blocked and start
+   *  fresh on rotate. Admin preview panes skip it (overlay isn't rendered
+   *  there either). */
+  const [portraitBlocked, setPortraitBlocked] = useState(false);
+  useEffect(() => {
+    if (previewMode) return;
+    const mq = window.matchMedia(
+      "(orientation: portrait) and (pointer: coarse)",
+    );
+    const sync = () => setPortraitBlocked(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, [previewMode]);
   /** Seeded-conversation request from an ask chip → SceneDialogueLayer. */
   const [askRequest, setAskRequest] = useState<{
     characterId: SpeakerId;
@@ -1396,8 +1415,12 @@ export function StoryPlayer({
                 stayed mounted, picking a branch mid-dialogue would change the
                 scene and leave the PREVIOUS narration exit-animating just as
                 the bottom region fades back in — a one-frame flash of the old
-                text. With it unmounted, only the new scene's narration mounts. */}
-            {!pendingEncounter && !dialogueActive && (
+                text. With it unmounted, only the new scene's narration mounts.
+                Same for `portraitBlocked`: while the rotate prompt covers the
+                player the Typewriter must not advance (or finish) the line
+                behind it — unmounted here, it types from the start once the
+                device rotates back to landscape. */}
+            {!pendingEncounter && !dialogueActive && !portraitBlocked && (
               <motion.div
                 key={`narr-${narrationKey}`}
                 initial={{ opacity: 0, y: 10 }}
@@ -1585,7 +1608,9 @@ export function StoryPlayer({
         />
       )}
 
-      {hydrated && displayedSpeaker && !pendingEncounter && (
+      {/* `!portraitBlocked` — don't narrate behind the rotate prompt; the
+          remount after rotating replays this line from the start. */}
+      {hydrated && displayedSpeaker && !pendingEncounter && !portraitBlocked && (
         <SpeechAudio
           text={displayedNarration}
           voiceId={displayedSpeaker.voice}
