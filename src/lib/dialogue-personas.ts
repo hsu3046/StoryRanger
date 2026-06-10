@@ -1,7 +1,6 @@
 import type {
   Character,
   CharacterPersona,
-  CompanionId,
   DialogueMessage,
   Hero,
 } from "@/types/story";
@@ -50,12 +49,15 @@ function moodLabel(mood: number): string {
 
 /**
  * STATIC half of the system prompt — depends only on the character's
- * persona + display name, so it is byte-identical across every request to
- * this character and eligible for prompt caching.
+ * persona + display name + story title, so it is byte-identical across every
+ * request to this character and eligible for prompt caching.
  */
 export function buildPersonaSystemPrompt(
   displayName: string,
   persona: CharacterPersona,
+  /** The story this character belongs to — the engine is multi-story, so the
+   *  framing must come from the loaded story, never a hardcoded title. */
+  storyTitle: string,
 ): string {
   const giftLine =
     persona.giftableItems.length > 0
@@ -71,7 +73,7 @@ export function buildPersonaSystemPrompt(
       ? persona.donts.map((d) => `  - ${d}`).join("\n")
       : "  - (none specified)";
 
-  return `You are ${displayName} from "The Wonderful Wizard of Oz", speaking directly with the child playing the story. The child is the hero of this telling. Their name, your current mood, and the present scene are provided in the user message tagged CURRENT CONTEXT — always use the name given there, never assume a name from the original book.
+  return `You are ${displayName} from "${storyTitle}", speaking directly with the child playing the story. The child is the hero of this telling. Their name, your current mood, and the present scene are provided in the user message tagged CURRENT CONTEXT — always use the name given there, never assume a name from the original book.
 
 WHO YOU ARE
 ${persona.shortBio}
@@ -107,7 +109,7 @@ ACTION FIELD
 - \`action\` is an optional one-line body-language note shown above the reply (italic).
 - Example: "leans against the tree, sighing" / "ears perk up" / "knits her brow worriedly".
 - Use SPARINGLY — only when it adds something the reply alone can't carry. Set to null otherwise.
-- For Toto specifically: \`reply\` itself must already be an action in *asterisks* (no words) — \`action\` can be null.
+- If your character cannot speak (a pet or animal companion): \`reply\` itself must already be an action in *asterisks* (no words) — \`action\` can be null.
 
 SUGGESTIONS (always required — exactly 2 short hero replies)
 - Suggest 2 short follow-up lines the HERO might say next, in the hero's child voice.
@@ -133,7 +135,9 @@ export function buildDialogueContext(
   hero: Pick<Hero, "name" | "gender">,
   currentMood: number,
   sceneNarration: string,
-  companions: CompanionId[],
+  // Plain ids — the dialogue layer is story-generic, not bound to the Oz
+  // companion slots (the route validates them against the story's cast).
+  companions: string[],
   alreadyGifted: boolean,
   heroMemory: string[] = [],
   journeyNote = "",
@@ -149,8 +153,8 @@ export function buildDialogueContext(
 
   const companionsLine =
     companions.length === 0
-      ? `${hero.name} is travelling alone with Toto.`
-      : `${hero.name} is travelling with: ${companions.join(", ")} (plus Toto).`;
+      ? `${hero.name} is travelling alone.`
+      : `${hero.name} is travelling with: ${companions.join(", ")}.`;
 
   const giftStatusLine = alreadyGifted
     ? "- You have already given them your one keepsake — do NOT offer another (leave itemGift null)."
@@ -179,7 +183,7 @@ export function buildDialogueContext(
     : "";
 
   return `CURRENT CONTEXT (this turn)
-- The hero's name is "${hero.name}". When you address them by name, use exactly "${hero.name}" — NEVER any other name (not "Dorothy" or anyone from the book). For pronouns, use ${pronouns.they}/${pronouns.them}/${pronouns.their}.
+- The hero's name is "${hero.name}". When you address them by name, use exactly "${hero.name}" — NEVER a name from the original book. For pronouns, use ${pronouns.they}/${pronouns.them}/${pronouns.their}.
 - Your mood toward ${hero.name} right now: ${currentMood}/10 — ${moodLabel(currentMood)}.
 - Scene narration: "${sceneNarration}"
 - ${companionsLine}${journeyLine}${giftStatusLine ? `\n${giftStatusLine}` : ""}${memoryBlock}${goalBlock}`;

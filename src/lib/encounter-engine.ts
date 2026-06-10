@@ -26,8 +26,11 @@ export function buildEncounterQueue(
       if (r.companion && !state.companions.includes(r.companion)) continue;
       if (r.item && !(state.inventory ?? []).includes(r.item)) continue;
     }
-    // One battle per encounter — battles no longer repeat (the old
-    // `trigger.count` multiplier was removed).
+    // One battle per encounter PER PASS (the old `trigger.count` multiplier
+    // was removed). Revisiting the branch — looping stories are a supported
+    // authoring pattern — re-triggers the battle ON PURPOSE; farming is
+    // prevented downstream instead: rewards are granted on the first clear
+    // only (see EncounterFlow's `alreadyCleared`).
     pool.push(e);
   }
 

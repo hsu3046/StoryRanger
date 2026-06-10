@@ -315,7 +315,10 @@ export interface PlayState {
   partyMaxHp?: PartyHp;
   /** Attackers whose HP hit 0 across the run. Cannot rejoin battles. */
   fallenAttackers?: AttackerId[];
-  /** v2.0 — encounters already completed (for `once` trigger gating). */
+  /** v2.0 — encounter ids cleared at least once. Battles deliberately
+   *  RE-TRIGGER on branch revisits (looping stories are supported); this set
+   *  gates the one-time grants instead — rewards/moodBoost on first clear
+   *  only (EncounterFlow) — and drives the medal battle count (deduped). */
   completedEncounters?: string[];
   /** Scenes whose `reward` was already auto-granted on first entry —
    *  prevents double-grant on revisit. */
