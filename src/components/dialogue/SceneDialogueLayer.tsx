@@ -126,6 +126,8 @@ export function SceneDialogueLayer({
     action: string | null;
     suggestions: string[];
     itemGift?: string | null;
+    /** Text-only reply — never sent to TTS (rate-limit fallback line). */
+    silent?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   // Bumps each time a reply lands → re-keys SpeechAudio so the same character
@@ -306,6 +308,30 @@ export function SceneDialogueLayer({
           unlockGoal: sessionGoalRef.current?.goal,
         }),
       });
+      if (res.status === 429) {
+        // Per-user budget hit. The server sends an in-character line in the
+        // story's language — show it as a normal reply (no scary error) and
+        // gently close the conversation like an `endsConversation` turn.
+        // Deliberately NOT recorded as a turn (no onApplyTurn). `silent`
+        // keeps it out of TTS — the SpeechAudio render gate checks it; an
+        // unchanged speakNonce would NOT suppress playback because setting
+        // latestReply remounts SpeechAudio with a fresh playedKeyRef.
+        const limited = (await res.json().catch(() => null)) as {
+          fallbackReply?: string;
+        } | null;
+        setLatestReply({
+          reply:
+            limited?.fallbackReply ??
+            "Phew… my voice needs a little rest. Let's talk again in a little while, okay?",
+          action: null,
+          suggestions: [],
+          itemGift: undefined,
+          silent: true,
+        });
+        clearEndTimer();
+        endTimerRef.current = setTimeout(() => closeSession(), 3200);
+        return;
+      }
       if (!res.ok) throw new Error(`dialogue ${res.status}`);
       const data = (await res.json()) as DialogueResponse;
       setLatestReply({
@@ -461,8 +487,11 @@ export function SceneDialogueLayer({
 
       {/* Speak the character's reply via ElevenLabs (Web Audio, mixes with
           BGM). No R2 cache — dialogue is LLM-generated fresh each turn. The
-          nonce-keyed playKey replays even when the same line recurs. */}
-      {active && latestReply?.reply && characterMap[active]?.voice && (
+          nonce-keyed playKey replays even when the same line recurs. `silent`
+          replies (rate-limit fallback) must not mount this at all — a remount
+          resets playedKeyRef, so the playKey guard alone can't keep them
+          unspoken. */}
+      {active && latestReply?.reply && !latestReply.silent && characterMap[active]?.voice && (
         <SpeechAudio
           text={latestReply.reply}
           voiceId={characterMap[active].voice}
