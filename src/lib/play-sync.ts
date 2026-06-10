@@ -97,6 +97,45 @@ export async function upsertRemotePlayState(state: PlayState): Promise<void> {
   }
 }
 
+/**
+ * Tab-close variant of upsertRemotePlayState. The normal path does
+ * auth.getUser() (a network round-trip) and a plain fetch RPC — on
+ * pagehide the browser aborts both in-flight requests, so the last
+ * debounce window of progress regularly never reached the DB ("flushes
+ * on tab hide" was only half true). Differences here:
+ *   1. getSession() — a LOCAL storage read, no network gate to die first;
+ *   2. raw PostgREST call with `keepalive: true`, which the browser
+ *      completes after the page is gone (same RPC → same stale-write guard).
+ * A second supabase-js client configured with a keepalive fetch would work
+ * too, but two GoTrue instances sharing one storage key fight over the
+ * auth-token lock — the raw call avoids that entirely.
+ */
+export async function flushRemotePlayState(state: PlayState): Promise<void> {
+  if (!isSupabaseConfigured() || typeof window === "undefined") return;
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (!session) return;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+    void fetch(`${url}/rest/v1/rpc/storyranger_save_play_state`, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ p_story_id: state.storyId, p_state: state }),
+    }).catch(() => {
+      /* best-effort — localStorage already has it */
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function deleteRemotePlayState(storyId: string): Promise<void> {
   const uid = await currentUserId();
   if (!uid) return;
@@ -223,11 +262,17 @@ async function runMigration(): Promise<void> {
       if (!state || haveState.has(storyId)) continue;
       if (haveRow.has(storyId)) {
         // Review-only remote row → fill `state`, keep the remote review.
+        // `.is("state", null)` makes the fill atomic: between our SELECT and
+        // this UPDATE another device may have saved REAL progress through the
+        // guarded RPC — an unconditional update would clobber it with this
+        // device's (older) local copy, bypassing the 0003 stale-write guard.
+        // 0 rows matched = someone else filled it = success.
         const { error } = await supabase
           .from(TABLES.playStates)
           .update({ state, updated_at: new Date().toISOString() })
           .eq("user_id", uid)
-          .eq("story_id", storyId);
+          .eq("story_id", storyId)
+          .is("state", null);
         if (error) failedAny = true;
       } else {
         // No remote row → insert state + local review. ignoreDuplicates keeps

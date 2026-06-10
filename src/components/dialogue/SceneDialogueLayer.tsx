@@ -169,11 +169,19 @@ export function SceneDialogueLayer({
       CHOICE_REVEAL_DELAY_MS,
     );
   }
-  // Clear any pending timers on unmount.
+  // Clear any pending timers AND the in-flight dialogue fetch on unmount.
+  // The layer is keyed by scene id, so scene transitions / encounter entry
+  // unmount it mid-request; without the abort the response would still land:
+  // onApplyTurn writes a ghost turn (mood/history/gift) into the PlayState of
+  // a scene the player already left, and an endsConversation reply arms a
+  // fresh endTimer AFTER this cleanup ran — nobody clears it, and 2.4s later
+  // the stale closeSession fires dialogueCount/medals/SFX.
   useEffect(
     () => () => {
       clearChoiceTimer();
       clearEndTimer();
+      abortRef.current?.abort();
+      abortRef.current = null;
     },
     [],
   );

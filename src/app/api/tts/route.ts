@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { hasElevenLabsKey, isVoiceError, synthesizeSpeech } from "@/lib/elevenlabs";
 import { DEFAULT_TTS_VOICE, ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
-import { hasR2, r2Put } from "@/lib/r2";
+import { hasR2, r2Get, r2Put } from "@/lib/r2";
 import {
   consumeRateLimit,
   rateLimited429,
@@ -21,6 +21,48 @@ export const runtime = "nodejs";
 const TTS_CHARS_PER_MINUTE = 5_000;
 const TTS_CHARS_PER_DAY = 30_000;
 const TTS_MIN_WEIGHT = 125;
+
+/** The R2 key is a content hash — a URL's bytes can never change, so repeat
+ *  plays are safe to cache forever (same pattern as fingerprinted assets). */
+const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
+
+/**
+ * Coalesce concurrent identical syntheses (per instance): a prefetch racing
+ * the user's playback of the same line — or a re-fired prefetch effect —
+ * otherwise pays ElevenLabs twice for one clip. Keyed by the same content
+ * hash as the R2 object; entries remove themselves when settled.
+ */
+const inFlight = new Map<
+  string,
+  Promise<{ buffer: Buffer; usedFallbackVoice: boolean }>
+>();
+
+/** Synthesize, falling back to the default voice when the requested voice
+ *  itself is bad (invalid/unavailable id) — the last link of the retry chain
+ *  (synthesizeSpeech already retries transient 429/5xx/network failures). */
+async function synthesizeWithVoiceFallback(
+  text: string,
+  voiceId: string,
+  voiceSpeed: number,
+): Promise<{ buffer: Buffer; usedFallbackVoice: boolean }> {
+  try {
+    return {
+      buffer: await synthesizeSpeech(text, voiceId, voiceSpeed),
+      usedFallbackVoice: false,
+    };
+  } catch (err) {
+    if (isVoiceError(err) && voiceId !== DEFAULT_TTS_VOICE) {
+      console.warn(
+        `[tts] voice "${voiceId}" failed (${err instanceof Error ? err.message : err}); falling back to default voice`,
+      );
+      return {
+        buffer: await synthesizeSpeech(text, DEFAULT_TTS_VOICE, voiceSpeed),
+        usedFallbackVoice: true,
+      };
+    }
+    throw err;
+  }
+}
 
 const RequestSchema = z.object({
   text: z.string().min(1).max(2000),
@@ -55,77 +97,122 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  // Character-weighted budget — maps 1:1 to ElevenLabs credits. The client
-  // treats 429 as "stay silent + cool down"; text gameplay continues.
-  const limit = await consumeRateLimit({
-    userId,
-    route: "tts",
-    weight: Math.max(body.text.length, TTS_MIN_WEIGHT),
-    minuteMax: TTS_CHARS_PER_MINUTE,
-    dayMax: TTS_CHARS_PER_DAY,
-  });
-  if (limit.limited) return rateLimited429(limit.retryAfterSeconds);
-
-  if (!hasElevenLabsKey()) {
-    console.warn("[tts] ELEVENLABS_API_KEY not set — returning 503");
-    return NextResponse.json({ error: "no_api_key" }, { status: 503 });
+  // Read-through BEFORE the rate limit: the client checks R2 first, but our
+  // cache write lands via after() AFTER the response — so a prefetch that is
+  // still synthesizing (or just finished) leaves a window where the client
+  // misses and asks us to synthesize the same line again. Serving the cached
+  // bytes costs no ElevenLabs credits, so it doesn't consume the budget.
+  const cacheKey =
+    body.cache && hasR2()
+      ? await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed)
+      : null;
+  if (cacheKey) {
+    const cached = await r2Get(cacheKey);
+    if (cached) {
+      return new NextResponse(new Uint8Array(cached), {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Cache-Control": IMMUTABLE_CACHE,
+        },
+      });
+    }
   }
 
-  // synthesizeSpeech already retries transient failures (429/5xx/network).
-  // Here we add the LAST link of the chain: if the requested voice itself is
-  // bad (invalid/unavailable id → 4xx), fall back to a known-good default voice
-  // so the line still speaks instead of going silent.
+  // One paid synthesis per identical line — concurrent requests share the
+  // same promise (dialogue lines too: cache=false only skips R2, identical
+  // text+voice in flight twice would still double-bill).
+  //
+  // Quota choreography (the flight Map is GLOBAL across users):
+  //   · joining an EXISTING flight consumes no budget — it costs no
+  //     ElevenLabs credits, and charging it could 429 identical narration
+  //     during the prefetch/playback race;
+  //   · gate failures (429/503) stay in the requester's own scope — the
+  //     flight wraps ONLY actual synthesis, so user B can never inherit
+  //     user A's rate-limit rejection;
+  //   · the would-be creator consumes ITS quota first, then re-checks the
+  //     Map: if another request created the flight during the quota RPC,
+  //     join it — the rare race over-consumes one weight (conservative) but
+  //     never synthesizes twice.
+  const flightKey =
+    cacheKey ?? (await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed));
+  let flight = inFlight.get(flightKey);
+  let created = false;
+  if (!flight) {
+    // Character-weighted budget — maps 1:1 to ElevenLabs credits. The
+    // client treats 429 as "stay silent + cool down"; gameplay continues.
+    const limit = await consumeRateLimit({
+      userId,
+      route: "tts",
+      weight: Math.max(body.text.length, TTS_MIN_WEIGHT),
+      minuteMax: TTS_CHARS_PER_MINUTE,
+      dayMax: TTS_CHARS_PER_DAY,
+    });
+    if (limit.limited) return rateLimited429(limit.retryAfterSeconds);
+
+    if (!hasElevenLabsKey()) {
+      console.warn("[tts] ELEVENLABS_API_KEY not set — returning 503");
+      return NextResponse.json({ error: "no_api_key" }, { status: 503 });
+    }
+
+    flight = inFlight.get(flightKey);
+    if (!flight) {
+      created = true;
+      flight = synthesizeWithVoiceFallback(
+        body.text,
+        body.voiceId,
+        body.voiceSpeed,
+      );
+      // A FAILED synthesis releases the key immediately so a retry starts
+      // fresh. A successful one must NOT release on settle: the R2 write
+      // happens post-response (after(), below), and deleting the flight
+      // before the object is visible in R2 reopens exactly the window this
+      // coalescing closes — a follower arriving after ElevenLabs returned
+      // but before the PUT landed would miss both and pay a second
+      // synthesis. The creator releases it after the cache step instead.
+      flight.catch(() => inFlight.delete(flightKey));
+      inFlight.set(flightKey, flight);
+    }
+  }
+
   let buffer: Buffer;
   let usedFallbackVoice = false;
   try {
-    buffer = await synthesizeSpeech(body.text, body.voiceId, body.voiceSpeed);
+    ({ buffer, usedFallbackVoice } = await flight);
   } catch (err) {
-    if (isVoiceError(err) && body.voiceId !== DEFAULT_TTS_VOICE) {
-      console.warn(
-        `[tts] voice "${body.voiceId}" failed (${err instanceof Error ? err.message : err}); falling back to default voice`,
-      );
-      try {
-        buffer = await synthesizeSpeech(
-          body.text,
-          DEFAULT_TTS_VOICE,
-          body.voiceSpeed,
-        );
-        usedFallbackVoice = true;
-      } catch (err2) {
-        console.error("[tts] fallback voice also failed", err2);
-        return NextResponse.json(
-          {
-            error: "tts_failed",
-            detail: err2 instanceof Error ? err2.message : String(err2),
-          },
-          { status: 502 },
-        );
-      }
-    } else {
-      console.error("[tts] ElevenLabs error", err);
-      return NextResponse.json(
-        {
-          error: "tts_failed",
-          detail: err instanceof Error ? err.message : String(err),
-        },
-        { status: 502 },
-      );
-    }
+    console.error("[tts] ElevenLabs error", err);
+    return NextResponse.json(
+      {
+        error: "tts_failed",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      { status: 502 },
+    );
   }
 
   // Cacheable ONLY when the requested voice was used — a fallback-voice clip
   // must not be stored under the requested voice's key (it'd serve the wrong
   // voice forever). Best-effort, scheduled with after() so it can't be killed.
+  // The stored Cache-Control makes repeat R2 plays instant (no revalidation).
+  // Flight lifetime is the CREATOR's job: cacheable → release only after the
+  // PUT settles (late followers keep joining the resolved flight until the
+  // read-through can take over); otherwise → release now (nothing will be
+  // cached, identical future requests legitimately synthesize anew).
   const cacheable = body.cache && !usedFallbackVoice;
-  if (cacheable && hasR2()) {
-    after(async () => {
-      try {
-        const key = await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed);
-        await r2Put(key, buffer, "audio/mpeg");
-      } catch (e) {
-        console.warn("[tts] R2 cache write failed:", String(e));
-      }
-    });
+  if (created) {
+    if (cacheable && cacheKey) {
+      after(async () => {
+        try {
+          await r2Put(cacheKey, buffer, "audio/mpeg", IMMUTABLE_CACHE);
+        } catch (e) {
+          console.warn("[tts] R2 cache write failed:", String(e));
+        } finally {
+          inFlight.delete(flightKey);
+        }
+      });
+    } else {
+      inFlight.delete(flightKey);
+    }
   }
 
   return new NextResponse(new Uint8Array(buffer), {
@@ -134,9 +221,7 @@ export async function POST(req: Request) {
       "Content-Type": "audio/mpeg",
       // Deterministic narration is immutable-cacheable; unique dialogue lines
       // (and fallback-voice clips) must not be stored.
-      "Cache-Control": cacheable
-        ? "public, max-age=31536000, immutable"
-        : "no-store",
+      "Cache-Control": cacheable ? IMMUTABLE_CACHE : "no-store",
     },
   });
 }

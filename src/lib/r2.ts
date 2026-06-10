@@ -40,6 +40,10 @@ async function r2Request(
   objectKey: string,
   body: Buffer | undefined,
   contentType: string | undefined,
+  /** Optional Cache-Control stored as object metadata on PUT (SigV4-signed,
+   *  like content-type). R2 then serves it on every GET — without it browsers
+   *  fall back to heuristic freshness + conditional revalidation round-trips. */
+  cacheControl?: string,
 ): Promise<Response> {
   const accountId = process.env.R2_ACCOUNT_ID!;
   const accessKey = process.env.R2_ACCESS_KEY_ID!;
@@ -59,6 +63,7 @@ async function r2Request(
     ["x-amz-date", amzDate],
   ];
   if (contentType) headerPairs.push(["content-type", contentType]);
+  if (cacheControl) headerPairs.push(["cache-control", cacheControl]);
   headerPairs.sort((a, b) => (a[0] < b[0] ? -1 : 1));
   const canonicalHeaders =
     headerPairs.map(([k, v]) => `${k}:${v}`).join("\n") + "\n";
@@ -99,6 +104,7 @@ async function r2Request(
     "x-amz-date": amzDate,
   };
   if (contentType) headers["Content-Type"] = contentType;
+  if (cacheControl) headers["Cache-Control"] = cacheControl;
 
   return fetch(`https://${host}${canonicalUri}`, {
     method,
@@ -117,13 +123,26 @@ export async function r2Exists(objectKey: string): Promise<boolean> {
   }
 }
 
+/** Fetch an object's bytes, or null when it doesn't exist (or R2 errors —
+ *  callers treat that as a cache miss and regenerate). */
+export async function r2Get(objectKey: string): Promise<Buffer | null> {
+  try {
+    const res = await r2Request("GET", objectKey, undefined, undefined);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 /** Upload an object. Throws on a non-2xx response. */
 export async function r2Put(
   objectKey: string,
   body: Buffer,
   contentType: string,
+  cacheControl?: string,
 ): Promise<void> {
-  const res = await r2Request("PUT", objectKey, body, contentType);
+  const res = await r2Request("PUT", objectKey, body, contentType, cacheControl);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(`r2 put ${res.status}: ${detail.slice(0, 300)}`);

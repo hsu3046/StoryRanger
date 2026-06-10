@@ -76,26 +76,12 @@ export async function recordEarnedAchievementsRemote(
   const u = await currentUser();
   if (!u) return;
   try {
-    const { data } = await u.supabase
-      .from(TABLES.profiles)
-      .select("achievements")
-      .eq("id", u.id)
-      .maybeSingle();
-    const current = new Set<string>(
-      (data?.achievements as string[] | undefined) ?? [],
-    );
-    let changed = false;
-    for (const id of ids)
-      if (!current.has(id)) {
-        current.add(id);
-        changed = true;
-      }
-    if (changed) {
-      await u.supabase
-        .from(TABLES.profiles)
-        .update({ achievements: [...current] })
-        .eq("id", u.id);
-    }
+    // Atomic server-side union (docs/migrations/0005). The old
+    // SELECT → JS-union → UPDATE flow let two devices racing each other
+    // drop the loser's medals (lost update), and silently matched 0 rows
+    // when the profile row didn't exist yet — the RPC upserts + unions in
+    // one statement under RLS (security invoker).
+    await u.supabase.rpc("storyranger_union_achievements", { p_ids: ids });
   } catch {
     /* ignore */
   }

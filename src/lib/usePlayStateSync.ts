@@ -7,6 +7,7 @@ import { loadState, saveState } from "./storage";
 import {
   loadRemotePlayState,
   upsertRemotePlayState,
+  flushRemotePlayState,
   claimLocalCacheOwnership,
   migrateLocalToRemoteOnce,
   reconcileReview,
@@ -34,7 +35,10 @@ export function usePlayStateSync(slot: string, syncToDb: boolean) {
     const s = pending.current;
     if (s && syncToDb) {
       pending.current = null;
-      void upsertRemotePlayState(s);
+      // keepalive variant — flush fires on pagehide/unmount, where a normal
+      // fetch (and the getUser() round-trip before it) is aborted with the
+      // closing tab and the last debounce window of progress never lands.
+      void flushRemotePlayState(s);
     }
   }, [syncToDb]);
 
