@@ -1,4 +1,9 @@
 import { assetUrl, ASSET_BASE_URL } from "./asset-paths";
+import {
+  isTtsCoolingDown,
+  retryAfterSecondsFrom,
+  startTtsCooldown,
+} from "./tts-cooldown";
 import { ttsObjectKey } from "./tts-config";
 
 /**
@@ -29,12 +34,16 @@ export async function prefetchNarration(
       }
     }
 
-    // Miss → generate (server persists to R2). Body discarded.
-    await fetch("/api/tts", {
+    // Miss → generate (server persists to R2). Body discarded. Prefetch is
+    // the first thing to give up under a rate-limit cooldown — warming the
+    // cache is never worth spending the played-back lines' budget.
+    if (isTtsCoolingDown()) return;
+    const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, voiceId, voiceSpeed }),
     });
+    if (res.status === 429) startTtsCooldown(retryAfterSecondsFrom(res));
   } catch {
     /* prefetch is best-effort — swallow all errors */
   }

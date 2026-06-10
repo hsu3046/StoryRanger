@@ -10,7 +10,11 @@ import {
   trimDialogueHistory,
 } from "@/lib/dialogue-personas";
 import { SpeakerIdSchema } from "@/data/schemas";
-import { requireSessionOr401 } from "@/lib/supabase/guard";
+import {
+  consumeRateLimit,
+  rateLimited429,
+  requirePaidSession,
+} from "@/lib/supabase/guard";
 import type { DialogueResponse } from "@/types/story";
 
 export const runtime = "nodejs";
@@ -93,6 +97,42 @@ function normalizeSuggestions(raw: string[]): string[] {
   return out.slice(0, 2);
 }
 
+/** Per-user dialogue budget — see the audit issue #51 cost math. ~$0.005
+ *  worst-case per request on gpt-5-mini → ≤ ~$1.5/day per rogue account. */
+const DIALOGUE_PER_MINUTE = 20;
+const DIALOGUE_PER_DAY = 300;
+
+/**
+ * In-character "I need a rest" lines shown INSTEAD of a scary error when the
+ * rate limit trips. Keyed by story language (Story.language is free-text —
+ * unknown languages fall back to English). The client renders the line as a
+ * normal reply bubble and then gently closes the conversation.
+ */
+const RATE_LIMIT_LINES: Record<string, string[]> = {
+  en: [
+    "Phew… my voice needs a little rest. Let's talk again in a little while, okay?",
+    "I'm a bit sleepy all of a sudden… let's chat more after a short rest!",
+    "So much talking today! Let me catch my breath and we'll talk soon.",
+  ],
+  ko: [
+    "아이고, 목소리가 조금 지쳤나 봐. 우리 잠깐 쉬었다가 다시 이야기하자!",
+    "갑자기 좀 졸리네… 조금만 쉬고 나서 또 수다 떨자!",
+    "오늘 이야기 정말 많이 했다! 숨 좀 고르고 금방 다시 올게.",
+  ],
+  ja: [
+    "ふぅ、ちょっと声がつかれちゃった。少し休んでから、またお話ししようね！",
+    "なんだか急にねむくなっちゃった…少し休んだらまたおしゃべりしよう！",
+    "今日はたくさんお話ししたね！ひと息ついたら、またすぐ戻ってくるよ。",
+  ],
+};
+
+function rateLimitLine(language: string): string {
+  const lines =
+    RATE_LIMIT_LINES[language.trim().toLowerCase().slice(0, 2)] ??
+    RATE_LIMIT_LINES.en;
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
 const SAFE_FALLBACK: DialogueResponse = {
   reply: "They smile gently, but the words won't come right now.",
   action: null,
@@ -105,7 +145,7 @@ const SAFE_FALLBACK: DialogueResponse = {
 
 export async function POST(req: Request) {
   // Paid LLM — gate behind login (the proxy can't, it excludes /api).
-  const gate = await requireSessionOr401();
+  const { gate, userId } = await requirePaidSession();
   if (gate) return gate;
 
   let body;
@@ -118,6 +158,21 @@ export async function POST(req: Request) {
   const loaded = getStory(body.storyId);
   if (!loaded) {
     return NextResponse.json({ error: "unknown_story" }, { status: 404 });
+  }
+
+  // Budget check AFTER story resolution so the 429 can carry an in-character
+  // fallback line in the story's language (no scary error for the child).
+  const limit = await consumeRateLimit({
+    userId,
+    route: "dialogue",
+    weight: 1,
+    minuteMax: DIALOGUE_PER_MINUTE,
+    dayMax: DIALOGUE_PER_DAY,
+  });
+  if (limit.limited) {
+    return rateLimited429(limit.retryAfterSeconds, {
+      fallbackReply: rateLimitLine(loaded.story.language),
+    });
   }
 
   // Persona content now lives on the character (admin-editable). Look it

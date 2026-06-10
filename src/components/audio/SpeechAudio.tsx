@@ -4,6 +4,11 @@ import { Howl } from "howler";
 import { useEffect, useRef, useState } from "react";
 
 import { assetUrl, ASSET_BASE_URL } from "@/lib/asset-paths";
+import {
+  isTtsCoolingDown,
+  retryAfterSecondsFrom,
+  startTtsCooldown,
+} from "@/lib/tts-cooldown";
 import { ttsObjectKey } from "@/lib/tts-config";
 
 interface Props {
@@ -109,8 +114,11 @@ export function SpeechAudio({
 
         // 2) Miss / non-cacheable — generate via ElevenLabs. For cacheable
         //    lines the server also writes it to R2 (next request is a hit);
-        //    `cache: false` tells it not to.
+        //    `cache: false` tells it not to. During a rate-limit cooldown we
+        //    skip generation entirely — the line stays silent (text gameplay
+        //    continues), while R2 cache hits above keep playing normally.
         if (!blob) {
+          if (isTtsCoolingDown()) return;
           const res = await fetch("/api/tts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -118,6 +126,11 @@ export function SpeechAudio({
           });
           if (res.status === 503) {
             console.warn("[speech] 503 — ELEVENLABS_API_KEY not set on server");
+            return;
+          }
+          if (res.status === 429) {
+            startTtsCooldown(retryAfterSecondsFrom(res));
+            console.warn("[speech] 429 — TTS budget hit, cooling down");
             return;
           }
           if (!res.ok) {

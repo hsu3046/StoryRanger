@@ -306,6 +306,27 @@ export function SceneDialogueLayer({
           unlockGoal: sessionGoalRef.current?.goal,
         }),
       });
+      if (res.status === 429) {
+        // Per-user budget hit. The server sends an in-character line in the
+        // story's language — show it as a normal reply (no scary error) and
+        // gently close the conversation like an `endsConversation` turn.
+        // Deliberately NOT recorded as a turn (no onApplyTurn) and not spoken
+        // (no speakNonce bump — TTS budget is likely near its limit too).
+        const limited = (await res.json().catch(() => null)) as {
+          fallbackReply?: string;
+        } | null;
+        setLatestReply({
+          reply:
+            limited?.fallbackReply ??
+            "Phew… my voice needs a little rest. Let's talk again in a little while, okay?",
+          action: null,
+          suggestions: [],
+          itemGift: undefined,
+        });
+        clearEndTimer();
+        endTimerRef.current = setTimeout(() => closeSession(), 3200);
+        return;
+      }
       if (!res.ok) throw new Error(`dialogue ${res.status}`);
       const data = (await res.json()) as DialogueResponse;
       setLatestReply({

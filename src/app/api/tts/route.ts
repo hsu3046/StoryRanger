@@ -4,9 +4,23 @@ import { z } from "zod";
 import { hasElevenLabsKey, isVoiceError, synthesizeSpeech } from "@/lib/elevenlabs";
 import { DEFAULT_TTS_VOICE, ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
 import { hasR2, r2Put } from "@/lib/r2";
-import { requireSessionOr401 } from "@/lib/supabase/guard";
+import {
+  consumeRateLimit,
+  rateLimited429,
+  requirePaidSession,
+} from "@/lib/supabase/guard";
 
 export const runtime = "nodejs";
+
+/**
+ * Per-user TTS budget, in CHARACTERS (≈ ElevenLabs credits, multilingual v2 is
+ * 1 credit/char). Day cap 30k ≈ $6.6–9 worst-case per rogue account — 30% of
+ * the Creator plan's monthly credits. The 125-char floor per request bounds
+ * tiny-text hammering to 40 req/min without a second counter.
+ */
+const TTS_CHARS_PER_MINUTE = 5_000;
+const TTS_CHARS_PER_DAY = 30_000;
+const TTS_MIN_WEIGHT = 125;
 
 const RequestSchema = z.object({
   text: z.string().min(1).max(2000),
@@ -31,7 +45,7 @@ const RequestSchema = z.object({
  */
 export async function POST(req: Request) {
   // Paid TTS — gate behind login (the proxy can't, it excludes /api).
-  const gate = await requireSessionOr401();
+  const { gate, userId } = await requirePaidSession();
   if (gate) return gate;
 
   let body: z.infer<typeof RequestSchema>;
@@ -40,6 +54,17 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
+
+  // Character-weighted budget — maps 1:1 to ElevenLabs credits. The client
+  // treats 429 as "stay silent + cool down"; text gameplay continues.
+  const limit = await consumeRateLimit({
+    userId,
+    route: "tts",
+    weight: Math.max(body.text.length, TTS_MIN_WEIGHT),
+    minuteMax: TTS_CHARS_PER_MINUTE,
+    dayMax: TTS_CHARS_PER_DAY,
+  });
+  if (limit.limited) return rateLimited429(limit.retryAfterSeconds);
 
   if (!hasElevenLabsKey()) {
     console.warn("[tts] ELEVENLABS_API_KEY not set — returning 503");
