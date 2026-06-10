@@ -355,6 +355,24 @@ export function SceneDialogueLayer({
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
       console.warn("[dialogue]", err);
+      // Any non-abort failure (401 expired session, network drop, 5xx that
+      // wasn't absorbed by the server's SAFE_FALLBACK) used to leave
+      // latestReply null forever: the bubble shows thinking-dots, the choice
+      // cards (with the only "end conversation" button) never render, and the
+      // portrait rail + parent scene UI stay disabled — an unrecoverable
+      // dead-end for a child. Recover the same way the rate-limit path does:
+      // an in-character line (text-only) and a gentle auto-close back to the
+      // scene, where tapping the portrait again retries naturally.
+      setLatestReply({
+        reply:
+          "Hmm… the words don't want to come out right now. Let's talk again in a moment!",
+        action: null,
+        suggestions: [],
+        itemGift: undefined,
+        silent: true,
+      });
+      clearEndTimer();
+      endTimerRef.current = setTimeout(() => closeSession(), 3200);
     } finally {
       // Only clear loading if THIS request is still the current one. A
       // superseded (aborted) request must not turn off the spinner that

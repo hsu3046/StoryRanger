@@ -1,5 +1,6 @@
 import type { PlayState } from "@/types/story";
 import { DEFAULT_HERO } from "./narrative";
+import { getStory } from "./stories";
 import { encountersFor } from "@/data/encounters";
 import { MEDALS } from "@/data/medals";
 import { checkMedals } from "@/lib/medals-engine";
@@ -161,6 +162,27 @@ export function sanitizePlayState(
       const k = (parsed.interaction as { kind?: unknown }).kind;
       if (k !== "challenge" && k !== "outcome" && k !== "encounter") {
         delete parsed.interaction;
+      } else if (k === "challenge" || k === "outcome") {
+        // Validate against the CURRENT content, mirroring the player's
+        // pendingChallenge/pendingOutcome gates. If live admin editing removed
+        // the branch (or its challenge/outcome) since this save was written,
+        // those memos return null — the overlay UI disappears but the
+        // interaction would otherwise survive as a zombie: interactionKind
+        // stays truthy, so the BGM effect never adopts the destination scene
+        // (challenge-variant music keeps playing through normal play). Clear
+        // it here so the save resumes cleanly on the scene.
+        const i = parsed.interaction as {
+          kind: "challenge" | "outcome";
+          sourceSceneId?: string;
+          branchId?: string;
+        };
+        const branch = getStory(storyId)
+          ?.story.scenes[i.sourceSceneId ?? ""]?.branches.find(
+            (b) => b.id === i.branchId,
+          );
+        const stillValid =
+          k === "challenge" ? !!branch?.challenge?.enabled : !!branch?.outcome;
+        if (!stillValid) delete parsed.interaction;
       } else if (k === "encounter") {
         // Drop queued encounter ids that no longer exist in the catalog —
         // happens after a data-side rename or deletion. If everything

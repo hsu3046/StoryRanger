@@ -678,9 +678,17 @@ export function StoryPlayer({
   // Conditional branches (require an item / companion) only appear once their
   // gate is met. Shared by the bottom choice row AND the in-dialogue reply
   // cards so a gated branch can't be taken while chatting either.
+  // Dangling branches (next scene not created yet — a normal state during
+  // live admin editing, same premise as isTerminalScene) are hidden too:
+  // takeBranch throws on a missing scene, so showing one would let the child
+  // solve a challenge gate and then go nowhere. They reappear automatically
+  // the moment the admin connects the scene.
   const visibleBranches = useMemo(
-    () => (currentScene.branches ?? []).filter((b) => isBranchVisible(b, state)),
-    [currentScene, state],
+    () =>
+      (currentScene.branches ?? []).filter(
+        (b) => story.scenes[b.next] !== undefined && isBranchVisible(b, state),
+      ),
+    [currentScene, story.scenes, state],
   );
   const heroId = useMemo(() => resolveHeroId(characters), [characters]);
   const characterMap = useMemo(() => {
@@ -741,6 +749,17 @@ export function StoryPlayer({
    *  inline. Tap anywhere fires `continueFromOutcome()` and the scene
    *  transition proceeds. */
   function commitBranch(branch: Branch, opts: { skipReward: boolean }) {
+    // Defence-in-depth behind the visibleBranches filter: a stale closure or
+    // a persisted interaction can still hand us a branch whose destination
+    // was deleted mid-session. takeBranch throws on it — but only AFTER the
+    // side effects below (ask reset, SFX, companion banner) had fired,
+    // leaving "the banner flashed and nothing happened". Bail out FIRST.
+    if (!story.scenes[branch.next]) {
+      console.warn(
+        `[play] branch "${branch.id}" points at missing scene "${branch.next}" — ignored`,
+      );
+      return;
+    }
     // Drop any pending ask so it can't ride an encounter/outcome bridge and
     // auto-open the previous scene's character over the destination scene.
     setAskRequest(null);

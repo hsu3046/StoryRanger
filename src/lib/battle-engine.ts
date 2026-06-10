@@ -240,13 +240,21 @@ export function setupBattle(args: SetupArgs): BattleState {
     .map((id, i) => {
       const stats: MonsterStats | undefined = catalog[id];
       if (!stats) return null;
+      // Invalid content (the admin LLM generator can emit hits 0) would spawn
+      // a pre-defeated monster: it can't be fought — if ALL monsters are like
+      // this the phase starts at hero-choose with no attackable target and the
+      // player is softlocked — yet its drops would still leak into the victory
+      // rewards. Drop it exactly like an unknown id; the zero-monster guard
+      // below then turns an all-invalid encounter into an instant clean
+      // victory instead of a trap.
+      if (stats.hits <= 0) return null;
       return {
         monsterId: id,
         name: stats.name,
         hitsRemaining: stats.hits,
         maxHits: stats.hits,
         position: layout[i] ?? "right",
-        defeated: stats.hits <= 0,
+        defeated: false,
       };
     })
     .filter((m): m is BattleMonsterInstance => m !== null);
@@ -282,7 +290,7 @@ export function setupBattle(args: SetupArgs): BattleState {
   if (monsters.length === 0 && args.monsterIds.length > 0) {
     if (process.env.NODE_ENV !== "production") {
       console.warn(
-        `[battle] all monsterIds dropped for story "${args.storyId}" — not in its monster catalog:`,
+        `[battle] all monsterIds dropped for story "${args.storyId}" — not in its monster catalog (or hits ≤ 0):`,
         args.monsterIds,
       );
     }
@@ -311,6 +319,35 @@ export function setupBattle(args: SetupArgs): BattleState {
     companionIdxThisRound: 0,
     rewards: [],
     itemsConsumed: [],
+  };
+}
+
+/**
+ * Patch a persisted BattleState whose shape predates a later engine field —
+ * battle persistence (2026-05-28) and e.g. `itemsConsumed` (2026-05-29) did
+ * not ship together, and any future field repeats the gap. Renders iterate
+ * several of these arrays directly (`[...state.itemsConsumed]`,
+ * `for (const id of ...)`), so a missing one is a render-crashing TypeError,
+ * not a soft glitch. Lives next to the BattleState shape on purpose:
+ * ⚠️ when you ADD a field to BattleState, add its default here too.
+ */
+export function normalizeSavedBattleState(
+  saved: BattleState,
+  fallback: { storyId: string },
+): BattleState {
+  return {
+    ...saved,
+    storyId: saved.storyId ?? fallback.storyId,
+    leadAttacker: saved.leadAttacker ?? saved.activeAttacker,
+    actingOrder: saved.actingOrder ?? [],
+    allyIdx: saved.allyIdx ?? 0,
+    itemsConsumed: saved.itemsConsumed ?? [],
+    rewards: saved.rewards ?? [],
+    fallenAttackers: saved.fallenAttackers ?? [],
+    log: saved.log ?? [],
+    streak: saved.streak ?? 0,
+    monsterIdxThisRound: saved.monsterIdxThisRound ?? 0,
+    companionIdxThisRound: saved.companionIdxThisRound ?? 0,
   };
 }
 

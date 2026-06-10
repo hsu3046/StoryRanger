@@ -10,6 +10,7 @@ import {
   canUseItem,
   chooseHeroAction,
   enterMonsterAttack,
+  normalizeSavedBattleState,
   resolveDefense,
   resolvePuzzleAttack,
   setupBattle,
@@ -119,14 +120,10 @@ export function BattleScreen({
 }: Props) {
   const [state, setState] = useState<BattleState>(() =>
     initialState
-      ? {
-          // Guard pre-refactor saves that predate these fields.
-          ...initialState,
-          storyId: initialState.storyId ?? storyId,
-          leadAttacker: initialState.leadAttacker ?? initialState.activeAttacker,
-          actingOrder: initialState.actingOrder ?? [],
-          allyIdx: initialState.allyIdx ?? 0,
-        }
+      ? // Guard saves that predate later engine fields (e.g. itemsConsumed) —
+        // the renders below iterate those arrays, so a hole is a crash, not a
+        // glitch. The engine owns the canonical default-set.
+        normalizeSavedBattleState(initialState, { storyId })
       : setupBattle(setup),
   );
   // Per-story monster catalog (stats / sprite / airborne / size). Stable per
