@@ -19,7 +19,9 @@ export const MonsterDropSchema = z.union([
 export const MonsterStatsSchema = z.object({
   id: z.string(),
   name: z.string(),
-  hits: z.number().min(0).max(20),
+  // ≥ 1: a 0-hit monster can't be fought — it spawns pre-defeated and (before
+  // the engine-side guard) could softlock the battle. Reject at authoring time.
+  hits: z.number().int().min(1).max(20),
   drops: z.array(MonsterDropSchema).optional(),
   size: SpriteSizeSchema,
   airborne: z.boolean().optional(),
