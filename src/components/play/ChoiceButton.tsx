@@ -41,10 +41,14 @@ export function ChoiceButton({ branch, disabled, onSelect }: Props) {
       onClick={() => onSelect(branch)}
       className={choiceButtonAccentClass}
     >
+      {/* Icon tracks the BUTTON scale, not the label font — on short
+          screens the button is ~44-52px tall, so 24px (≈ half the button,
+          visually matching the 28px ask-chip portrait beside it) reads
+          proportionate where a font-matched 14-16px looked lost. */}
       <ArrowCircleRight
         size={22}
         weight="fill"
-        className="shrink-0 text-accent-deep short:size-4"
+        className="shrink-0 text-accent-deep short:size-6"
         aria-hidden
       />
       <span>{branch.label}</span>
