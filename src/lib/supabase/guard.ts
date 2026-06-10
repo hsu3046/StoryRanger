@@ -67,7 +67,7 @@ export async function consumeRateLimit(opts: {
 
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin.rpc("rate_limit_consume", {
+    const { data, error } = await admin.rpc("storyranger_rate_limit_consume", {
       p_user_id: opts.userId,
       p_route: opts.route,
       p_weight: Math.max(1, Math.round(opts.weight)),
