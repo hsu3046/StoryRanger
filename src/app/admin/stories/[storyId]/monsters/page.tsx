@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 
-import { contentRepo } from "@/lib/content-repo";
+import { contentRepo, scanMonsterReferences } from "@/lib/content-repo";
 import { MonstersEditor } from "@/app/admin/_components/MonstersEditor";
 import { resolveAssetWithCommon } from "@/app/admin/_lib/resolveAsset";
 
@@ -75,6 +75,7 @@ export default async function MonstersPage({
       itemCatalog={items}
       assetMap={assetMap}
       imageOptions={imageOptions}
+      missingRefs={scanMonsterReferences(storyId).missing}
     />
   );
 }

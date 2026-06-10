@@ -37,7 +37,10 @@ export const ItemEffectSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const ItemDefSchema = z.object({
-  id: z.string(),
+  // Non-empty: an empty id breaks asset paths (`…/monsters/`), drop /
+  // encounter references, and catalog map keys. SpeakerIdSchema already
+  // enforces this for characters — keep the catalogs consistent.
+  id: z.string().min(1),
   name: z.string(),
   /** Emoji or path under /public/items/. */
   icon: z.string().optional(),

@@ -13,6 +13,7 @@ import {
 import type { Character } from "@/types/story";
 import { VOICES } from "@/data/voices";
 import { slugify } from "@/app/admin/_lib/slugify";
+import { uniqueId } from "@/app/admin/_lib/uniqueId";
 
 export const runtime = "nodejs";
 
@@ -121,7 +122,11 @@ function mapCharacters(generated: GeneratedCharacterT[]): {
       // (two characters with id "hero" → mis-bound art/persona).
       id = "hero-npc";
     }
-    if (usedIds.has(id)) continue; // dedupe
+    // Two names can fold to one slug ("Mr. Fox" / "Mr Fox", or non-ASCII names
+    // sharing a fallback). DROPPING the collider would silently lose its
+    // persona/voice/art and under-fill castCount — keep the character under a
+    // suffixed id instead (still NAME_RE-safe for asset filenames).
+    if (usedIds.has(id)) id = uniqueId(id, usedIds);
     usedIds.add(id);
 
     const isNarrator = g.role === "narrator" || id === "narrator";
