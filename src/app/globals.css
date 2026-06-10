@@ -52,12 +52,13 @@
    tall) the svh term sits far above the vw curve and never engages. svh, not
    dvh, so the iOS URL bar showing/hiding can't reflow mid-read. */
 @utility text-fluid-narration {
-  /* 16px @360 → ~20px @768 → ~25px @1280 → 28px cap. ~18–20px on landscape
-     phones (svh-capped). Steeper than choice/question: the 24px cap of the
-     first conservative pass read too small on large desktop displays — 28px
-     keeps a worst-case 250-char narration at ≤7 lines (≈44% of a 1366×768
-     screen with the choice row, vs 66% at the old 36px cap). */
-  font-size: clamp(1rem, min(calc(0.78rem + 1vw), 4.5svh), 1.75rem);
+  /* 16px @360 → ~21px @768 → ~28px @1280 → 32px cap. ~18–20px on landscape
+     phones (svh-capped). Steeper than choice/question — desktop-tuned by
+     user feedback (24px and 28px caps both read too small on large
+     displays). 32px keeps a worst-case 250-char narration around half the
+     screen on a 1366×768 laptop (the old 36px cap pushed past 2/3), and the
+     60dvh scroll ceiling still bounds the extreme. */
+  font-size: clamp(1rem, min(calc(0.71rem + 1.3vw), 4.5svh), 2rem);
 }
 @utility text-fluid-choice {
   /* 14px @360 → ~16px @768 → 18px cap. ~15px on landscape phones. */

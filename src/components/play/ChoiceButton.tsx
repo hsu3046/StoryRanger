@@ -41,14 +41,13 @@ export function ChoiceButton({ branch, disabled, onSelect }: Props) {
       onClick={() => onSelect(branch)}
       className={choiceButtonAccentClass}
     >
-      {/* Icon tracks the BUTTON scale, not the label font — on short
-          screens the button is ~44-52px tall, so 24px (≈ half the button,
-          visually matching the 28px ask-chip portrait beside it) reads
-          proportionate where a font-matched 14-16px looked lost. */}
+      {/* Icon tracks the BUTTON scale, not the label font — 32px in the
+          80px desktop button and 24px in the ~44-52px short one (≈ 40-50%
+          of button height, visually matching the ask-chip portrait beside
+          it). Font-matched sizes (16-22px) read lost inside the pill. */}
       <ArrowCircleRight
-        size={22}
         weight="fill"
-        className="shrink-0 text-accent-deep short:size-6"
+        className="size-8 shrink-0 text-accent-deep short:size-6"
         aria-hidden
       />
       <span>{branch.label}</span>
