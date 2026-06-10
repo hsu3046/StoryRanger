@@ -41,7 +41,7 @@ export function ChoiceButton({ branch, disabled, onSelect }: Props) {
       <ArrowCircleRight
         size={22}
         weight="fill"
-        className="shrink-0 text-accent-deep"
+        className="shrink-0 text-accent-deep short:size-[18px]"
         aria-hidden
       />
       <span>{branch.label}</span>

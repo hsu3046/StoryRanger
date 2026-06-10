@@ -65,9 +65,13 @@
 }
 
 /* `short:` — landscape phones (every recent iPhone is 393–440px tall held
-   sideways) and any window under 480px tall. Landscape tablets are ≥720px
-   tall so they never match; portrait is gated by the rotate prompt instead. */
-@custom-variant short (@media (max-height: 480px));
+   sideways) and small desktop windows under 560px tall. Landscape tablets
+   report ≥640px even with browser chrome so they never match; portrait is
+   gated by the rotate prompt instead. Besides the layout compressions this
+   also shrinks every chrome control (header pills, battle chips, settings
+   rows) — at these heights 44px buttons read as oversized next to the
+   compressed text. */
+@custom-variant short (@media (max-height: 560px));
 
 /* Horizontal edge padding that clears the landscape notch / Dynamic Island
    (safe-area-inset-left/right is 59–68px on recent iPhones) — plain px-4/6

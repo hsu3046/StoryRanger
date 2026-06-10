@@ -680,9 +680,13 @@ export function BattleScreen({
                 onOpenSettings();
               }}
               aria-label="Open settings"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-paper/15 text-ink-soft/80 ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper/40 hover:text-ink active:scale-90"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-paper/15 text-ink-soft/80 ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper/40 hover:text-ink active:scale-90 short:h-9 short:w-9"
             >
-              <GearSix size={22} weight="duotone" />
+              <GearSix
+                size={22}
+                weight="duotone"
+                className="short:size-[18px]"
+              />
             </button>
           )}
         </div>
@@ -885,7 +889,7 @@ function PartyHpRow({
               type="button"
               disabled={!clickable}
               onClick={() => (healMode ? onHeal(id) : onSwitch(id))}
-              className={`flex h-11 items-center gap-1.5 rounded-pill px-1.5 ring-1 backdrop-blur transition-all active:scale-95 ${
+              className={`flex h-11 items-center gap-1.5 rounded-pill px-1.5 ring-1 backdrop-blur transition-all active:scale-95 short:h-9 ${
                 healable
                   ? "bg-emerald/25 text-ink ring-emerald shadow-button animate-pulse"
                   : selected && !healMode
@@ -899,7 +903,7 @@ function PartyHpRow({
             >
               <span className="relative">
                 <span
-                  className="block h-8 w-8 overflow-hidden rounded-full"
+                  className="block h-8 w-8 overflow-hidden rounded-full short:h-6 short:w-6"
                   style={{
                     backgroundImage: `url(${assetUrl(`${imageBase}.webp`)})`,
                     backgroundSize: "cover",
@@ -965,7 +969,7 @@ function ActionRow({ onAction }: { onAction: (a: HeroAction) => void }) {
   return (
     <div className="flex justify-center">
       <BattleActionButton
-        icon={<Sword size={22} weight="duotone" />}
+        icon={<Sword size={22} weight="duotone" className="short:size-[18px]" />}
         label="Attack"
         onClick={() => onAction({ kind: "attack" })}
       />
@@ -1014,9 +1018,13 @@ function BattleBag({
         onClick={() => setOpen((o) => !o)}
         aria-label="Open bag"
         aria-expanded={open}
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-paper/85 text-ink ring-1 ring-ink-soft/10 shadow-button backdrop-blur transition-all hover:bg-paper active:scale-95"
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-paper/85 text-ink ring-1 ring-ink-soft/10 shadow-button backdrop-blur transition-all hover:bg-paper active:scale-95 short:h-9 short:w-9"
       >
-        <Backpack size={22} weight="duotone" className="text-accent" />
+        <Backpack
+          size={22}
+          weight="duotone"
+          className="text-accent short:size-[18px]"
+        />
       </button>
 
       {open && (
@@ -1097,7 +1105,7 @@ function BattleActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="group inline-flex min-h-14 min-w-56 items-center justify-center gap-2 rounded-pill bg-paper/75 px-10 text-lg font-semibold text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/90 hover:-translate-y-0.5 hover:shadow-button-hover hover:ring-accent/50 active:translate-y-0 active:scale-[0.98] active:shadow-button-pressed sm:min-w-64"
+      className="group inline-flex min-h-14 min-w-56 items-center justify-center gap-2 rounded-pill bg-paper/75 px-10 text-lg font-semibold text-ink ring-1 ring-ink-soft/15 shadow-button backdrop-blur-sm transition-all hover:bg-paper/90 hover:-translate-y-0.5 hover:shadow-button-hover hover:ring-accent/50 active:translate-y-0 active:scale-[0.98] active:shadow-button-pressed sm:min-w-64 short:min-h-11 short:min-w-44 short:px-6 short:text-base"
     >
       <span className="text-accent-deep">{icon}</span>
       <span>{label}</span>

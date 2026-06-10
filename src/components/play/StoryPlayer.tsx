@@ -1332,9 +1332,13 @@ export function StoryPlayer({
             type="button"
             onClick={() => setShelfOpen(true)}
             aria-label="View your treasures"
-            className="flex h-11 items-center gap-2 rounded-pill bg-paper/85 px-4 text-base ring-1 ring-ink-soft/10 backdrop-blur transition-colors hover:bg-paper"
+            className="flex h-11 items-center gap-2 rounded-pill bg-paper/85 px-4 text-base ring-1 ring-ink-soft/10 backdrop-blur transition-colors hover:bg-paper short:h-9 short:gap-1.5 short:px-3 short:text-sm"
           >
-            <Backpack size={22} weight="duotone" className="text-accent" />
+            <Backpack
+              size={22}
+              weight="duotone"
+              className="text-accent short:size-[18px]"
+            />
             <span className="font-semibold text-ink tabular-nums">
               {(state.inventory ?? []).length}
             </span>
@@ -1344,18 +1348,26 @@ export function StoryPlayer({
               type="button"
               onClick={() => setMapOpen(true)}
               aria-label="View the map"
-              className="flex h-11 w-11 items-center justify-center rounded-pill bg-paper/85 text-ink-soft ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper hover:text-ink active:scale-90"
+              className="flex h-11 w-11 items-center justify-center rounded-pill bg-paper/85 text-ink-soft ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper hover:text-ink active:scale-90 short:h-9 short:w-9"
             >
-              <MapTrifold size={22} weight="duotone" />
+              <MapTrifold
+                size={22}
+                weight="duotone"
+                className="short:size-[18px]"
+              />
             </button>
           )}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Open settings"
-            className="flex h-11 w-11 items-center justify-center rounded-pill bg-paper/85 text-ink-soft ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper hover:text-ink active:scale-90"
+            className="flex h-11 w-11 items-center justify-center rounded-pill bg-paper/85 text-ink-soft ring-1 ring-ink-soft/10 backdrop-blur transition-all hover:bg-paper hover:text-ink active:scale-90 short:h-9 short:w-9"
           >
-            <GearSix size={22} weight="duotone" />
+            <GearSix
+              size={22}
+              weight="duotone"
+              className="short:size-[18px]"
+            />
           </button>
         </div>
       </header>
@@ -1752,7 +1764,7 @@ export function StoryPlayer({
               type="button"
               onClick={() => setMapOpen(false)}
               aria-label="Close map"
-              className="absolute flex h-11 w-11 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95"
+              className="absolute flex h-11 w-11 items-center justify-center rounded-full bg-paper/15 text-xl text-paper/85 backdrop-blur transition hover:bg-paper/25 active:scale-95 short:h-9 short:w-9 short:text-base"
               style={{
                 top: "max(1rem, env(safe-area-inset-top))",
                 right: "max(1rem, env(safe-area-inset-right))",
@@ -1859,7 +1871,7 @@ function AskChip({
           while a wide gap sits empty on the left. */}
       <span className="min-w-0 flex-1 text-center">{label}</span>
       {iconBase && (
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:h-9 short:w-9">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}
