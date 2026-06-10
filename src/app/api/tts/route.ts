@@ -37,18 +37,6 @@ const inFlight = new Map<
   Promise<{ buffer: Buffer; usedFallbackVoice: boolean }>
 >();
 
-/** Gate failures raised INSIDE a shared flight (rate limit / missing key) —
- *  carried as data so each awaiting request builds its own response (a
- *  NextResponse body can only be sent once, never shared between waiters). */
-class TtsGateError extends Error {
-  constructor(
-    readonly kind: "rate_limited" | "no_api_key",
-    readonly retryAfterSeconds = 60,
-  ) {
-    super(kind);
-  }
-}
-
 /** Synthesize, falling back to the default voice when the requested voice
  *  itself is bad (invalid/unavailable id) — the last link of the retry chain
  *  (synthesizeSpeech already retries transient 429/5xx/network failures). */
@@ -133,42 +121,48 @@ export async function POST(req: Request) {
 
   // One paid synthesis per identical line — concurrent requests share the
   // same promise (dialogue lines too: cache=false only skips R2, identical
-  // text+voice in flight twice would still double-bill). The quota check
-  // lives INSIDE the flight creator so only the request that actually starts
-  // a synthesis consumes budget — a waiter joining an existing flight costs
-  // no ElevenLabs credits, and charging it could 429 identical narration
-  // during the prefetch/playback race. The flight is registered into the Map
-  // synchronously (before any await) so two simultaneous misses can't both
-  // create one and double-consume.
+  // text+voice in flight twice would still double-bill).
+  //
+  // Quota choreography (the flight Map is GLOBAL across users):
+  //   · joining an EXISTING flight consumes no budget — it costs no
+  //     ElevenLabs credits, and charging it could 429 identical narration
+  //     during the prefetch/playback race;
+  //   · gate failures (429/503) stay in the requester's own scope — the
+  //     flight wraps ONLY actual synthesis, so user B can never inherit
+  //     user A's rate-limit rejection;
+  //   · the would-be creator consumes ITS quota first, then re-checks the
+  //     Map: if another request created the flight during the quota RPC,
+  //     join it — the rare race over-consumes one weight (conservative) but
+  //     never synthesizes twice.
   const flightKey =
     cacheKey ?? (await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed));
   let flight = inFlight.get(flightKey);
   if (!flight) {
-    const weight = Math.max(body.text.length, TTS_MIN_WEIGHT);
-    flight = (async () => {
-      // Character-weighted budget — maps 1:1 to ElevenLabs credits. The
-      // client treats 429 as "stay silent + cool down"; gameplay continues.
-      const limit = await consumeRateLimit({
-        userId,
-        route: "tts",
-        weight,
-        minuteMax: TTS_CHARS_PER_MINUTE,
-        dayMax: TTS_CHARS_PER_DAY,
-      });
-      if (limit.limited) {
-        throw new TtsGateError("rate_limited", limit.retryAfterSeconds);
-      }
-      if (!hasElevenLabsKey()) {
-        console.warn("[tts] ELEVENLABS_API_KEY not set — returning 503");
-        throw new TtsGateError("no_api_key");
-      }
-      return synthesizeWithVoiceFallback(
+    // Character-weighted budget — maps 1:1 to ElevenLabs credits. The
+    // client treats 429 as "stay silent + cool down"; gameplay continues.
+    const limit = await consumeRateLimit({
+      userId,
+      route: "tts",
+      weight: Math.max(body.text.length, TTS_MIN_WEIGHT),
+      minuteMax: TTS_CHARS_PER_MINUTE,
+      dayMax: TTS_CHARS_PER_DAY,
+    });
+    if (limit.limited) return rateLimited429(limit.retryAfterSeconds);
+
+    if (!hasElevenLabsKey()) {
+      console.warn("[tts] ELEVENLABS_API_KEY not set — returning 503");
+      return NextResponse.json({ error: "no_api_key" }, { status: 503 });
+    }
+
+    flight = inFlight.get(flightKey);
+    if (!flight) {
+      flight = synthesizeWithVoiceFallback(
         body.text,
         body.voiceId,
         body.voiceSpeed,
-      );
-    })().finally(() => inFlight.delete(flightKey));
-    inFlight.set(flightKey, flight);
+      ).finally(() => inFlight.delete(flightKey));
+      inFlight.set(flightKey, flight);
+    }
   }
 
   let buffer: Buffer;
@@ -176,11 +170,6 @@ export async function POST(req: Request) {
   try {
     ({ buffer, usedFallbackVoice } = await flight);
   } catch (err) {
-    if (err instanceof TtsGateError) {
-      return err.kind === "rate_limited"
-        ? rateLimited429(err.retryAfterSeconds)
-        : NextResponse.json({ error: "no_api_key" }, { status: 503 });
-    }
     console.error("[tts] ElevenLabs error", err);
     return NextResponse.json(
       {
