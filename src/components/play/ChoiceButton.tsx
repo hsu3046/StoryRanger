@@ -14,13 +14,15 @@ interface Props {
 /**
  * Shared geometry/opacity for every bottom-row choice button — story
  * branches, scene "ask" chips, and the in-dialogue reply suggestions. Kept in
- * one place so size and opacity stay unified across all of them. Tall (h-20;
- * h-12 on landscape phones where 80px is a fifth of the viewport height),
- * translucent (bg-paper/60) over the scene art, big legible label. The ring
- * colour is appended by the variant below (neutral vs accent).
+ * one place so size and opacity stay unified across all of them. Tall (h-20),
+ * translucent (bg-paper/60) over the scene art, big legible label. On short
+ * screens the fixed height gives way to auto + min-h-10: choices sit 3-up in
+ * one row there (see StoryPlayer), so labels wrap to two lines and the
+ * button must grow instead of clipping. The ring colour is appended by the
+ * variant below (neutral vs accent).
  */
 const CHOICE_BUTTON_BASE =
-  "group relative flex h-20 short:h-12 w-full items-center justify-center gap-2 rounded-pill bg-paper/60 px-6 short:px-4 text-center text-fluid-choice font-semibold leading-tight text-balance text-ink ring-1 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 hover:shadow-button-hover hover:-translate-y-0.5 hover:-translate-x-px active:translate-y-0 active:translate-x-0 active:scale-[0.98] active:shadow-button-pressed disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:translate-x-0 disabled:hover:shadow-button";
+  "group relative flex h-20 short:h-auto short:min-h-10 short:py-1.5 w-full items-center justify-center gap-2 short:gap-1.5 rounded-pill bg-paper/60 px-6 short:px-3 text-center text-fluid-choice font-semibold leading-tight text-balance text-ink ring-1 shadow-button backdrop-blur-sm transition-all hover:bg-paper/85 hover:shadow-button-hover hover:-translate-y-0.5 hover:-translate-x-px active:translate-y-0 active:translate-x-0 active:scale-[0.98] active:shadow-button-pressed disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:translate-x-0 disabled:hover:shadow-button";
 
 /** Neutral choice — branches, ask chips, dialogue reply suggestions. */
 export const choiceButtonClass = `${CHOICE_BUTTON_BASE} ring-ink-soft/15 hover:ring-accent/50 disabled:hover:ring-ink-soft/15`;
@@ -41,7 +43,7 @@ export function ChoiceButton({ branch, disabled, onSelect }: Props) {
       <ArrowCircleRight
         size={22}
         weight="fill"
-        className="shrink-0 text-accent-deep short:size-[18px]"
+        className="shrink-0 text-accent-deep short:size-3.5"
         aria-hidden
       />
       <span>{branch.label}</span>

@@ -1504,11 +1504,19 @@ export function StoryPlayer({
             },
           });
           // One choice → centered at 2/5 width. Two+ → equal-width columns in
-          // a left-right row (already sized for up to 4 via flex-1).
+          // a left-right row (already sized for up to 4 via flex-1). On short
+          // screens the explicit 30% basis (vs flex-1's basis-0) makes the
+          // wrapping row cap itself at 3 tiles per line even below the `sm`
+          // width gate — narrow phone-size windows otherwise stacked every
+          // choice full-width and buried the scene.
           const tile = (key: string, i: number, node: ReactNode) => (
             <motion.div
               key={key}
-              className={choiceCount === 1 ? "w-full sm:w-2/5" : "min-w-0 flex-1"}
+              className={
+                choiceCount === 1
+                  ? "w-full sm:w-2/5 short:w-3/5"
+                  : "min-w-0 flex-1 short:basis-[30%]"
+              }
               style={{ pointerEvents: narrationDone ? "auto" : "none" }}
               {...entrance(i)}
             >
@@ -1520,7 +1528,7 @@ export function StoryPlayer({
               className={
                 choiceCount === 1
                   ? "flex justify-center"
-                  : "flex flex-col items-stretch gap-3 sm:flex-row lg:gap-4 short:gap-2"
+                  : "flex flex-col items-stretch gap-3 sm:flex-row lg:gap-4 short:flex-row short:flex-wrap short:justify-center short:gap-2"
               }
             >
               {askChoices.map((ask, i) => {
@@ -1871,7 +1879,7 @@ function AskChip({
           while a wide gap sits empty on the left. */}
       <span className="min-w-0 flex-1 text-center">{label}</span>
       {iconBase && (
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:h-9 short:w-9">
+        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:h-7 short:w-7">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}
