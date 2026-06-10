@@ -30,7 +30,10 @@ const RequestSchema = z.object({
   }),
   sceneId: z.string(),
   sceneNarration: z.string().max(2000),
-  companions: z.array(z.enum(["scarecrow", "tinman", "lion"])).default([]),
+  // Plain ids, validated against the loaded story's cast below — the engine
+  // is multi-story, so a fixed Oz-companion enum would reject every other
+  // story's party context.
+  companions: z.array(z.string().min(1).max(40)).max(8).default([]),
   currentMood: z.number().min(0).max(10),
   history: z
     .array(
@@ -192,9 +195,18 @@ export async function POST(req: Request) {
     return NextResponse.json(SAFE_FALLBACK);
   }
 
-  // STATIC system prompt — identical for every request to this character,
-  // so it stays a cacheable prefix.
-  const system = buildPersonaSystemPrompt(character.name, persona);
+  // STATIC system prompt — identical for every request to this character
+  // (title included: stable per story), so it stays a cacheable prefix.
+  const system = buildPersonaSystemPrompt(
+    character.name,
+    persona,
+    loaded.story.title,
+  );
+
+  // Companion ids must belong to this story's cast — drop anything else so a
+  // crafted request can't inject arbitrary strings into the prompt.
+  const castIds = new Set(loaded.characters.characters.map((c) => c.id));
+  const companions = body.companions.filter((id) => castIds.has(id));
 
   // DYNAMIC per-turn context (hero name, mood, scene, party) — folded into
   // the latest user message so it never disturbs the cached system prefix.
@@ -202,7 +214,7 @@ export async function POST(req: Request) {
     body.hero,
     body.currentMood,
     body.sceneNarration,
-    body.companions,
+    companions,
     body.alreadyGifted,
     body.heroMemory,
     body.journeyNote,

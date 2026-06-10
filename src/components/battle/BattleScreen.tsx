@@ -84,6 +84,10 @@ interface Props {
   /** Encounter-level drop items (in addition to monster drops) — folded into
    *  the victory panel's loot. */
   victoryItems?: string[];
+  /** Repeat clear of an already-completed encounter (intentional story
+   *  loops): nothing is granted, so show no loot either — the victory panel
+   *  must not promise items the caller will discard. */
+  suppressRewards?: boolean;
   /** Player's age (from onboarding) — drives challenge difficulty tier. */
   age: number;
   /** Subject the battle problems are drawn from (mixed / math / english /
@@ -114,6 +118,7 @@ export function BattleScreen({
   onOpenSettings,
   inventory = [],
   victoryItems,
+  suppressRewards = false,
   age,
   challengeType = "mixed",
   recordWrongChallenge,
@@ -710,7 +715,7 @@ export function BattleScreen({
                   : "escaped"
             }
             victoryItems={victoryItems}
-            rewards={state.rewards}
+            rewards={suppressRewards ? [] : state.rewards}
             onRetry={onRetry}
             onContinue={() =>
               onComplete({
@@ -779,6 +784,13 @@ export function BattleScreen({
         )}
         {activePuzzle && activeChallenge && activePuzzle.mode === "defend" && (
           <EducationalChallenge
+            // Remount per defend puzzle — same bug class the attack card's key
+            // guards against: without a changing key, AnimatePresence can
+            // resurrect a mid-exit instance (its resolvedRef already true,
+            // timer cleared) when the next hero-defending starts before the
+            // ~0.5–0.7s exit spring finishes, soft-locking the battle. The
+            // 900ms monster-rolling beat usually hides this; don't rely on it.
+            key={`def-${state.round}-${state.monsterIdxThisRound}-${state.defendingMonsterIdx}`}
             mode="defend"
             withTimer={!timerFrozen(state, "defend")}
             challenge={activeChallenge}

@@ -1650,6 +1650,9 @@ export function StoryPlayer({
           <EncounterFlow
             key={`${pendingEncounter.id}#${encounterQueueLen}#${encounterRetryNonce}`}
             encounter={pendingEncounter}
+            alreadyCleared={(state.completedEncounters ?? []).includes(
+              pendingEncounter.id,
+            )}
             storyId={story.id}
             age={state.hero.age}
             recordWrongChallenge={

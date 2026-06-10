@@ -37,6 +37,12 @@ export interface EncounterResult {
 
 interface Props {
   encounter: EncounterDef;
+  /** True when this encounter id is already in PlayState.completedEncounters.
+   *  Battles deliberately RE-TRIGGER on branch revisits (looping stories are
+   *  a supported authoring pattern) — but drops / encounter rewards /
+   *  moodBoost are granted on the FIRST clear only, so a loop can't be
+   *  farmed. Gates both the grant (onComplete) and the victory-screen list. */
+  alreadyCleared?: boolean;
   storyId: string;
   companions: CompanionId[];
   companionMoods: CompanionMoods;
@@ -93,6 +99,7 @@ const ALERT_DURATION_MS = 2200;
  */
 export function EncounterFlow({
   encounter,
+  alreadyCleared = false,
   storyId,
   companions,
   companionMoods,
@@ -168,7 +175,8 @@ export function EncounterFlow({
         inventory={inventory}
         initialState={initialBattleState}
         onStateChange={onBattleStateChange}
-        victoryItems={encounter.rewards.items ?? []}
+        victoryItems={alreadyCleared ? [] : (encounter.rewards.items ?? [])}
+        suppressRewards={alreadyCleared}
         setup={{
           storyId,
           bg: encounter.intro.bg,
@@ -181,20 +189,21 @@ export function EncounterFlow({
         }}
         onRetry={onRetry}
         onComplete={(res) => {
+          // Repeat clears (intentional story loops) replay the battle for fun
+          // but grant nothing — first clear only (see `alreadyCleared`).
+          const firstClearVictory = res.outcome === "victory" && !alreadyCleared;
           onComplete({
             encounterId: encounter.id,
             outcome: res.outcome,
             partyHp: res.partyHp,
             fallenAttackers: res.fallenAttackers,
-            itemsGained:
-              res.outcome === "victory"
-                ? [...res.rewards, ...(encounter.rewards.items ?? [])]
-                : [],
+            itemsGained: firstClearVictory
+              ? [...res.rewards, ...(encounter.rewards.items ?? [])]
+              : [],
             itemsConsumed: res.itemsConsumed,
-            moodBoost:
-              res.outcome === "victory"
-                ? encounter.rewards.moodBoost
-                : undefined,
+            moodBoost: firstClearVictory
+              ? encounter.rewards.moodBoost
+              : undefined,
           });
         }}
       />
