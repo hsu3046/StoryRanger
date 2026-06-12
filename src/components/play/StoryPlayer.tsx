@@ -249,6 +249,29 @@ export function StoryPlayer({
     sound: Howl;
     alignment: SpeechAlignment | null;
   } | null>(null);
+  // Ref mirror for edge-triggered effects/handlers that must stop the
+  // CURRENT narration without re-running on every playback change.
+  const narrationPlaybackRef = useRef(narrationPlayback);
+  useEffect(() => {
+    narrationPlaybackRef.current = narrationPlayback;
+  });
+  /** "One voice at a time" — stop the narration mid-line when another voice
+   *  begins (choice read-aloud, dialogue, mic). The stop settles the line
+   *  (SpeechAudio onstop), so the read-along brightens fully and the
+   *  narrationAudioDone gates fire as if it had finished. */
+  const stopNarrationVoice = useCallback(() => {
+    narrationPlaybackRef.current?.sound.stop();
+  }, []);
+  /** Mic is actively recording — gates the narration tap-to-replay (a
+   *  replay would speak straight into the child's recording). */
+  const [micRecording, setMicRecording] = useState(false);
+  // Opening a dialogue must SILENCE the narrator (case: narration audio
+  // outlives its hidden text and overlaps the NPC's voice). Edge-triggered
+  // on the rising flank only — by the time a branch taken FROM a dialogue
+  // loads the next scene's narration, this flag is already false again.
+  useEffect(() => {
+    if (dialogueActive) stopNarrationVoice();
+  }, [dialogueActive, stopNarrationVoice]);
   // The narrationKey whose entrance animation has settled on screen. Gates the
   // scene-reward toast: "Received …" must appear once the DESTINATION scene is
   // actually visible, not the instant the overlay (battle/outcome) clears —
@@ -1516,7 +1539,11 @@ export function StoryPlayer({
                 // replay (it follows the audio clock). Stops the choice
                 // read-aloud first so narrator + reader don't overlap.
                 onClick={() => {
-                  if (!narrationDone || voiceVolume <= 0) return;
+                  // No replay while the mic is open — the narrator would
+                  // speak straight into the child's recording.
+                  if (!narrationDone || voiceVolume <= 0 || micRecording) {
+                    return;
+                  }
                   choiceReader.stopAll();
                   setNarrationReplayNonce((n) => n + 1);
                 }}
@@ -1656,8 +1683,12 @@ export function StoryPlayer({
                     armed={choiceReader.armedIndex === i}
                     // Two-step: first tap reads the label aloud + arms, the
                     // second tap confirms (the reader degrades to single-tap
-                    // when the voice channel is muted).
-                    onSelect={() => choiceReader.tap(i)}
+                    // when the voice channel is muted). One voice at a time:
+                    // the read-aloud silences a still-speaking narrator.
+                    onSelect={() => {
+                      stopNarrationVoice();
+                      choiceReader.tap(i);
+                    }}
                   />,
                 );
               })}
@@ -1671,7 +1702,10 @@ export function StoryPlayer({
                       choiceReader.readingIndex === askChoices.length + i
                     }
                     armed={choiceReader.armedIndex === askChoices.length + i}
-                    onSelect={() => choiceReader.tap(askChoices.length + i)}
+                    onSelect={() => {
+                      stopNarrationVoice();
+                      choiceReader.tap(askChoices.length + i);
+                    }}
                   />,
                 ),
               )}
@@ -1690,7 +1724,13 @@ export function StoryPlayer({
                       getAudio().playSfx(SFX.CHOICE);
                       confirmVoiceChoice(i);
                     }}
-                    onRecordingStart={() => choiceReader.stopAll()}
+                    onRecordingStart={() => {
+                      // One voice at a time, and NOTHING into the mic: stop
+                      // the read-aloud AND a still/again-playing narrator.
+                      choiceReader.stopAll();
+                      stopNarrationVoice();
+                    }}
+                    onRecordingChange={setMicRecording}
                     size="row"
                   />
                 </div>

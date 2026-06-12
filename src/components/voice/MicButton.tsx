@@ -33,6 +33,9 @@ interface Props {
   /** Recording is about to start — stop any read-aloud so it doesn't bleed
    *  into the mic (the BGM duck is handled inside the capture hook). */
   onRecordingStart?: () => void;
+  /** Live recording state — lets the parent gate actions that would speak
+   *  into the open mic (e.g. the narration tap-to-replay). */
+  onRecordingChange?: (recording: boolean) => void;
   disabled?: boolean;
   /** `row` sits in the main choice row (large); `compact` in dialogue. */
   size?: "row" | "compact";
@@ -59,6 +62,7 @@ export function MicButton({
   labels,
   onMatch,
   onRecordingStart,
+  onRecordingChange,
   disabled,
   size = "row",
 }: Props) {
@@ -101,6 +105,23 @@ export function MicButton({
       if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
     };
   }, []);
+
+  // Live recording flag for the parent (gates e.g. the narration replay
+  // while the mic is open). Ref-routed so a parent passing an inline arrow
+  // doesn't re-run the effect every render; the cleanup covers every way a
+  // recording ends (tap-stop, 6 s hard cut, error, unmount-cancel). MUST
+  // stay above the early return below (rules of hooks).
+  const isRecording = capture.status === "recording";
+  const onRecordingChangeRef = useRef(onRecordingChange);
+  useEffect(() => {
+    onRecordingChangeRef.current = onRecordingChange;
+  });
+  useEffect(() => {
+    onRecordingChangeRef.current?.(isRecording);
+    return () => {
+      if (isRecording) onRecordingChangeRef.current?.(false);
+    };
+  }, [isRecording]);
 
   // The ONLY hide: the browser genuinely can't record (no MediaRecorder /
   // getUserMedia). Every runtime failure keeps the button + explains itself.

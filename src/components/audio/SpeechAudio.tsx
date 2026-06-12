@@ -179,6 +179,13 @@ export function SpeechAudio({
             if (!cancelled) playedKeyRef.current = playKey;
           },
           onend: () => settle(),
+          // External interruption — the "one voice at a time" policy: a
+          // choice tap / dialogue opening / mic start stops this line via
+          // the exposed Howl (onPlayback). Settling it keeps every gate
+          // honest (read-along brightens, narrationAudioDone fires). The
+          // INTERNAL dispose path (scene change, unmount) stops too, but
+          // its cleanup sets `cancelled` first, so settle() no-ops there.
+          onstop: () => settle(),
           onloaderror: (_id, e) => {
             console.warn("[speech] load error", String(e));
             settle();

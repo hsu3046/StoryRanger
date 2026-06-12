@@ -583,6 +583,10 @@ export function SceneDialogueLayer({
             branches={branches}
             loading={loading}
             voiceVolume={voiceVolume}
+            // "One voice at a time": a card read-aloud (or the mic opening)
+            // silences the NPC's still-playing reply. Stopping settles it
+            // (SpeechAudio onstop), so the bubble brightens fully.
+            onReadStart={() => replyPlayback?.sound.stop()}
             iconBase={portraitBase(active)}
             iconFallbackBase={portraitFallbackBase?.(active)}
             onSend={(t) => sendTurn(active, t)}

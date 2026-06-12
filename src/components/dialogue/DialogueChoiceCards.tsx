@@ -50,6 +50,10 @@ interface Props {
   /** Voice channel volume (0–1). Drives the tap-to-hear read-aloud + the
    *  two-step tap; 0 degrades both to the classic single-tap select. */
   voiceVolume?: number;
+  /** A card is about to be read aloud (or the mic opens) — the layer stops
+   *  the NPC's still-playing reply so the voices don't overlap ("one voice
+   *  at a time"). */
+  onReadStart?: () => void;
 }
 
 const MAX_INPUT = 240;
@@ -69,6 +73,7 @@ export function DialogueChoiceCards({
   iconBase,
   iconFallbackBase,
   voiceVolume = 0,
+  onReadStart,
 }: Props) {
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
@@ -197,15 +202,16 @@ export function DialogueChoiceCards({
               End conversation
             </button>
             {/* Say a reply instead of tapping one — renders nothing when
-                voice capture is unavailable. KNOWN LIMITATION: the NPC's
-                reply voice (SpeechAudio in SceneDialogueLayer) has no
-                external stop API, so recording while it still speaks relies
-                on getUserMedia's echoCancellation to keep it out of the mic
-                — unlike the scene row, which waits for the narrator. */}
+                voice capture is unavailable. Recording stops the read-aloud
+                AND (via onReadStart) the NPC's still-playing reply, so
+                nothing speaks into the child's mic. */}
             <MicButton
               labels={voiceLabels}
               onMatch={confirmVoiceChoice}
-              onRecordingStart={() => reader.stopAll()}
+              onRecordingStart={() => {
+                reader.stopAll();
+                onReadStart?.();
+              }}
               disabled={loading}
               size="compact"
             />
@@ -222,7 +228,11 @@ export function DialogueChoiceCards({
                   disabled={loading}
                   // Two-step via the reader: first tap reads the reply aloud
                   // + arms, second tap sends it (single-tap when muted).
-                  onClick={() => reader.tap(i)}
+                  // One voice at a time — silence the NPC's reply first.
+                  onClick={() => {
+                    onReadStart?.();
+                    reader.tap(i);
+                  }}
                   className={
                     choiceButtonClass +
                     choiceStateClass(
@@ -257,7 +267,10 @@ export function DialogueChoiceCards({
                 <div key={`b-${b.id}`} className="min-w-0 flex-1">
                   <button
                     type="button"
-                    onClick={() => reader.tap(idx)}
+                    onClick={() => {
+                      onReadStart?.();
+                      reader.tap(idx);
+                    }}
                     className={
                       choiceButtonAccentClass +
                       choiceStateClass(
