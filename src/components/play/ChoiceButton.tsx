@@ -8,6 +8,10 @@ interface Props {
   branch: Branch;
   /** Globally disabled (e.g. narration in progress). */
   disabled?: boolean;
+  /** This label's audio is playing (auto read-aloud / tap replay). */
+  reading?: boolean;
+  /** First tap landed — the next tap on this tile confirms the choice. */
+  armed?: boolean;
   onSelect: (branch: Branch) => void;
 }
 
@@ -33,14 +37,40 @@ export const choiceButtonClass = `${CHOICE_BUTTON_BASE} ring-ink-soft/15 hover:r
  *  rather than "keep talking". Same size/opacity as the neutral variant. */
 export const choiceButtonAccentClass = `${CHOICE_BUTTON_BASE} ring-accent/55 hover:ring-accent/80 disabled:hover:ring-accent/55`;
 
-export function ChoiceButton({ branch, disabled, onSelect }: Props) {
+/**
+ * Read-aloud state overrides, appended AFTER the variant class so the
+ * stronger ring wins. `reading` marks the tile whose audio is playing (the
+ * pre-reader's sound↔button link); `armed` marks a first tap waiting for its
+ * confirming second tap. Shared by branches, ask chips, and suggestions.
+ */
+export function choiceStateClass(reading?: boolean, armed?: boolean): string {
+  if (armed) return " ring-2 ring-accent-deep bg-paper/95";
+  if (reading) return " ring-2 ring-accent bg-paper/90 animate-pulse";
+  return "";
+}
+
+/** "Tap again!" pill shown over an armed tile — the only new UI a pre-reader
+ *  needs to learn. Host button must be `relative` (the base class is). */
+export function TapAgainBadge() {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute -top-2.5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-pill bg-accent-deep px-2.5 py-0.5 text-xs font-bold text-paper shadow-soft"
+    >
+      Tap again!
+    </span>
+  );
+}
+
+export function ChoiceButton({ branch, disabled, reading, armed, onSelect }: Props) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={() => onSelect(branch)}
-      className={choiceButtonAccentClass}
+      className={choiceButtonAccentClass + choiceStateClass(reading, armed)}
     >
+      {armed && <TapAgainBadge />}
       {/* Icon tracks the BUTTON scale, not the label font — 32px in the
           80px desktop button and 24px in the ~44-52px short one (≈ 40-50%
           of button height, visually matching the ask-chip portrait beside

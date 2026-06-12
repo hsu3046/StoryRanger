@@ -552,6 +552,7 @@ export function SceneDialogueLayer({
             suggestions={latestReply.suggestions}
             branches={branches}
             loading={loading}
+            voiceVolume={voiceVolume}
             iconBase={portraitBase(active)}
             iconFallbackBase={portraitFallbackBase?.(active)}
             onSend={(t) => sendTurn(active, t)}

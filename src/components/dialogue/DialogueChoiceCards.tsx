@@ -10,7 +10,15 @@ import {
 } from "@phosphor-icons/react";
 import type { Branch } from "@/types/story";
 import { assetUrl } from "@/lib/asset-paths";
-import { choiceButtonClass, choiceButtonAccentClass } from "../play/ChoiceButton";
+import { DEFAULT_TTS_VOICE } from "@/lib/tts-config";
+import { useChoiceReader } from "@/lib/useChoiceReader";
+import {
+  choiceButtonClass,
+  choiceButtonAccentClass,
+  choiceStateClass,
+  TapAgainBadge,
+} from "../play/ChoiceButton";
+import { MicButton } from "../voice/MicButton";
 
 /** Up to this many scene branches sit alongside the LLM reply suggestions
  *  (2 suggestions + 2 branches = the 4-up choice row's ceiling). */
@@ -39,6 +47,9 @@ interface Props {
    *  sees who they're talking to. */
   iconBase?: string;
   iconFallbackBase?: string;
+  /** Voice channel volume (0–1). Drives the tap-to-hear read-aloud + the
+   *  two-step tap; 0 degrades both to the classic single-tap select. */
+  voiceVolume?: number;
 }
 
 const MAX_INPUT = 240;
@@ -57,9 +68,51 @@ export function DialogueChoiceCards({
   loading,
   iconBase,
   iconFallbackBase,
+  voiceVolume = 0,
 }: Props) {
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
+
+  // Voice layer for pre-readers — labels in the EXACT render order below
+  // (suggestions, then branches). No auto-read (`autoKey: null`): the NPC
+  // just spoke, piling 2 more lines on every turn would drag the pace —
+  // tap-to-hear only. `cache: false` because suggestions are LLM one-shots.
+  const cappedSuggestions = suggestions.slice(0, MAX_DIALOGUE_SUGGESTIONS);
+  const cappedBranches = branches.slice(0, MAX_DIALOGUE_BRANCHES);
+  // Content keys -- the capped arrays are NEW identities every render, so the
+  // memo keys off their content instead (simple deps keep the linter happy).
+  const suggestionsKey = cappedSuggestions.join(" ");
+  const branchesKey = cappedBranches.map((b) => b.label).join(" ");
+  const voiceLabels = useMemo(
+    () => [...cappedSuggestions, ...cappedBranches.map((b) => b.label)],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- content-keyed via the joins above
+    [suggestionsKey, branchesKey],
+  );
+
+  function confirmVoiceChoice(index: number) {
+    if (index < cappedSuggestions.length) {
+      const s = cappedSuggestions[index];
+      if (s) onSend(s);
+      return;
+    }
+    const b = cappedBranches[index - cappedSuggestions.length];
+    if (b) {
+      onTakeBranch(b);
+    }
+  }
+
+  const reader = useChoiceReader({
+    labels: voiceLabels,
+    // Suggestions are the HERO's lines — the neutral storyteller voice, not
+    // the dialogue partner's.
+    voiceId: DEFAULT_TTS_VOICE,
+    voiceSpeed: 1,
+    volume: voiceVolume,
+    enabled: false, // no auto sequence in dialogue
+    autoKey: null,
+    cache: false,
+    onConfirm: confirmVoiceChoice,
+  });
 
   function submitTyped() {
     const t = text.trim();
@@ -146,20 +199,38 @@ export function DialogueChoiceCards({
               <HandWaving size={14} />
               End conversation
             </button>
+            {/* Say a reply instead of tapping one — renders nothing when
+                voice capture is unavailable. */}
+            <MicButton
+              labels={voiceLabels}
+              onMatch={confirmVoiceChoice}
+              onRecordingStart={() => reader.stopAll()}
+              disabled={loading}
+              size="compact"
+            />
           </div>
           {/* Reply suggestions (continue talking) + scene branches (advance
               the story) share one left-right row — same layout as the main
               choice row. Branches carry an accent ring + "→" so they read as
               "move on", not "keep chatting". */}
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:gap-3">
-            {suggestions.slice(0, MAX_DIALOGUE_SUGGESTIONS).map((s, i) => (
+            {cappedSuggestions.map((s, i) => (
               <div key={`s-${i}-${s}`} className="min-w-0 flex-1">
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={() => onSend(s)}
-                  className={choiceButtonClass}
+                  // Two-step via the reader: first tap reads the reply aloud
+                  // + arms, second tap sends it (single-tap when muted).
+                  onClick={() => reader.tap(i)}
+                  className={
+                    choiceButtonClass +
+                    choiceStateClass(
+                      reader.readingIndex === i,
+                      reader.armedIndex === i,
+                    )
+                  }
                 >
+                  {reader.armedIndex === i && <TapAgainBadge />}
                   {/* Text centers within the space LEFT of the avatar (flex-1),
                       not the whole button — so the portrait doesn't overlap /
                       clip a long label while a wide gap sits empty on the left. */}
@@ -176,23 +247,33 @@ export function DialogueChoiceCards({
                 </button>
               </div>
             ))}
-            {branches.slice(0, MAX_DIALOGUE_BRANCHES).map((b) => (
-              <div key={`b-${b.id}`} className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => onTakeBranch(b)}
-                  className={choiceButtonAccentClass}
-                >
-                  <ArrowCircleRight
-                    size={22}
-                    weight="fill"
-                    className="shrink-0 text-accent-deep"
-                    aria-hidden
-                  />
-                  <span>{b.label}</span>
-                </button>
-              </div>
-            ))}
+            {cappedBranches.map((b, i) => {
+              const idx = cappedSuggestions.length + i;
+              return (
+                <div key={`b-${b.id}`} className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => reader.tap(idx)}
+                    className={
+                      choiceButtonAccentClass +
+                      choiceStateClass(
+                        reader.readingIndex === idx,
+                        reader.armedIndex === idx,
+                      )
+                    }
+                  >
+                    {reader.armedIndex === idx && <TapAgainBadge />}
+                    <ArrowCircleRight
+                      size={22}
+                      weight="fill"
+                      className="shrink-0 text-accent-deep"
+                      aria-hidden
+                    />
+                    <span>{b.label}</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

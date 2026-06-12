@@ -47,12 +47,20 @@ import {
 } from "@/lib/narrative";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
+import { DEFAULT_TTS_VOICE } from "@/lib/tts-config";
+import { useChoiceReader } from "@/lib/useChoiceReader";
 
 import { Backpack, DeviceRotate, GearSix, MapTrifold } from "@phosphor-icons/react";
 
 import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
-import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
+import {
+  ChoiceButton,
+  choiceButtonClass,
+  choiceStateClass,
+  TapAgainBadge,
+} from "./ChoiceButton";
+import { MicButton } from "../voice/MicButton";
 import { SettingsModal } from "./SettingsModal";
 import {
   NotificationStack,
@@ -225,6 +233,10 @@ export function StoryPlayer({
    *  narration typewriter finishes (or user taps to skip), and resets
    *  whenever the displayed narration changes (new scene / outcome). */
   const [narrationDone, setNarrationDone] = useState(false);
+  /** The narration VOICE has finished (or will never play — muted/failed).
+   *  Gates the choice read-aloud: the typewriter ending (`narrationDone`)
+   *  says nothing about the audio, which usually outlives the typed text. */
+  const [narrationAudioDone, setNarrationAudioDone] = useState(false);
   // The narrationKey whose entrance animation has settled on screen. Gates the
   // scene-reward toast: "Received …" must appear once the DESTINATION scene is
   // actually visible, not the instant the overlay (battle/outcome) clears —
@@ -1237,12 +1249,66 @@ export function StoryPlayer({
 
   const narrationKey = `${displayedSceneKey}:${displayedNarration.slice(0, 40)}`;
 
-  // Reset the narration-done gate whenever the narration content changes
-  // so the next scene's choices re-enter via the typewriter→fade flow.
+  // Reset the narration-done gates whenever the narration content changes
+  // so the next scene's choices re-enter via the typewriter→fade flow (and
+  // the choice read-aloud waits for the NEW scene's voice again).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: narrationKey transition drives the gate reset
     setNarrationDone(false);
+    setNarrationAudioDone(false);
   }, [narrationKey]);
+
+  // ── Voice accessibility — choice read-aloud + push-to-talk picker ────
+  // Labels in the EXACT order the choices row renders (asks, then branches),
+  // so an index from the reader/mic maps 1:1 onto a tile.
+  const voiceChoiceLabels = useMemo(() => {
+    const asks = pendingEncounter ? [] : visibleAsks;
+    return [
+      ...asks.map((a) => a.label),
+      ...visibleBranches.map((b) => b.label),
+    ];
+  }, [pendingEncounter, visibleAsks, visibleBranches]);
+
+  /** Resolve a reader/mic index back to the same action its tile performs. */
+  function confirmVoiceChoice(index: number) {
+    const asks = pendingEncounter ? [] : visibleAsks;
+    if (index < asks.length) {
+      const ask = asks[index];
+      if (ask) {
+        setAskRequest({
+          characterId: ask.characterId,
+          question: ask.label,
+          key: Date.now(),
+          unlock: ask.unlock,
+        });
+      }
+      return;
+    }
+    const branch = visibleBranches[index - asks.length];
+    if (branch) handleChoose(branch);
+  }
+
+  const choiceReadAloudReady =
+    hydrated &&
+    narrationDone &&
+    narrationAudioDone &&
+    !dialogueActive &&
+    !showingOutcome &&
+    !pendingEncounter &&
+    !isEnding &&
+    !portraitBlocked;
+
+  const choiceReader = useChoiceReader({
+    labels: voiceChoiceLabels,
+    // Same narrator voice as the scene so the read-aloud doesn't switch
+    // characters mid-beat; labels are static JSON → R2-cacheable.
+    voiceId: displayedSpeaker?.voice ?? DEFAULT_TTS_VOICE,
+    voiceSpeed: displayedSpeaker?.voiceSpeed ?? 1,
+    volume: voiceVolume,
+    enabled: choiceReadAloudReady,
+    autoKey: narrationKey,
+    onConfirm: confirmVoiceChoice,
+  });
 
   // Scene reward arrival — show the item toast only once the player has actually
   // LANDED on the rewarded scene: overlay (outcome/encounter) dismissed AND the
@@ -1573,14 +1639,12 @@ export function StoryPlayer({
                     label={ask.label}
                     iconBase={iconBase}
                     iconFallbackBase={iconFallbackBase}
-                    onSelect={() =>
-                      setAskRequest({
-                        characterId: ask.characterId,
-                        question: ask.label,
-                        key: Date.now(),
-                        unlock: ask.unlock,
-                      })
-                    }
+                    reading={choiceReader.readingIndex === i}
+                    armed={choiceReader.armedIndex === i}
+                    // Two-step: first tap reads the label aloud + arms, the
+                    // second tap confirms (the reader degrades to single-tap
+                    // when the voice channel is muted).
+                    onSelect={() => choiceReader.tap(i)}
                   />,
                 );
               })}
@@ -1588,8 +1652,31 @@ export function StoryPlayer({
                 tile(
                   branch.id,
                   askChoices.length + i,
-                  <ChoiceButton branch={branch} onSelect={handleChoose} />,
+                  <ChoiceButton
+                    branch={branch}
+                    reading={
+                      choiceReader.readingIndex === askChoices.length + i
+                    }
+                    armed={choiceReader.armedIndex === askChoices.length + i}
+                    onSelect={() => choiceReader.tap(askChoices.length + i)}
+                  />,
                 ),
+              )}
+              {/* Push-to-talk — say a choice instead of tapping it. Renders
+                  nothing when unsupported/denied/cooling, so the row is
+                  byte-identical to the pre-voice UI in those cases. */}
+              {narrationDone && (
+                <div className="flex shrink-0 items-center justify-center self-center">
+                  <MicButton
+                    labels={voiceChoiceLabels}
+                    onMatch={(i) => {
+                      getAudio().playSfx(SFX.CHOICE);
+                      confirmVoiceChoice(i);
+                    }}
+                    onRecordingStart={() => choiceReader.stopAll()}
+                    size="row"
+                  />
+                </div>
               )}
             </div>
           );
@@ -1617,6 +1704,7 @@ export function StoryPlayer({
           voiceSpeed={displayedSpeaker.voiceSpeed}
           volume={voiceVolume}
           playKey={narrationKey}
+          onSettled={() => setNarrationAudioDone(true)}
         />
       )}
 
@@ -1890,15 +1978,26 @@ function AskChip({
   label,
   iconBase,
   iconFallbackBase,
+  reading,
+  armed,
   onSelect,
 }: {
   label: string;
   iconBase?: string;
   iconFallbackBase?: string;
+  /** Read-aloud is playing this label (highlight while it speaks). */
+  reading?: boolean;
+  /** First tap landed — next tap confirms. */
+  armed?: boolean;
   onSelect: () => void;
 }) {
   return (
-    <button type="button" onClick={onSelect} className={choiceButtonClass}>
+    <button
+      type="button"
+      onClick={onSelect}
+      className={choiceButtonClass + choiceStateClass(reading, armed)}
+    >
+      {armed && <TapAgainBadge />}
       {/* Text centers within the space LEFT of the portrait (flex-1), not the
           whole button — keeps a long question from clipping under the avatar
           while a wide gap sits empty on the left. */}

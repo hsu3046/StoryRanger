@@ -3,13 +3,7 @@
 import { Howl } from "howler";
 import { useEffect, useRef, useState } from "react";
 
-import { assetUrl, ASSET_BASE_URL } from "@/lib/asset-paths";
-import {
-  isTtsCoolingDown,
-  retryAfterSecondsFrom,
-  startTtsCooldown,
-} from "@/lib/tts-cooldown";
-import { ttsObjectKey } from "@/lib/tts-config";
+import { fetchSpeechBlob } from "@/lib/speech-fetch";
 
 interface Props {
   text: string;
@@ -28,6 +22,13 @@ interface Props {
    * write it, so the bucket isn't littered with one-shot objects.
    */
   cache?: boolean;
+  /**
+   * The line is DONE — finished playing, or will never play (fetch failed,
+   * decode error). Fired at most once per playKey. Lets the choice read-aloud
+   * wait for the narration VOICE to finish, not just the typewriter (the two
+   * aren't synced — long narration audio outlives the typed text).
+   */
+  onSettled?: () => void;
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -53,6 +54,7 @@ export function SpeechAudio({
   volume,
   playKey,
   cache = true,
+  onSettled,
 }: Props) {
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
@@ -62,6 +64,13 @@ export function SpeechAudio({
   // settings open/close, any parent re-render that flips `enabled`) must never
   // restart a line the player already heard.
   const playedKeyRef = useRef<string | null>(null);
+  // The playKey we've already reported as settled — onSettled fires once per
+  // key no matter how the line ends (finished, failed fetch, decode error).
+  const settledKeyRef = useRef<string | null>(null);
+  const onSettledRef = useRef(onSettled);
+  useEffect(() => {
+    onSettledRef.current = onSettled;
+  });
   const enabled = volume > 0 && !!voiceId;
 
   function dispose() {
@@ -84,6 +93,12 @@ export function SpeechAudio({
   useEffect(() => {
     let cancelled = false;
 
+    function settle() {
+      if (cancelled || settledKeyRef.current === playKey) return;
+      settledKeyRef.current = playKey;
+      onSettledRef.current?.();
+    }
+
     async function load() {
       setError(null);
       dispose();
@@ -98,50 +113,16 @@ export function SpeechAudio({
       if (playedKeyRef.current === playKey) return;
 
       try {
-        let blob: Blob | null = null;
-
-        // 1) Cache hit — pull the bytes straight from R2/CDN (egress-free).
-        //    Cacheable lines only; dialogue skips this and always generates.
-        if (cache && ASSET_BASE_URL) {
-          try {
-            const key = await ttsObjectKey(text, voiceId, voiceSpeed);
-            const hit = await fetch(assetUrl(`/${key}`));
-            if (hit.ok) blob = await hit.blob();
-          } catch {
-            /* network/CORS hiccup → fall through to generate */
-          }
-        }
-
-        // 2) Miss / non-cacheable — generate via ElevenLabs. For cacheable
-        //    lines the server also writes it to R2 (next request is a hit);
-        //    `cache: false` tells it not to. During a rate-limit cooldown we
-        //    skip generation entirely — the line stays silent (text gameplay
-        //    continues), while R2 cache hits above keep playing normally.
-        if (!blob) {
-          if (isTtsCoolingDown()) return;
-          const res = await fetch("/api/tts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, voiceId, voiceSpeed, cache }),
-          });
-          if (res.status === 503) {
-            console.warn("[speech] 503 — ELEVENLABS_API_KEY not set on server");
-            return;
-          }
-          if (res.status === 429) {
-            startTtsCooldown(retryAfterSecondsFrom(res));
-            console.warn("[speech] 429 — TTS budget hit, cooling down");
-            return;
-          }
-          if (!res.ok) {
-            const errText = await res.text().catch(() => "");
-            console.warn(`[speech] tts ${res.status}`, errText.slice(0, 200));
-            return;
-          }
-          blob = await res.blob();
-        }
-
+        // R2 cache → /api/tts, with all cooldown/429/503 handling shared
+        // with the choice read-aloud path (speech-fetch.ts).
+        const blob = await fetchSpeechBlob(text, voiceId, voiceSpeed, cache);
         if (cancelled) return;
+        if (!blob) {
+          // This line will never play (budget/cooldown/server error) —
+          // unblock anything waiting on the narration voice.
+          settle();
+          return;
+        }
 
         const url = URL.createObjectURL(blob);
         urlRef.current = url;
@@ -160,10 +141,15 @@ export function SpeechAudio({
           onplay: () => {
             if (!cancelled) playedKeyRef.current = playKey;
           },
-          onloaderror: (_id, e) =>
-            console.warn("[speech] load error", String(e)),
-          onplayerror: (_id, e) =>
-            console.warn("[speech] play error", String(e)),
+          onend: () => settle(),
+          onloaderror: (_id, e) => {
+            console.warn("[speech] load error", String(e));
+            settle();
+          },
+          onplayerror: (_id, e) => {
+            console.warn("[speech] play error", String(e));
+            settle();
+          },
         });
         soundRef.current = sound;
         sound.play();
@@ -171,6 +157,7 @@ export function SpeechAudio({
         if (!cancelled) {
           console.warn("[speech] threw:", err);
           setError("audio_failed");
+          settle();
         }
       }
     }

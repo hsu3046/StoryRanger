@@ -86,6 +86,10 @@ class AudioEngine {
    *  set via SpeechAudio's `volume` prop, not these engine channels. */
   private bgmVolume = BGM_VOLUME;
   private sfxVolume = SFX_VOLUME;
+  /** Mic is recording — BGM is faded to silence so it neither fights the
+   *  iOS record-mode audio session nor bleeds into the transcription. The
+   *  user's `bgmVolume` is untouched; unduck restores it. */
+  private ducked = false;
   /** Howl → scheduled stop() timeout. Cleared on cancel. */
   private pendingStops = new Map<Howl, ReturnType<typeof setTimeout>>();
 
@@ -119,6 +123,7 @@ class AudioEngine {
    */
   setBgmVolume(v: number): void {
     this.bgmVolume = Math.max(0, Math.min(1, v));
+    if (this.ducked) return; // stored value applies on unduck
     const cb = this.currentBgm;
     if (!cb) return;
     if (cb.playing()) {
@@ -126,6 +131,31 @@ class AudioEngine {
     } else {
       cb.volume(this.bgmVolume);
     }
+  }
+
+  /**
+   * Fade the BGM to silence for the duration of a mic recording. Fade-based
+   * (NOT `volume()`) for the same iOS automation-timeline reason as
+   * setBgmVolume above. Full silence — not a partial dip — because anything
+   * audible re-enters the mic and degrades the child's transcription.
+   */
+  duckBgm(): void {
+    if (this.ducked) return;
+    this.ducked = true;
+    const cb = this.currentBgm;
+    if (!cb) return;
+    if (cb.playing()) cb.fade(cb.volume(), 0, 150);
+    else cb.volume(0);
+  }
+
+  /** Restore the BGM to the (possibly meanwhile-changed) user volume. */
+  unduckBgm(): void {
+    if (!this.ducked) return;
+    this.ducked = false;
+    const cb = this.currentBgm;
+    if (!cb) return;
+    if (cb.playing()) cb.fade(cb.volume(), this.bgmVolume, 250);
+    else cb.volume(this.bgmVolume);
   }
 
   /** Set the sound-effects volume (0–1), applied to every cached effect. */
@@ -145,11 +175,15 @@ class AudioEngine {
     // header).
     this.cancelPendingStop(next);
 
+    // While ducked (mic recording) every new/resumed track starts silent;
+    // unduckBgm restores the user volume afterwards.
+    const targetVol = this.ducked ? 0 : this.bgmVolume;
+
     // Same Howl currently designated — just make sure it's actually
     // playing. Avoids restarting from 0 on every same-bgm scene change.
     if (this.currentBgm === next) {
       if (!next.playing()) {
-        next.volume(this.bgmVolume);
+        next.volume(targetVol);
         next.play();
       }
       this.currentBgmKey = cacheKey;
@@ -183,7 +217,7 @@ class AudioEngine {
       next.volume(0);
       next.play();
     }
-    next.fade(startVol, this.bgmVolume, CROSSFADE_MS);
+    next.fade(startVol, targetVol, CROSSFADE_MS);
 
     this.currentBgm = next;
     this.currentBgmKey = cacheKey;
@@ -371,6 +405,8 @@ export function getAudio(): AudioEngine {
       isMuted: () => false,
       setBgmVolume: () => {},
       setSfxVolume: () => {},
+      duckBgm: () => {},
+      unduckBgm: () => {},
       playBgm: () => {},
       stopBgm: () => {},
       playSfx: () => {},
