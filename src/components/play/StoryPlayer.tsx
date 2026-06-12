@@ -249,18 +249,15 @@ export function StoryPlayer({
     sound: Howl;
     alignment: SpeechAlignment | null;
   } | null>(null);
-  // Ref mirror for edge-triggered effects/handlers that must stop the
-  // CURRENT narration without re-running on every playback change.
-  const narrationPlaybackRef = useRef(narrationPlayback);
-  useEffect(() => {
-    narrationPlaybackRef.current = narrationPlayback;
-  });
-  /** "One voice at a time" — stop the narration mid-line when another voice
-   *  begins (choice read-aloud, dialogue, mic). The stop settles the line
-   *  (SpeechAudio onstop), so the read-along brightens fully and the
-   *  narrationAudioDone gates fire as if it had finished. */
+  /** "One voice at a time" — stop the narration when another voice begins
+   *  (choice read-aloud, dialogue, mic). Routed through SpeechAudio's
+   *  stopNonce so it also suppresses a line that is STILL FETCHING (a
+   *  direct sound.stop() can't reach those — the clip would land seconds
+   *  later and speak over whatever interrupted it). The stop settles the
+   *  line: read-along brightens, narrationAudioDone gates fire. */
+  const [narrationStopNonce, setNarrationStopNonce] = useState(0);
   const stopNarrationVoice = useCallback(() => {
-    narrationPlaybackRef.current?.sound.stop();
+    setNarrationStopNonce((n) => n + 1);
   }, []);
   /** Mic is actively recording — gates the narration tap-to-replay (a
    *  replay would speak straight into the child's recording). */
@@ -270,6 +267,7 @@ export function StoryPlayer({
   // on the rising flank only — by the time a branch taken FROM a dialogue
   // loads the next scene's narration, this flag is already false again.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- edge-triggered stop signal to the audio layer (nonce), not derived state
     if (dialogueActive) stopNarrationVoice();
   }, [dialogueActive, stopNarrationVoice]);
   // The narrationKey whose entrance animation has settled on screen. Gates the
@@ -1754,6 +1752,7 @@ export function StoryPlayer({
           playKey={narrationKey}
           onSettled={() => setNarrationAudioDone(true)}
           replayNonce={narrationReplayNonce}
+          stopNonce={narrationStopNonce}
           onPlayback={(sound, alignment) =>
             setNarrationPlayback(sound ? { sound, alignment } : null)
           }

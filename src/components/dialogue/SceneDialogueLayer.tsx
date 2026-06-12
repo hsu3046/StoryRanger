@@ -144,6 +144,12 @@ export function SceneDialogueLayer({
   // The reply's audio settled (finished or will never play) — lets the
   // bubble brighten the remainder instead of waiting forever.
   const [replyAudioDone, setReplyAudioDone] = useState(false);
+  // "One voice at a time": a card read-aloud / mic start stops the NPC's
+  // reply via SpeechAudio's stopNonce — which ALSO suppresses a reply whose
+  // TTS is still generating (1–3 s, cache=false), the most common timing:
+  // the cards appear before the voice arrives, and a direct sound.stop()
+  // would miss it, letting the reply blast in seconds later.
+  const [replyStopNonce, setReplyStopNonce] = useState(0);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- per-reply reset of the read-along state
     setReplyAudioDone(false);
@@ -541,6 +547,7 @@ export function SceneDialogueLayer({
           playKey={`${active}:${speakNonce}`}
           cache={false}
           onSettled={() => setReplyAudioDone(true)}
+          stopNonce={replyStopNonce}
           onPlayback={(sound, alignment) =>
             setReplyPlayback(sound ? { sound, alignment } : null)
           }
@@ -584,9 +591,10 @@ export function SceneDialogueLayer({
             loading={loading}
             voiceVolume={voiceVolume}
             // "One voice at a time": a card read-aloud (or the mic opening)
-            // silences the NPC's still-playing reply. Stopping settles it
-            // (SpeechAudio onstop), so the bubble brightens fully.
-            onReadStart={() => replyPlayback?.sound.stop()}
+            // silences the NPC's reply — playing OR still generating (the
+            // stopNonce suppresses in-flight TTS too). The stop settles it,
+            // so the bubble brightens fully.
+            onReadStart={() => setReplyStopNonce((n) => n + 1)}
             iconBase={portraitBase(active)}
             iconFallbackBase={portraitFallbackBase?.(active)}
             onSend={(t) => sendTurn(active, t)}

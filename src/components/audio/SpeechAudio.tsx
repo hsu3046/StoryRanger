@@ -45,6 +45,17 @@ interface Props {
    * The read-along highlight polls the Howl's clock against the alignment.
    */
   onPlayback?: (sound: Howl | null, alignment: SpeechAlignment | null) => void;
+  /**
+   * Bump to STOP the current line ("one voice at a time" — a choice tap /
+   * dialogue opening / mic start silences this narrator). Crucially this
+   * also suppresses a line that is still FETCHING: stopping via the exposed
+   * Howl alone leaves a zombie — the clip lands seconds later (dialogue TTS
+   * generates 1–3 s) and starts speaking over whatever interrupted it.
+   * A suppressed line settles (audioDone fires, read-along brightens); a
+   * suppressed-before-play line cannot be tap-replayed (no sound exists) —
+   * accepted, the window is sub-seconds and the next line reloads fresh.
+   */
+  stopNonce?: number;
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -73,6 +84,7 @@ export function SpeechAudio({
   onSettled,
   replayNonce = 0,
   onPlayback,
+  stopNonce = 0,
 }: Props) {
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
@@ -113,6 +125,20 @@ export function SpeechAudio({
     soundRef.current?.volume(clamp(volume));
   }, [volume]);
 
+  // Stop-on-demand. The ref-compare pattern (see replay below) makes a
+  // remount with a stale nonce inert. `stoppedKeyRef` is the in-flight
+  // suppressor: the load pipeline checks it around its awaits, so a stop
+  // that lands while the clip is still fetching kills the playback BEFORE
+  // it starts (a plain sound.stop() can only reach a sound that exists).
+  const stoppedKeyRef = useRef<string | null>(null);
+  const lastStopRef = useRef(stopNonce);
+  useEffect(() => {
+    if (stopNonce === lastStopRef.current) return;
+    lastStopRef.current = stopNonce;
+    stoppedKeyRef.current = playKey;
+    soundRef.current?.stop(); // settles via onstop when already playing
+  }, [stopNonce, playKey]);
+
   // Replay-on-demand. Tracks the last nonce in a ref (not a dep-less mount
   // check) so a remount with a stale nonce (scene re-show after dialogue)
   // doesn't replay uninvited. Only an already-loaded, currently-idle sound
@@ -148,12 +174,24 @@ export function SpeechAudio({
       // setup (React StrictMode's setup→cleanup→setup) or a transient fetch
       // failure never burns the key without any audio having played.
       if (playedKeyRef.current === playKey) return;
+      // Suppressed before we even started (stop landed pre-load) — settle
+      // and skip the fetch (an uncacheable line would bill for nothing).
+      if (stoppedKeyRef.current === playKey) {
+        settle();
+        return;
+      }
 
       try {
         // R2 cache → /api/tts, with all cooldown/429/503 handling shared
         // with the choice read-aloud path (speech-fetch.ts).
         const line = await fetchSpeechLine(text, voiceId, voiceSpeed, cache);
         if (cancelled) return;
+        // Stop landed WHILE fetching (the common interrupt window — TTS
+        // generation takes 1–3 s) → never start this playback.
+        if (stoppedKeyRef.current === playKey) {
+          settle();
+          return;
+        }
         if (!line) {
           // This line will never play (budget/cooldown/server error) —
           // unblock anything waiting on the narration voice.
