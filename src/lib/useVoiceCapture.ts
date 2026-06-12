@@ -31,14 +31,15 @@ export type VoiceCaptureStatus = "idle" | "recording" | "transcribing";
 
 export type VoiceCaptureResult =
   | { ok: true; transcript: string }
-  | { ok: false; reason: "too-short" | "denied" | "cooldown" | "stt-error" };
+  | {
+      ok: false;
+      reason: "too-short" | "denied" | "cooldown" | "stt-error" | "mic-error";
+    };
 
 /** webm/opus first (Chrome/Android, ~70 KB per 6 s clip); iOS Safari only
  *  does mp4/AAC. No `isTypeSupported` at all → construct with no options and
  *  let the browser pick (recorder.mimeType tells us what we got). */
 const MIME_CANDIDATES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-
-const DENIED_LS_KEY = "storyranger:micDenied";
 
 function pickMimeType(): string | undefined {
   if (
@@ -61,9 +62,12 @@ export interface VoiceCapture {
   status: VoiceCaptureStatus;
   /** Live mic level 0–1 while recording — drives the button's pulse. */
   level: number;
-  /** MediaRecorder + getUserMedia available (false → render no mic UI). */
+  /** MediaRecorder + getUserMedia available (false → render no mic UI —
+   *  the ONLY case that hides the button; everything else stays visible). */
   supported: boolean;
-  /** Permission denied (now or persisted) — render no mic UI. */
+  /** Last permission attempt was denied — STYLE the button (slash icon),
+   *  don't hide it. Session-only; a tap retries getUserMedia, so re-allowing
+   *  the mic in browser settings heals without a reload. */
   denied: boolean;
   /** Begin recording. Must be called from a user gesture (tap handler). */
   start: () => Promise<void>;
@@ -104,8 +108,11 @@ export function useVoiceCapture(opts: {
   const rafRef = useRef<number | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
-  // Capability + persisted-denial check (client only — a useState initializer
-  // would run truthy in the browser but falsy during SSR → hydration mismatch).
+  // Capability check (client only — a useState initializer would run truthy
+  // in the browser but falsy during SSR → hydration mismatch). Denial is NOT
+  // persisted anymore: hiding the mic forever after one denied prompt was the
+  // worst possible UX (user feedback) — the button now stays, styled as
+  // blocked, and every tap is a fresh retry.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot capability probe of a browser-only API
     setSupported(
@@ -113,21 +120,6 @@ export function useVoiceCapture(opts: {
         typeof navigator !== "undefined" &&
         !!navigator.mediaDevices?.getUserMedia,
     );
-    if (localStorage.getItem(DENIED_LS_KEY) !== "1") return;
-    setDenied(true);
-    // If the user re-allowed the mic in browser settings since, lift the
-    // flag without making them find a toggle (Permissions API where present).
-    navigator.permissions
-      ?.query({ name: "microphone" as PermissionName })
-      .then((p) => {
-        if (p.state !== "denied") {
-          localStorage.removeItem(DENIED_LS_KEY);
-          setDenied(false);
-        }
-      })
-      .catch(() => {
-        /* Permissions API absent/unsupported key — keep the flag */
-      });
   }, []);
 
   /** Stop tracks + meters and give the audio session back to playback. */
@@ -220,7 +212,10 @@ export function useVoiceCapture(opts: {
   }, []);
 
   const start = useCallback(async () => {
-    if (startingRef.current || recorderRef.current || !supported || denied) {
+    // `denied` is deliberately NOT a guard — a tap while blocked retries
+    // getUserMedia, so fixing the permission in browser settings (or a
+    // dismissed-prompt second chance) heals the mic in place.
+    if (startingRef.current || recorderRef.current || !supported) {
       return;
     }
     if (isSttCoolingDown()) {
@@ -234,15 +229,16 @@ export function useVoiceCapture(opts: {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      setDenied(false); // permission (re)granted — clear the blocked styling
     } catch (err) {
       startingRef.current = false;
       if (err instanceof DOMException && err.name === "NotAllowedError") {
-        localStorage.setItem(DENIED_LS_KEY, "1");
         setDenied(true);
         onResultRef.current({ ok: false, reason: "denied" });
       } else {
-        // No mic / hardware busy — treat as unsupported for this session.
-        setSupported(false);
+        // No mic / hardware busy — surface it, keep the button (it may be
+        // transient: another tab holding the device, a USB mic re-plugged).
+        onResultRef.current({ ok: false, reason: "mic-error" });
       }
       return;
     }
@@ -265,10 +261,11 @@ export function useVoiceCapture(opts: {
         recorder = new MediaRecorder(stream);
       } catch {
         // Even the bare constructor failed — release the stream + duck NOW
-        // (nothing else will) and stop offering the mic this session.
+        // (nothing else will). Keep the button: surface the failure instead
+        // of vanishing (user feedback — a disappearing mic is the worst UX).
         startingRef.current = false;
         releaseAudioSession();
-        setSupported(false);
+        onResultRef.current({ ok: false, reason: "mic-error" });
         return;
       }
     }
@@ -328,7 +325,7 @@ export function useVoiceCapture(opts: {
     hardCutRef.current = setTimeout(() => {
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     }, MAX_RECORDING_MS);
-  }, [supported, denied, releaseAudioSession, startLevelMeter, transcribe]);
+  }, [supported, releaseAudioSession, startLevelMeter, transcribe]);
 
   const stop = useCallback(() => {
     const rec = recorderRef.current;
