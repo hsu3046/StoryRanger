@@ -1572,8 +1572,10 @@ export function StoryPlayer({
         </div>
 
         {/* Choices row — horizontal at the very bottom. While an outcome
-            is pending, we replace the choice row with reward chips + a
-            "tap anywhere to continue" hint. */}
+            is pending, we replace the choice row with a "Tap to Continue"
+            button. The button (not the whole screen) is the ONLY advance
+            target — a full-screen overlay used to swallow every tap, which
+            made the outcome narration impossible to tap-replay. */}
         {(() => {
           if (showingOutcome && pendingOutcome) {
             // Outcome bridge shows only the outgoing-scene pause + outcome text.
@@ -1581,16 +1583,13 @@ export function StoryPlayer({
             // toast separately.
             return (
               <div className="flex flex-col items-center gap-3">
-                <span
-                  className="text-sm font-semibold uppercase tracking-wide text-paper"
-                  style={{
-                    textShadow:
-                      "0 2px 6px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.95)",
-                  }}
-                  aria-hidden
+                <button
+                  type="button"
+                  onClick={continueFromOutcome}
+                  className="rounded-pill bg-paper/85 px-6 py-2.5 text-sm font-semibold uppercase tracking-wide text-ink shadow-button ring-1 ring-ink-soft/15 backdrop-blur-sm transition-all hover:bg-paper hover:ring-accent/50 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-button-pressed"
                 >
-                  Tap anywhere to continue
-                </span>
+                  Tap to Continue
+                </button>
               </div>
             );
           }
@@ -1740,17 +1739,9 @@ export function StoryPlayer({
         })()}
       </div>
 
-      {/* Outcome tap-to-continue overlay. Sits BELOW the bottom UI
-          (z-10) but ABOVE the scene gradients/image (default z) — tapping
-          anywhere outside the speech box advances. */}
-      {showingOutcome && (
-        <button
-          type="button"
-          aria-label="Continue"
-          onClick={continueFromOutcome}
-          className="absolute inset-0 z-[5] cursor-pointer"
-        />
-      )}
+      {/* (The former full-screen tap-to-continue overlay is gone: it sat
+          over the narration and swallowed the tap-to-replay. Advancing now
+          happens ONLY via the "Tap to Continue" button in the bottom row.) */}
 
       {/* `!portraitBlocked` — don't narrate behind the rotate prompt; the
           remount after rotating replays this line from the start. */}
