@@ -28,6 +28,7 @@ const STOP_WORDS = new Set([
   "the", "a", "an", "to", "of", "in", "on", "at", "and", "or", "for",
   "with", "let", "lets", "go", "is", "it", "its", "i", "im", "me", "my",
   "we", "you", "your", "do", "did", "will", "would", "please", "um", "uh",
+  "okay", "ok",
 ]);
 
 /** Spoken digits fold to numerals so "two" and "2" compare equal. */
@@ -36,14 +37,22 @@ const NUMBER_WORDS: Record<string, string> = {
   six: "6", seven: "7", eight: "8", nine: "9", ten: "10",
 };
 
-/** Ordinal/meta phrases → choice index ("the first one", "number two").
- *  Only consulted when the utterance shares nothing with any label, so a
- *  label that legitimately contains "first" can never be shadowed. */
+/** Casual variants fold to the canonical word a label would use — a child's
+ *  "yeah!" must land on a "Yes, let's help him" label. */
+const SYNONYM_WORDS: Record<string, string> = {
+  yeah: "yes", yep: "yes", yup: "yes",
+  nope: "no", nah: "no",
+};
+
+/** Ordinal/meta phrases → choice index ("the first one", "number two", a
+ *  transcriber's bare "2"). Only consulted when the utterance shares nothing
+ *  with any label, so a label that legitimately contains "first" can never
+ *  be shadowed. */
 const ORDINAL_WORDS: Record<string, number> = {
-  first: 0, "1st": 0, one: 0,
-  second: 1, "2nd": 1, two: 1,
-  third: 2, "3rd": 2, three: 2,
-  fourth: 3, "4th": 3, four: 3,
+  first: 0, "1st": 0, one: 0, "1": 0,
+  second: 1, "2nd": 1, two: 1, "2": 1,
+  third: 2, "3rd": 2, three: 2, "3": 2,
+  fourth: 3, "4th": 3, four: 3, "4": 3,
 };
 
 /** Lowercase, strip diacritics + punctuation, collapse whitespace. */
@@ -62,7 +71,7 @@ function tokenize(normalized: string): string[] {
   return normalized
     .split(" ")
     .filter(Boolean)
-    .map((t) => NUMBER_WORDS[t] ?? t);
+    .map((t) => SYNONYM_WORDS[t] ?? NUMBER_WORDS[t] ?? t);
 }
 
 function contentTokens(normalized: string): string[] {
@@ -98,9 +107,15 @@ function tokensEqual(a: string, b: string): boolean {
   return levenshtein(a, b) <= 1;
 }
 
-/** Dice coefficient over content tokens with fuzzy token equality (greedy
- *  one-to-one pairing — fine at these sizes). */
-function tokenDice(utterTokens: string[], labelTokens: string[]): number {
+/** Token-overlap score with fuzzy token equality (greedy one-to-one pairing
+ *  — fine at these sizes). Returns the better of:
+ *  - Dice: symmetric overlap — rewards saying most of the label;
+ *  - precision (matches / utterance tokens): a SHORT utterance fully
+ *    contained in one label ("yes" → "Yes, let's help him") scores 1.0,
+ *    where Dice alone dies on the length asymmetry (2·1/(1+3)=0.5 < floor).
+ *  Precision can tie across labels sharing a token — the caller's margin
+ *  rule turns that into a safe "ambiguous → try again". */
+function tokenScore(utterTokens: string[], labelTokens: string[]): number {
   if (!utterTokens.length || !labelTokens.length) return 0;
   const used = new Array<boolean>(labelTokens.length).fill(false);
   let matches = 0;
@@ -113,7 +128,9 @@ function tokenDice(utterTokens: string[], labelTokens: string[]): number {
       }
     }
   }
-  return (2 * matches) / (utterTokens.length + labelTokens.length);
+  const dice = (2 * matches) / (utterTokens.length + labelTokens.length);
+  const precision = matches / utterTokens.length;
+  return Math.max(dice, precision);
 }
 
 /** Whole-string similarity in [0,1] from normalized edit distance. */
@@ -125,9 +142,9 @@ function stringSimilarity(a: string, b: string): number {
 
 /** Score one utterance against one label, both already normalized. */
 function scoreLabel(utterNorm: string, labelNorm: string): number {
-  const dice = tokenDice(contentTokens(utterNorm), contentTokens(labelNorm));
+  const tokens = tokenScore(contentTokens(utterNorm), contentTokens(labelNorm));
   const sim = stringSimilarity(utterNorm, labelNorm);
-  return Math.max(dice, sim);
+  return Math.max(tokens, sim);
 }
 
 /** "the first one" / "number two" / bare "two" → index, when the child says

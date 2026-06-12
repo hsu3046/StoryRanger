@@ -113,11 +113,12 @@ export async function POST(req: Request) {
     const file = new File([audio], filenameFor(mime), {
       type: audio.type || "audio/webm",
     });
+    // No `temperature`: 0 is already the default, and the 4o-transcribe
+    // family doesn't document the param — sending it is pure 400 risk.
     const result = await getOpenAI().audio.transcriptions.create({
       file,
       model: STT_MODEL,
       language: "en",
-      temperature: 0,
       prompt: labels.length
         ? `The child is choosing one of these options: ${labels.join("; ")}`
         : undefined,

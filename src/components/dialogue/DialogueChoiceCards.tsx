@@ -200,7 +200,11 @@ export function DialogueChoiceCards({
               End conversation
             </button>
             {/* Say a reply instead of tapping one — renders nothing when
-                voice capture is unavailable. */}
+                voice capture is unavailable. KNOWN LIMITATION: the NPC's
+                reply voice (SpeechAudio in SceneDialogueLayer) has no
+                external stop API, so recording while it still speaks relies
+                on getUserMedia's echoCancellation to keep it out of the mic
+                — unlike the scene row, which waits for the narrator. */}
             <MicButton
               labels={voiceLabels}
               onMatch={confirmVoiceChoice}

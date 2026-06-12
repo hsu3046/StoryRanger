@@ -92,6 +92,10 @@ export function useVoiceCapture(opts: {
   });
 
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // Synchronous re-entrancy guard: kids double-tap, and `recorderRef` is
+  // still null while the first start() awaits getUserMedia — without this a
+  // second tap acquires a SECOND stream that nothing ever releases.
+  const startingRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef(0);
@@ -216,11 +220,14 @@ export function useVoiceCapture(opts: {
   }, []);
 
   const start = useCallback(async () => {
-    if (recorderRef.current || !supported || denied) return;
+    if (startingRef.current || recorderRef.current || !supported || denied) {
+      return;
+    }
     if (isSttCoolingDown()) {
       onResultRef.current({ ok: false, reason: "cooldown" });
       return;
     }
+    startingRef.current = true;
 
     let stream: MediaStream;
     try {
@@ -228,6 +235,7 @@ export function useVoiceCapture(opts: {
         audio: { echoCancellation: true, noiseSuppression: true },
       });
     } catch (err) {
+      startingRef.current = false;
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         localStorage.setItem(DENIED_LS_KEY, "1");
         setDenied(true);
@@ -253,12 +261,40 @@ export function useVoiceCapture(opts: {
         : new MediaRecorder(stream);
     } catch {
       // Options rejected (Safari quirks) — final fallback: browser default.
-      recorder = new MediaRecorder(stream);
+      try {
+        recorder = new MediaRecorder(stream);
+      } catch {
+        // Even the bare constructor failed — release the stream + duck NOW
+        // (nothing else will) and stop offering the mic this session.
+        startingRef.current = false;
+        releaseAudioSession();
+        setSupported(false);
+        return;
+      }
     }
     recorderRef.current = recorder;
+    startingRef.current = false;
 
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    recorder.onerror = (e) => {
+      // Recording died mid-flight (device yanked, OS revoked the mic).
+      console.warn("[stt] recorder error:", e);
+      discardRef.current = true;
+      try {
+        if (recorder.state === "recording") {
+          recorder.stop(); // normal teardown via onstop
+          return;
+        }
+      } catch {
+        /* fall through to direct teardown */
+      }
+      // onstop won't fire — tear down directly (all idempotent).
+      chunksRef.current = [];
+      recorderRef.current = null;
+      releaseAudioSession();
+      setStatus("idle");
     };
     recorder.onstop = () => {
       const actualMime = recorder.mimeType || mime || "audio/webm";

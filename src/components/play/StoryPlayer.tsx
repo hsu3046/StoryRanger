@@ -1664,8 +1664,12 @@ export function StoryPlayer({
               )}
               {/* Push-to-talk — say a choice instead of tapping it. Renders
                   nothing when unsupported/denied/cooling, so the row is
-                  byte-identical to the pre-voice UI in those cases. */}
-              {narrationDone && (
+                  byte-identical to the pre-voice UI in those cases. Gated on
+                  the narration VOICE having finished (not just the
+                  typewriter) — an open mic under a still-speaking narrator
+                  would record the narrator. Muted voice channel → no audio
+                  to wait for. */}
+              {narrationDone && (voiceVolume <= 0 || narrationAudioDone) && (
                 <div className="flex shrink-0 items-center justify-center self-center">
                   <MicButton
                     labels={voiceChoiceLabels}
