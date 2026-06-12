@@ -52,14 +52,23 @@
    tall) the svh term sits far above the vw curve and never engages. svh, not
    dvh, so the iOS URL bar showing/hiding can't reflow mid-read. */
 @utility text-fluid-narration {
-  /* ~23px @768 → ~28px @1024 → ~33px @1280 → 36px cap. ~16–18px on
-     landscape phones (svh-capped). The two regimes tune independently:
-     phones live on the svh ceiling (height 393–440), tablets/desktop on
-     the vw curve — re-tuned 2026-06 by user feedback BOTH ways (bigger on
-     tablet/desktop, smaller on phones). On squat laptop windows
-     (1366×768) the 4svh guard still holds the worst-case 250-char
-     narration to ~31px + the 60dvh scroll ceiling. */
-  font-size: clamp(0.875rem, min(calc(0.55rem + 1.9vw), 4svh), 2.25rem);
+  /* Two fully separated regimes (2026-06, user-tuned twice — the shared
+     min(vw, svh) form kept the svh guard choking desktop windows, e.g.
+     4svh capped a 1440×900 window at 36px and a 1366×768 one at ~31px):
+
+     Tablet/desktop: ~27px @768w → ~33px @1024 → ~40px @1280 → 44px cap
+     (~1470w+). The 5.5svh term only guards SQUAT windows (560–800px tall:
+     ~33px @600h) — at normal desktop heights it sits above the curve and
+     never engages. Worst-case long narration is still bounded by the
+     60dvh scroll ceiling on the block. */
+  font-size: clamp(1rem, min(calc(0.55rem + 2.4vw), 5.5svh), 2.75rem);
+
+  /* Landscape phones (same gate as the `short:` variant): pure svh print
+     size — ~15.7px @393h, ~17.6px @440h, 20px cap. The desktop curve
+     above can't leak in here, and vice versa. */
+  @media (max-height: 560px) {
+    font-size: clamp(0.875rem, 4svh, 1.25rem);
+  }
 }
 @utility text-fluid-choice {
   /* 14px @360 → ~16px @768 → 18px cap. ~13–14.5px on landscape phones —
