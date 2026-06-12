@@ -130,20 +130,32 @@ export function ReadAlongText({
     setBrightCount(0);
   }, [text, sound]);
 
-  // The sync loop: every frame, bright = words whose start time has passed
-  // on the audio clock. Recomputed (not accumulated) so a replay's seek(0)
-  // dims everything again and the wave re-runs.
+  // The sync loop. The audio clock is trusted ONLY while the clip is
+  // actually playing — when a Howler sound ends (or is stopped) it REWINDS
+  // seek() to 0, and reading that would collapse the highlight back to the
+  // first word (the "only 'The' stays white" bug). Outside playback:
+  //  - line settled (audioDone) → park on ALL bright;
+  //  - otherwise (clip still loading / about to start) → hold as-is, dim.
+  // A replay flips playing() back on, the clock restarts near 0, and the
+  // recomputed count re-runs the wave from the top.
+  const audioDoneRef = useRef(audioDone);
+  useEffect(() => {
+    audioDoneRef.current = audioDone;
+  });
   useEffect(() => {
     if (!expectAudio || !sound || !wordStarts) return;
     let raf: number | null = null;
     const tick = () => {
-      const pos = sound.seek();
-      const t = (typeof pos === "number" ? pos : 0) + HIGHLIGHT_LEAD_S;
-      let count = 0;
-      while (count < wordStarts.length && wordStarts[count] <= t) count++;
-      // While the clip is actually playing, trust the clock; once it ends
-      // Howler parks seek() at ~duration, so the count lands on "all".
-      setBrightCount((prev) => (prev === count ? prev : count));
+      if (sound.playing()) {
+        const pos = sound.seek();
+        const t = (typeof pos === "number" ? pos : 0) + HIGHLIGHT_LEAD_S;
+        let count = 0;
+        while (count < wordStarts.length && wordStarts[count] <= t) count++;
+        setBrightCount((prev) => (prev === count ? prev : count));
+      } else if (audioDoneRef.current) {
+        const all = wordStarts.length;
+        setBrightCount((prev) => (prev === all ? prev : all));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -153,12 +165,12 @@ export function ReadAlongText({
   }, [expectAudio, sound, wordStarts]);
 
   // Fallback ladder — any state where word-sync can't (or won't) happen
-  // shows the full text bright.
+  // shows the full text bright. (The "finished playing" case is handled by
+  // the loop above parking the count on ALL.)
   const allBright =
     !expectAudio || // muted: nothing to wait for
     (audioDone && !sound) || // settled without ever playing (budget/failure)
-    (sound !== null && !wordStarts) || // audio plays but no usable timing
-    (audioDone && wordStarts !== null && brightCount >= wordStarts.length);
+    (sound !== null && !wordStarts); // audio plays but no usable timing
 
   // No timing? Still render word/whitespace chunks (uniform markup) — the
   // `allBright` ladder decides their state, never the per-word counter.
