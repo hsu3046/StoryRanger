@@ -1,8 +1,21 @@
 /**
- * ElevenLabs text-to-speech (server-only). Synthesizes one line to MP3.
- * Caching/persistence is handled by the caller (R2 on-demand cache).
+ * ElevenLabs text-to-speech (server-only). Synthesizes one line to MP3 plus
+ * its character-level timing (read-along highlight). Caching/persistence is
+ * handled by the caller (R2 on-demand cache).
  */
-import { TTS_MODEL, TTS_VOICE_SETTINGS, clampSpeed } from "./tts-config";
+import {
+  TTS_MODEL,
+  TTS_VOICE_SETTINGS,
+  clampSpeed,
+  type SpeechAlignment,
+} from "./tts-config";
+
+export interface SynthesisResult {
+  buffer: Buffer;
+  /** Character timing from the same generation call — null only if the API
+   *  response omitted it (shouldn't happen, but audio must still play). */
+  alignment: SpeechAlignment | null;
+}
 
 export function hasElevenLabsKey(): boolean {
   return !!process.env.ELEVENLABS_API_KEY?.trim();
@@ -34,25 +47,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** One synthesis call with a hard timeout (aborts a hung request). */
+/** One synthesis call with a hard timeout (aborts a hung request).
+ *  `with-timestamps` variant: same model/credits/latency as the plain
+ *  endpoint, but the response is JSON carrying the mp3 (base64) PLUS the
+ *  character-level timing the read-along highlight needs. */
 async function rawSynthesize(
   apiKey: string,
   text: string,
   voiceId: string,
   voiceSpeed: number,
-): Promise<Buffer> {
+): Promise<SynthesisResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TTS_TIMEOUT_MS);
   try {
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps`,
       {
         method: "POST",
         signal: controller.signal,
         headers: {
           "xi-api-key": apiKey,
           "Content-Type": "application/json",
-          Accept: "audio/mpeg",
+          Accept: "application/json",
         },
         // No language_code → eleven_multilingual_v2 auto-detects the language
         // from the text, so Korean / Japanese / English stories all speak
@@ -74,7 +90,17 @@ async function rawSynthesize(
         `elevenlabs ${res.status}: ${detail.slice(0, 300)}`,
       );
     }
-    return Buffer.from(await res.arrayBuffer());
+    const data = (await res.json()) as {
+      audio_base64?: string;
+      alignment?: SpeechAlignment | null;
+    };
+    if (!data.audio_base64) {
+      throw new ElevenLabsError(0, "elevenlabs: response missing audio_base64");
+    }
+    return {
+      buffer: Buffer.from(data.audio_base64, "base64"),
+      alignment: data.alignment ?? null,
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -90,7 +116,7 @@ export async function synthesizeSpeech(
   text: string,
   voiceId: string,
   voiceSpeed: number,
-): Promise<Buffer> {
+): Promise<SynthesisResult> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY not set");
 

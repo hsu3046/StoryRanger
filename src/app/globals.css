@@ -52,17 +52,29 @@
    tall) the svh term sits far above the vw curve and never engages. svh, not
    dvh, so the iOS URL bar showing/hiding can't reflow mid-read. */
 @utility text-fluid-narration {
-  /* 16px @360 → ~21px @768 → ~28px @1280 → 32px cap. ~18–20px on landscape
-     phones (svh-capped). Steeper than choice/question — desktop-tuned by
-     user feedback (24px and 28px caps both read too small on large
-     displays). 32px keeps a worst-case 250-char narration around half the
-     screen on a 1366×768 laptop (the old 36px cap pushed past 2/3), and the
-     60dvh scroll ceiling still bounds the extreme. */
-  font-size: clamp(1rem, min(calc(0.71rem + 1.3vw), 4.5svh), 2rem);
+  /* Two fully separated regimes (2026-06, user-tuned twice — the shared
+     min(vw, svh) form kept the svh guard choking desktop windows, e.g.
+     4svh capped a 1440×900 window at 36px and a 1366×768 one at ~31px):
+
+     Tablet/desktop: ~27px @768w → ~33px @1024 → ~40px @1280 → 44px cap
+     (~1470w+). The 5.5svh term only guards SQUAT windows (560–800px tall:
+     ~33px @600h) — at normal desktop heights it sits above the curve and
+     never engages. Worst-case long narration is still bounded by the
+     60dvh scroll ceiling on the block. */
+  font-size: clamp(1rem, min(calc(0.55rem + 2.4vw), 5.5svh), 2.75rem);
+
+  /* Landscape phones (same gate as the `short:` variant): pure svh print
+     size — ~15.7px @393h, ~17.6px @440h, 20px cap. The desktop curve
+     above can't leak in here, and vice versa. */
+  @media (max-height: 560px) {
+    font-size: clamp(0.875rem, 4svh, 1.25rem);
+  }
 }
 @utility text-fluid-choice {
-  /* 14px @360 → ~16px @768 → 18px cap. ~15px on landscape phones. */
-  font-size: clamp(0.875rem, min(calc(0.78rem + 0.45vw), 3.8svh), 1.125rem);
+  /* 14px @360 → ~16px @768 → 18px cap. ~13–14.5px on landscape phones —
+     svh term lowered with the narration so the bottom stack shrinks
+     together; the vw curve (tablet/desktop) is unchanged. */
+  font-size: clamp(0.75rem, min(calc(0.78rem + 0.45vw), 3.3svh), 1.125rem);
 }
 @utility text-fluid-question {
   /* 16px @360 → ~18px @768 → ~20px @1180 → 22px cap. ~16px on landscape phones. */

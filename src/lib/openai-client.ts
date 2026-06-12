@@ -1,5 +1,5 @@
 /**
- * OpenAI client — used ONLY for TTS now. LLM calls go through
+ * OpenAI client — used ONLY for TTS and STT now. LLM calls go through
  * `src/lib/llm.ts` which routes between OpenAI / Gemini / Anthropic
  * based on `LLM_PROVIDER`.
  */
@@ -28,3 +28,8 @@ export function getOpenAI(): OpenAI {
 // default. `??` only triggers on null/undefined and would let an empty
 // string through, breaking the OpenAI call with `model: ""`.
 export const TTS_MODEL = process.env.OPENAI_TTS_MODEL?.trim() || "tts-1";
+
+/** Transcription model for the push-to-talk choice picker (/api/stt).
+ *  Same `||` rationale as TTS_MODEL above. */
+export const STT_MODEL =
+  process.env.OPENAI_STT_MODEL?.trim() || "gpt-4o-mini-transcribe";

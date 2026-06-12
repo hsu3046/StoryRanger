@@ -1,4 +1,8 @@
+import type { Howl } from "howler";
+
 import type { SpeakerId } from "@/types/story";
+import type { SpeechAlignment } from "@/lib/tts-config";
+import { ReadAlongText } from "./ReadAlongText";
 import { Typewriter } from "./Typewriter";
 
 interface Props {
@@ -7,12 +11,19 @@ interface Props {
   characterColor: string;
   narration: string;
   variant?: "page" | "overlay";
-  /** Fires when the typewriter finishes (or the user taps to skip). The
-   *  parent uses this to gate revealing the choice buttons. */
+  /** Fires when the text is fully on screen (read-along shows it at mount,
+   *  so this is immediate). The parent gates the choice buttons on it. */
   onTypingDone?: () => void;
-  /** Render the narration instantly (no typing) — for already-revealed text
-   *  re-shown after a dialogue closes. */
+  /** Render the narration instantly (no typing) — page variant only. */
   instant?: boolean;
+  /** Read-along playback (overlay variant): the narration's Howl + its
+   *  character timing, from SpeechAudio's onPlayback. */
+  playbackSound?: Howl | null;
+  alignment?: SpeechAlignment | null;
+  /** Narration audio is expected (voice channel on + TTS mounted). */
+  expectAudio?: boolean;
+  /** Narration audio settled (finished or failed) — see ReadAlongText. */
+  audioDone?: boolean;
 }
 
 /**
@@ -44,25 +55,33 @@ export function CharacterSpeechBox({
   variant = "page",
   onTypingDone,
   instant,
+  playbackSound = null,
+  alignment = null,
+  expectAudio = false,
+  audioDone,
 }: Props) {
   const isNarrator = speaker === "narrator";
   const isOverlay = variant === "overlay";
 
   if (isOverlay) {
-    // `text-balance` is intentionally OMITTED on the <p> below — it
-    // makes the browser recompute line breaks every time the typewriter
-    // appends a character, which shifts earlier glyphs left/right by a
-    // subpixel and reads as horizontal jitter. Plain `wrap` is stable
-    // across mid-animation content changes.
+    // Read-along (replaced the typewriter, whose pace never matched the TTS):
+    // the full text mounts dimmed and words brighten as the narrator speaks
+    // them. `text-balance` is safe here for the same reason it was with the
+    // typewriter's transparent remainder — the full text sits in the inline
+    // flow from the first paint (only span opacity animates), so the line
+    // breaker's input never changes. Kerning/ligatures stay locked
+    // (OVERLAY_TEXT_STYLE) against the historical iOS jitter.
     return (
       <p
-        className="text-fluid-narration leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-center"
+        className="text-fluid-narration leading-snug tracking-wide text-paper whitespace-pre-line text-balance font-medium text-center"
         style={OVERLAY_TEXT_STYLE}
       >
-        <Typewriter
+        <ReadAlongText
           text={narration}
-          skipOnClick
-          instant={instant}
+          sound={playbackSound}
+          alignment={alignment}
+          expectAudio={expectAudio}
+          audioDone={audioDone}
           onDone={onTypingDone}
         />
       </p>

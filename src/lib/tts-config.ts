@@ -40,18 +40,39 @@ export function clampSpeed(speed: number): number {
 }
 
 /**
- * Deterministic R2 object key for one spoken line: `tts/<sha256>.mp3`. Hashes
- * the text + voice + model + every setting that affects the audio, so the same
- * line+voice+settings always resolves to the same cached object. Works in the
+ * Character-level timing for one synthesized line, exactly as ElevenLabs'
+ * `with-timestamps` endpoint returns it: `characters[i]` of the INPUT text
+ * is spoken during [start[i], end[i]] seconds of the audio. This is what
+ * drives the read-along word highlight — generated WITH the audio, never
+ * derived from it.
+ */
+export interface SpeechAlignment {
+  characters: string[];
+  character_start_times_seconds: number[];
+  character_end_times_seconds: number[];
+}
+
+/** Cache schema version. v2 = the read-along migration: clips are generated
+ *  via `with-timestamps` and an `.align.json` sits beside each `.mp3`. The
+ *  bump re-keys every line, so pre-alignment clips regenerate lazily on
+ *  first play (one-time credits) instead of living forever without timing. */
+const TTS_CACHE_VERSION = "v2";
+
+/**
+ * Deterministic R2 object keys for one spoken line: the audio at
+ * `tts/<sha256>.mp3` and its timing at `tts/<sha256>.align.json`. Hashes the
+ * text + voice + model + every setting that affects the audio, so the same
+ * line+voice+settings always resolves to the same cached pair. Works in the
  * browser and the Node runtime (both expose `crypto.subtle`).
  */
-export async function ttsObjectKey(
+export async function ttsObjectKeys(
   text: string,
   voiceId: string,
   voiceSpeed: number,
-): Promise<string> {
+): Promise<{ audio: string; align: string }> {
   const s = TTS_VOICE_SETTINGS;
   const sig = [
+    TTS_CACHE_VERSION,
     text,
     voiceId,
     TTS_MODEL,
@@ -68,5 +89,5 @@ export async function ttsObjectKey(
   const hex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  return `tts/${hex}.mp3`;
+  return { audio: `tts/${hex}.mp3`, align: `tts/${hex}.align.json` };
 }

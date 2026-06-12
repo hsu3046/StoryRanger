@@ -47,12 +47,21 @@ import {
 } from "@/lib/narrative";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
+import { DEFAULT_TTS_VOICE, type SpeechAlignment } from "@/lib/tts-config";
+import type { Howl } from "howler";
+import { useChoiceReader } from "@/lib/useChoiceReader";
 
 import { Backpack, DeviceRotate, GearSix, MapTrifold } from "@phosphor-icons/react";
 
 import { SceneImage } from "./SceneImage";
 import { CharacterSpeechBox } from "./CharacterSpeechBox";
-import { ChoiceButton, choiceButtonClass } from "./ChoiceButton";
+import {
+  ChoiceButton,
+  choiceButtonClass,
+  choiceStateClass,
+  TapAgainBadge,
+} from "./ChoiceButton";
+import { MicButton } from "../voice/MicButton";
 import { SettingsModal } from "./SettingsModal";
 import {
   NotificationStack,
@@ -225,6 +234,42 @@ export function StoryPlayer({
    *  narration typewriter finishes (or user taps to skip), and resets
    *  whenever the displayed narration changes (new scene / outcome). */
   const [narrationDone, setNarrationDone] = useState(false);
+  /** The narration VOICE has finished (or will never play — muted/failed).
+   *  Gates the choice read-aloud: the typewriter ending (`narrationDone`)
+   *  says nothing about the audio, which usually outlives the typed text. */
+  const [narrationAudioDone, setNarrationAudioDone] = useState(false);
+  /** Bumped when the child taps the finished narration text → SpeechAudio
+   *  replays the already-loaded line (free — no refetch). Monotonic across
+   *  scenes; SpeechAudio reacts to the CHANGE, not the value. */
+  const [narrationReplayNonce, setNarrationReplayNonce] = useState(0);
+  /** The narration's live playback (Howl + character timing) from
+   *  SpeechAudio — drives the read-along word highlight. Null while the
+   *  clip is fetching and after the line is disposed (scene change). */
+  const [narrationPlayback, setNarrationPlayback] = useState<{
+    sound: Howl;
+    alignment: SpeechAlignment | null;
+  } | null>(null);
+  /** "One voice at a time" — stop the narration when another voice begins
+   *  (choice read-aloud, dialogue, mic). Routed through SpeechAudio's
+   *  stopNonce so it also suppresses a line that is STILL FETCHING (a
+   *  direct sound.stop() can't reach those — the clip would land seconds
+   *  later and speak over whatever interrupted it). The stop settles the
+   *  line: read-along brightens, narrationAudioDone gates fire. */
+  const [narrationStopNonce, setNarrationStopNonce] = useState(0);
+  const stopNarrationVoice = useCallback(() => {
+    setNarrationStopNonce((n) => n + 1);
+  }, []);
+  /** Mic is actively recording — gates the narration tap-to-replay (a
+   *  replay would speak straight into the child's recording). */
+  const [micRecording, setMicRecording] = useState(false);
+  // Opening a dialogue must SILENCE the narrator (case: narration audio
+  // outlives its hidden text and overlaps the NPC's voice). Edge-triggered
+  // on the rising flank only — by the time a branch taken FROM a dialogue
+  // loads the next scene's narration, this flag is already false again.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- edge-triggered stop signal to the audio layer (nonce), not derived state
+    if (dialogueActive) stopNarrationVoice();
+  }, [dialogueActive, stopNarrationVoice]);
   // The narrationKey whose entrance animation has settled on screen. Gates the
   // scene-reward toast: "Received …" must appear once the DESTINATION scene is
   // actually visible, not the instant the overlay (battle/outcome) clears —
@@ -234,11 +279,6 @@ export function StoryPlayer({
   const [enteredNarrationKey, setEnteredNarrationKey] = useState<string | null>(
     null,
   );
-  // The last narrationKey whose typewriter fully revealed. When the narration
-  // block remounts for the SAME key (e.g. a dialogue closed without changing
-  // scene), we render it instantly instead of retyping — the typewriter is for
-  // genuine scene entry only.
-  const revealedNarrationKeyRef = useRef<string | null>(null);
   // All overlay state (puzzle / outcome / encounter+battle) now lives in
   // `state.interaction` so a page refresh resumes on the exact same
   // overlay rather than skipping past. Helpers below re-derive the rich
@@ -765,8 +805,8 @@ export function StoryPlayer({
    *  When the branch defines an `outcome`, we still apply the engine
    *  state immediately (so rewards/medals are realised) but pause UI on
    *  an "outcome page": same scene art, outcome narration, reward chips
-   *  inline. Tap anywhere fires `continueFromOutcome()` and the scene
-   *  transition proceeds. */
+   *  inline. The "Tap to Continue" button fires `continueFromOutcome()`
+   *  and the scene transition proceeds. */
   function commitBranch(branch: Branch, opts: { skipReward: boolean }) {
     // Defence-in-depth behind the visibleBranches filter: a stale closure or
     // a persisted interaction can still hand us a branch whose destination
@@ -1237,12 +1277,56 @@ export function StoryPlayer({
 
   const narrationKey = `${displayedSceneKey}:${displayedNarration.slice(0, 40)}`;
 
-  // Reset the narration-done gate whenever the narration content changes
-  // so the next scene's choices re-enter via the typewriter→fade flow.
+  // Reset the narration-done gates whenever the narration content changes
+  // so the next scene's choices re-enter via the typewriter→fade flow (and
+  // the choice read-aloud waits for the NEW scene's voice again).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: narrationKey transition drives the gate reset
     setNarrationDone(false);
+    setNarrationAudioDone(false);
   }, [narrationKey]);
+
+  // ── Voice accessibility — choice read-aloud + push-to-talk picker ────
+  // Labels in the EXACT order the choices row renders (asks, then branches),
+  // so an index from the reader/mic maps 1:1 onto a tile.
+  const voiceChoiceLabels = useMemo(() => {
+    const asks = pendingEncounter ? [] : visibleAsks;
+    return [
+      ...asks.map((a) => a.label),
+      ...visibleBranches.map((b) => b.label),
+    ];
+  }, [pendingEncounter, visibleAsks, visibleBranches]);
+
+  /** Resolve a reader/mic index back to the same action its tile performs. */
+  function confirmVoiceChoice(index: number) {
+    const asks = pendingEncounter ? [] : visibleAsks;
+    if (index < asks.length) {
+      const ask = asks[index];
+      if (ask) {
+        setAskRequest({
+          characterId: ask.characterId,
+          question: ask.label,
+          key: Date.now(),
+          unlock: ask.unlock,
+        });
+      }
+      return;
+    }
+    const branch = visibleBranches[index - asks.length];
+    if (branch) handleChoose(branch);
+  }
+
+  // Tap-to-read only (the auto read-aloud sequence was removed by user
+  // decision): the first tap on a choice speaks it, the second confirms.
+  const choiceReader = useChoiceReader({
+    labels: voiceChoiceLabels,
+    // Same narrator voice as the scene so the read-aloud doesn't switch
+    // characters mid-beat; labels are static JSON → R2-cacheable.
+    voiceId: displayedSpeaker?.voice ?? DEFAULT_TTS_VOICE,
+    voiceSpeed: displayedSpeaker?.voiceSpeed ?? 1,
+    volume: voiceVolume,
+    onConfirm: confirmVoiceChoice,
+  });
 
   // Scene reward arrival — show the item toast only once the player has actually
   // LANDED on the rewarded scene: overlay (outcome/encounter) dismissed AND the
@@ -1393,14 +1477,14 @@ export function StoryPlayer({
 
       {/* Bottom layout — narration (above), choices row (below). Hidden
           while a dialogue bubble is open so the two UIs don't overlap.
-          During an outcome page the whole region also acts as a tap
-          target → continueFromOutcome(). */}
+          NOT an outcome tap target (it used to be) — advancing goes through
+          the "Tap to Continue" button only, so tapping the outcome
+          narration replays it instead of skipping the page. */}
       <div
         className={`absolute inset-x-0 bottom-0 z-10 flex flex-col items-stretch gap-3 px-safe pb-safe transition-opacity duration-200 sm:px-safe-lg lg:pb-safe-lg lg:gap-4 short:gap-2 short:pb-safe-sm ${
           dialogueActive ? "pointer-events-none opacity-0" : "opacity-100"
-        } ${showingOutcome ? "cursor-pointer" : ""}`}
+        }`}
         aria-hidden={dialogueActive}
-        onClick={showingOutcome ? continueFromOutcome : undefined}
       >
         {/* Narration — cinematic subtitle style. Block centered + text
             centered so left/right margins look identical regardless of
@@ -1445,7 +1529,22 @@ export function StoryPlayer({
                 // narration from covering the whole scene — tightened to
                 // 40dvh on landscape phones, where 60dvh of a 393px-tall
                 // viewport left almost no scene visible.
-                className="max-h-[60dvh] short:max-h-[40dvh] overflow-y-auto pr-2"
+                className={`max-h-[60dvh] short:max-h-[40dvh] overflow-y-auto pr-2${
+                  narrationDone && voiceVolume > 0 ? " cursor-pointer" : ""
+                }`}
+                // Tap-to-replay, mirroring the choice buttons' "tap = hear
+                // it" pattern — the read-along highlight re-runs with the
+                // replay (it follows the audio clock). Stops the choice
+                // read-aloud first so narrator + reader don't overlap.
+                onClick={() => {
+                  // No replay while the mic is open — the narrator would
+                  // speak straight into the child's recording.
+                  if (!narrationDone || voiceVolume <= 0 || micRecording) {
+                    return;
+                  }
+                  choiceReader.stopAll();
+                  setNarrationReplayNonce((n) => n + 1);
+                }}
               >
                 <CharacterSpeechBox
                   speaker={displayedSpeakerId}
@@ -1453,11 +1552,16 @@ export function StoryPlayer({
                   characterColor={displayedSpeaker?.color ?? "#5a4128"}
                   narration={displayedNarration}
                   variant="overlay"
-                  instant={revealedNarrationKeyRef.current === narrationKey}
-                  onTypingDone={() => {
-                    revealedNarrationKeyRef.current = narrationKey;
-                    setNarrationDone(true);
-                  }}
+                  playbackSound={narrationPlayback?.sound ?? null}
+                  alignment={narrationPlayback?.alignment ?? null}
+                  // Mirrors the SpeechAudio mount condition below — within
+                  // this block pendingEncounter/portraitBlocked are already
+                  // false, so only the volume + speaker checks remain.
+                  expectAudio={
+                    voiceVolume > 0 && hydrated && !!displayedSpeaker
+                  }
+                  audioDone={narrationAudioDone}
+                  onTypingDone={() => setNarrationDone(true)}
                 />
               </motion.div>
             )}
@@ -1466,8 +1570,10 @@ export function StoryPlayer({
         </div>
 
         {/* Choices row — horizontal at the very bottom. While an outcome
-            is pending, we replace the choice row with reward chips + a
-            "tap anywhere to continue" hint. */}
+            is pending, we replace the choice row with a "Tap to Continue"
+            button. The button (not the whole screen) is the ONLY advance
+            target — a full-screen overlay used to swallow every tap, which
+            made the outcome narration impossible to tap-replay. */}
         {(() => {
           if (showingOutcome && pendingOutcome) {
             // Outcome bridge shows only the outgoing-scene pause + outcome text.
@@ -1475,16 +1581,13 @@ export function StoryPlayer({
             // toast separately.
             return (
               <div className="flex flex-col items-center gap-3">
-                <span
-                  className="text-sm font-semibold uppercase tracking-wide text-paper"
-                  style={{
-                    textShadow:
-                      "0 2px 6px rgba(0,0,0,0.85), 0 1px 0 rgba(0,0,0,0.95)",
-                  }}
-                  aria-hidden
+                <button
+                  type="button"
+                  onClick={continueFromOutcome}
+                  className="rounded-pill bg-paper/85 px-6 py-2.5 text-sm font-semibold uppercase tracking-wide text-ink shadow-button ring-1 ring-ink-soft/15 backdrop-blur-sm transition-all hover:bg-paper hover:ring-accent/50 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-button-pressed"
                 >
-                  Tap anywhere to continue
-                </span>
+                  Tap to Continue
+                </button>
               </div>
             );
           }
@@ -1573,14 +1676,16 @@ export function StoryPlayer({
                     label={ask.label}
                     iconBase={iconBase}
                     iconFallbackBase={iconFallbackBase}
-                    onSelect={() =>
-                      setAskRequest({
-                        characterId: ask.characterId,
-                        question: ask.label,
-                        key: Date.now(),
-                        unlock: ask.unlock,
-                      })
-                    }
+                    reading={choiceReader.readingIndex === i}
+                    armed={choiceReader.armedIndex === i}
+                    // Two-step: first tap reads the label aloud + arms, the
+                    // second tap confirms (the reader degrades to single-tap
+                    // when the voice channel is muted). One voice at a time:
+                    // the read-aloud silences a still-speaking narrator.
+                    onSelect={() => {
+                      stopNarrationVoice();
+                      choiceReader.tap(i);
+                    }}
                   />,
                 );
               })}
@@ -1588,25 +1693,53 @@ export function StoryPlayer({
                 tile(
                   branch.id,
                   askChoices.length + i,
-                  <ChoiceButton branch={branch} onSelect={handleChoose} />,
+                  <ChoiceButton
+                    branch={branch}
+                    reading={
+                      choiceReader.readingIndex === askChoices.length + i
+                    }
+                    armed={choiceReader.armedIndex === askChoices.length + i}
+                    onSelect={() => {
+                      stopNarrationVoice();
+                      choiceReader.tap(askChoices.length + i);
+                    }}
+                  />,
                 ),
+              )}
+              {/* Push-to-talk — say a choice instead of tapping it. Renders
+                  nothing when unsupported/denied/cooling, so the row is
+                  byte-identical to the pre-voice UI in those cases. Gated on
+                  the narration VOICE having finished (not just the
+                  typewriter) — an open mic under a still-speaking narrator
+                  would record the narrator. Muted voice channel → no audio
+                  to wait for. */}
+              {narrationDone && (voiceVolume <= 0 || narrationAudioDone) && (
+                <div className="flex shrink-0 items-center justify-center self-center">
+                  <MicButton
+                    labels={voiceChoiceLabels}
+                    onMatch={(i) => {
+                      getAudio().playSfx(SFX.CHOICE);
+                      confirmVoiceChoice(i);
+                    }}
+                    onRecordingStart={() => {
+                      // One voice at a time, and NOTHING into the mic: stop
+                      // the read-aloud AND a still/again-playing narrator.
+                      choiceReader.stopAll();
+                      stopNarrationVoice();
+                    }}
+                    onRecordingChange={setMicRecording}
+                    size="row"
+                  />
+                </div>
               )}
             </div>
           );
         })()}
       </div>
 
-      {/* Outcome tap-to-continue overlay. Sits BELOW the bottom UI
-          (z-10) but ABOVE the scene gradients/image (default z) — tapping
-          anywhere outside the speech box advances. */}
-      {showingOutcome && (
-        <button
-          type="button"
-          aria-label="Continue"
-          onClick={continueFromOutcome}
-          className="absolute inset-0 z-[5] cursor-pointer"
-        />
-      )}
+      {/* (The former full-screen tap-to-continue overlay is gone: it sat
+          over the narration and swallowed the tap-to-replay. Advancing now
+          happens ONLY via the "Tap to Continue" button in the bottom row.) */}
 
       {/* `!portraitBlocked` — don't narrate behind the rotate prompt; the
           remount after rotating replays this line from the start. */}
@@ -1617,6 +1750,12 @@ export function StoryPlayer({
           voiceSpeed={displayedSpeaker.voiceSpeed}
           volume={voiceVolume}
           playKey={narrationKey}
+          onSettled={() => setNarrationAudioDone(true)}
+          replayNonce={narrationReplayNonce}
+          stopNonce={narrationStopNonce}
+          onPlayback={(sound, alignment) =>
+            setNarrationPlayback(sound ? { sound, alignment } : null)
+          }
         />
       )}
 
@@ -1890,21 +2029,36 @@ function AskChip({
   label,
   iconBase,
   iconFallbackBase,
+  reading,
+  armed,
   onSelect,
 }: {
   label: string;
   iconBase?: string;
   iconFallbackBase?: string;
+  /** Read-aloud is playing this label (highlight while it speaks). */
+  reading?: boolean;
+  /** First tap landed — next tap confirms. */
+  armed?: boolean;
   onSelect: () => void;
 }) {
   return (
-    <button type="button" onClick={onSelect} className={choiceButtonClass}>
+    <button
+      type="button"
+      onClick={onSelect}
+      className={choiceButtonClass + choiceStateClass(reading, armed)}
+    >
+      {armed && <TapAgainBadge />}
       {/* Text centers within the space LEFT of the portrait (flex-1), not the
           whole button — keeps a long question from clipping under the avatar
           while a wide gap sits empty on the left. */}
       <span className="min-w-0 flex-1 text-center">{label}</span>
       {iconBase && (
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:h-7 short:w-7">
+        // -mr-2 pulls the portrait toward the pill's right edge so its gap
+        // there matches the vertical one: h-20 pill − h-12 avatar = 16px
+        // top/bottom, but px-6 left 24px on the right. (short: py-1.5 ≈ 6px
+        // vertical vs px-3 = 12px → -1.5.)
+        <span className="-mr-2 h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:-mr-1.5 short:h-7 short:w-7">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}
