@@ -47,7 +47,8 @@ import {
 } from "@/lib/narrative";
 import { getAudio, SFX } from "@/lib/audio-engine";
 import { prefetchNarration } from "@/lib/tts-prefetch";
-import { DEFAULT_TTS_VOICE } from "@/lib/tts-config";
+import { DEFAULT_TTS_VOICE, type SpeechAlignment } from "@/lib/tts-config";
+import type { Howl } from "howler";
 import { useChoiceReader } from "@/lib/useChoiceReader";
 
 import { Backpack, DeviceRotate, GearSix, MapTrifold } from "@phosphor-icons/react";
@@ -241,6 +242,13 @@ export function StoryPlayer({
    *  replays the already-loaded line (free — no refetch). Monotonic across
    *  scenes; SpeechAudio reacts to the CHANGE, not the value. */
   const [narrationReplayNonce, setNarrationReplayNonce] = useState(0);
+  /** The narration's live playback (Howl + character timing) from
+   *  SpeechAudio — drives the read-along word highlight. Null while the
+   *  clip is fetching and after the line is disposed (scene change). */
+  const [narrationPlayback, setNarrationPlayback] = useState<{
+    sound: Howl;
+    alignment: SpeechAlignment | null;
+  } | null>(null);
   // The narrationKey whose entrance animation has settled on screen. Gates the
   // scene-reward toast: "Received …" must appear once the DESTINATION scene is
   // actually visible, not the instant the overlay (battle/outcome) clears —
@@ -250,11 +258,6 @@ export function StoryPlayer({
   const [enteredNarrationKey, setEnteredNarrationKey] = useState<string | null>(
     null,
   );
-  // The last narrationKey whose typewriter fully revealed. When the narration
-  // block remounts for the SAME key (e.g. a dialogue closed without changing
-  // scene), we render it instantly instead of retyping — the typewriter is for
-  // genuine scene entry only.
-  const revealedNarrationKeyRef = useRef<string | null>(null);
   // All overlay state (puzzle / outcome / encounter+battle) now lives in
   // `state.interaction` so a page refresh resumes on the exact same
   // overlay rather than skipping past. Helpers below re-derive the rich
@@ -1509,10 +1512,9 @@ export function StoryPlayer({
                   narrationDone && voiceVolume > 0 ? " cursor-pointer" : ""
                 }`}
                 // Tap-to-replay, mirroring the choice buttons' "tap = hear
-                // it" pattern. While typing, the Typewriter's own click
-                // handler skips the animation and this handler no-ops
-                // (narrationDone false) — one tap never does both. Stops the
-                // choice read-aloud first so narrator + reader don't overlap.
+                // it" pattern — the read-along highlight re-runs with the
+                // replay (it follows the audio clock). Stops the choice
+                // read-aloud first so narrator + reader don't overlap.
                 onClick={() => {
                   if (!narrationDone || voiceVolume <= 0) return;
                   choiceReader.stopAll();
@@ -1525,11 +1527,16 @@ export function StoryPlayer({
                   characterColor={displayedSpeaker?.color ?? "#5a4128"}
                   narration={displayedNarration}
                   variant="overlay"
-                  instant={revealedNarrationKeyRef.current === narrationKey}
-                  onTypingDone={() => {
-                    revealedNarrationKeyRef.current = narrationKey;
-                    setNarrationDone(true);
-                  }}
+                  playbackSound={narrationPlayback?.sound ?? null}
+                  alignment={narrationPlayback?.alignment ?? null}
+                  // Mirrors the SpeechAudio mount condition below — within
+                  // this block pendingEncounter/portraitBlocked are already
+                  // false, so only the volume + speaker checks remain.
+                  expectAudio={
+                    voiceVolume > 0 && hydrated && !!displayedSpeaker
+                  }
+                  audioDone={narrationAudioDone}
+                  onTypingDone={() => setNarrationDone(true)}
                 />
               </motion.div>
             )}
@@ -1716,6 +1723,9 @@ export function StoryPlayer({
           playKey={narrationKey}
           onSettled={() => setNarrationAudioDone(true)}
           replayNonce={narrationReplayNonce}
+          onPlayback={(sound, alignment) =>
+            setNarrationPlayback(sound ? { sound, alignment } : null)
+          }
         />
       )}
 

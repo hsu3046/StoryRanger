@@ -2,7 +2,13 @@ import { NextResponse, after } from "next/server";
 import { z } from "zod";
 
 import { hasElevenLabsKey, isVoiceError, synthesizeSpeech } from "@/lib/elevenlabs";
-import { DEFAULT_TTS_VOICE, ttsObjectKey, SPEED_MIN, SPEED_MAX } from "@/lib/tts-config";
+import {
+  DEFAULT_TTS_VOICE,
+  ttsObjectKeys,
+  SPEED_MIN,
+  SPEED_MAX,
+  type SpeechAlignment,
+} from "@/lib/tts-config";
 import { hasR2, r2Get, r2Put } from "@/lib/r2";
 import {
   consumeRateLimit,
@@ -34,7 +40,11 @@ const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
  */
 const inFlight = new Map<
   string,
-  Promise<{ buffer: Buffer; usedFallbackVoice: boolean }>
+  Promise<{
+    buffer: Buffer;
+    alignment: SpeechAlignment | null;
+    usedFallbackVoice: boolean;
+  }>
 >();
 
 /** Synthesize, falling back to the default voice when the requested voice
@@ -44,10 +54,14 @@ async function synthesizeWithVoiceFallback(
   text: string,
   voiceId: string,
   voiceSpeed: number,
-): Promise<{ buffer: Buffer; usedFallbackVoice: boolean }> {
+): Promise<{
+  buffer: Buffer;
+  alignment: SpeechAlignment | null;
+  usedFallbackVoice: boolean;
+}> {
   try {
     return {
-      buffer: await synthesizeSpeech(text, voiceId, voiceSpeed),
+      ...(await synthesizeSpeech(text, voiceId, voiceSpeed)),
       usedFallbackVoice: false,
     };
   } catch (err) {
@@ -56,7 +70,7 @@ async function synthesizeWithVoiceFallback(
         `[tts] voice "${voiceId}" failed (${err instanceof Error ? err.message : err}); falling back to default voice`,
       );
       return {
-        buffer: await synthesizeSpeech(text, DEFAULT_TTS_VOICE, voiceSpeed),
+        ...(await synthesizeSpeech(text, DEFAULT_TTS_VOICE, voiceSpeed)),
         usedFallbackVoice: true,
       };
     }
@@ -102,20 +116,28 @@ export async function POST(req: Request) {
   // still synthesizing (or just finished) leaves a window where the client
   // misses and asks us to synthesize the same line again. Serving the cached
   // bytes costs no ElevenLabs credits, so it doesn't consume the budget.
-  const cacheKey =
+  const cacheKeys =
     body.cache && hasR2()
-      ? await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed)
+      ? await ttsObjectKeys(body.text, body.voiceId, body.voiceSpeed)
       : null;
-  if (cacheKey) {
-    const cached = await r2Get(cacheKey);
+  if (cacheKeys) {
+    const [cached, cachedAlign] = await Promise.all([
+      r2Get(cacheKeys.audio),
+      r2Get(cacheKeys.align),
+    ]);
     if (cached) {
-      return new NextResponse(new Uint8Array(cached), {
-        status: 200,
-        headers: {
-          "Content-Type": "audio/mpeg",
-          "Cache-Control": IMMUTABLE_CACHE,
-        },
-      });
+      let alignment: SpeechAlignment | null = null;
+      if (cachedAlign) {
+        try {
+          alignment = JSON.parse(cachedAlign.toString("utf-8")) as SpeechAlignment;
+        } catch {
+          /* malformed align object — audio still plays, highlight falls back */
+        }
+      }
+      return NextResponse.json(
+        { audioBase64: cached.toString("base64"), alignment },
+        { headers: { "Cache-Control": IMMUTABLE_CACHE } },
+      );
     }
   }
 
@@ -135,7 +157,8 @@ export async function POST(req: Request) {
   //     join it — the rare race over-consumes one weight (conservative) but
   //     never synthesizes twice.
   const flightKey =
-    cacheKey ?? (await ttsObjectKey(body.text, body.voiceId, body.voiceSpeed));
+    cacheKeys?.audio ??
+    (await ttsObjectKeys(body.text, body.voiceId, body.voiceSpeed)).audio;
   let flight = inFlight.get(flightKey);
   let created = false;
   if (!flight) {
@@ -176,9 +199,10 @@ export async function POST(req: Request) {
   }
 
   let buffer: Buffer;
+  let alignment: SpeechAlignment | null = null;
   let usedFallbackVoice = false;
   try {
-    ({ buffer, usedFallbackVoice } = await flight);
+    ({ buffer, alignment, usedFallbackVoice } = await flight);
   } catch (err) {
     console.error("[tts] ElevenLabs error", err);
     return NextResponse.json(
@@ -200,10 +224,21 @@ export async function POST(req: Request) {
   // cached, identical future requests legitimately synthesize anew).
   const cacheable = body.cache && !usedFallbackVoice;
   if (created) {
-    if (cacheable && cacheKey) {
+    if (cacheable && cacheKeys) {
       after(async () => {
         try {
-          await r2Put(cacheKey, buffer, "audio/mpeg", IMMUTABLE_CACHE);
+          // Audio + its timing land as a PAIR at the same content hash; the
+          // align write is best-effort (a missing align file just means the
+          // highlight falls back to fade-in for that line).
+          await r2Put(cacheKeys.audio, buffer, "audio/mpeg", IMMUTABLE_CACHE);
+          if (alignment) {
+            await r2Put(
+              cacheKeys.align,
+              Buffer.from(JSON.stringify(alignment), "utf-8"),
+              "application/json",
+              IMMUTABLE_CACHE,
+            );
+          }
         } catch (e) {
           console.warn("[tts] R2 cache write failed:", String(e));
         } finally {
@@ -215,13 +250,17 @@ export async function POST(req: Request) {
     }
   }
 
-  return new NextResponse(new Uint8Array(buffer), {
-    status: 200,
-    headers: {
-      "Content-Type": "audio/mpeg",
-      // Deterministic narration is immutable-cacheable; unique dialogue lines
-      // (and fallback-voice clips) must not be stored.
-      "Cache-Control": cacheable ? IMMUTABLE_CACHE : "no-store",
+  // JSON envelope (audio as base64 + character timing) — the read-along
+  // highlight needs both in one round trip, especially for uncacheable
+  // dialogue lines where there is no R2 pair to fetch.
+  return NextResponse.json(
+    { audioBase64: buffer.toString("base64"), alignment },
+    {
+      headers: {
+        // Deterministic narration is immutable-cacheable; unique dialogue
+        // lines (and fallback-voice clips) must not be stored.
+        "Cache-Control": cacheable ? IMMUTABLE_CACHE : "no-store",
+      },
     },
-  });
+  );
 }

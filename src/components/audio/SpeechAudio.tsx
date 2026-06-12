@@ -3,7 +3,8 @@
 import { Howl } from "howler";
 import { useEffect, useRef, useState } from "react";
 
-import { fetchSpeechBlob } from "@/lib/speech-fetch";
+import { fetchSpeechLine } from "@/lib/speech-fetch";
+import type { SpeechAlignment } from "@/lib/tts-config";
 
 interface Props {
   text: string;
@@ -38,6 +39,12 @@ interface Props {
    * load pipeline.
    */
   replayNonce?: number;
+  /**
+   * The line's playable sound + its character timing are ready (fired right
+   * before play()), or got disposed (`null, null` — text changed, unmount).
+   * The read-along highlight polls the Howl's clock against the alignment.
+   */
+  onPlayback?: (sound: Howl | null, alignment: SpeechAlignment | null) => void;
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -65,10 +72,15 @@ export function SpeechAudio({
   cache = true,
   onSettled,
   replayNonce = 0,
+  onPlayback,
 }: Props) {
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
   const urlRef = useRef<string | null>(null);
+  const onPlaybackRef = useRef(onPlayback);
+  useEffect(() => {
+    onPlaybackRef.current = onPlayback;
+  });
   // The playKey we've already loaded+played. A line plays AT MOST ONCE per key;
   // re-runs of the load effect (mute↔unmute crossing the volume-0 boundary, a
   // settings open/close, any parent re-render that flips `enabled`) must never
@@ -88,6 +100,7 @@ export function SpeechAudio({
       soundRef.current.stop();
       soundRef.current.unload();
       soundRef.current = null;
+      onPlaybackRef.current?.(null, null);
     }
     if (urlRef.current) {
       URL.revokeObjectURL(urlRef.current);
@@ -139,16 +152,16 @@ export function SpeechAudio({
       try {
         // R2 cache → /api/tts, with all cooldown/429/503 handling shared
         // with the choice read-aloud path (speech-fetch.ts).
-        const blob = await fetchSpeechBlob(text, voiceId, voiceSpeed, cache);
+        const line = await fetchSpeechLine(text, voiceId, voiceSpeed, cache);
         if (cancelled) return;
-        if (!blob) {
+        if (!line) {
           // This line will never play (budget/cooldown/server error) —
           // unblock anything waiting on the narration voice.
           settle();
           return;
         }
 
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(line.blob);
         urlRef.current = url;
         const sound = new Howl({
           src: [url],
@@ -176,6 +189,9 @@ export function SpeechAudio({
           },
         });
         soundRef.current = sound;
+        // Hand the sound + timing to the read-along highlight BEFORE play()
+        // so the very first frame of audio already has a sync target.
+        onPlaybackRef.current?.(sound, line.alignment);
         sound.play();
       } catch (err) {
         if (!cancelled) {

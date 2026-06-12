@@ -1,8 +1,10 @@
 "use client";
 
+import type { Howl } from "howler";
 import { motion } from "framer-motion";
 
-import { Typewriter } from "../play/Typewriter";
+import type { SpeechAlignment } from "@/lib/tts-config";
+import { ReadAlongText } from "../play/ReadAlongText";
 
 interface Props {
   /** Vertical offset (in px) — bubble sits to the right of the portrait
@@ -16,15 +18,24 @@ interface Props {
   action?: string | null;
   /** Hero is waiting for an LLM response (show typing dots). */
   loading?: boolean;
-  /** Fires once the reply has finished streaming (or was tap-skipped) — the
-   *  layer uses it to hold the choice cards back until the bubble lands. */
+  /** Fires once the reply is on screen (read-along mounts it whole, so this
+   *  is immediate) — the layer uses it to release the choice cards. */
   onTypingDone?: () => void;
+  /** Read-along playback for THIS reply (from the layer's SpeechAudio). */
+  playbackSound?: Howl | null;
+  alignment?: SpeechAlignment | null;
+  /** Reply audio is expected (voice on + a TTS mount for this reply). */
+  expectAudio?: boolean;
+  /** Reply audio settled (finished or will never play). */
+  audioDone?: boolean;
 }
 
 /**
  * Speech bubble pinned to the right side of the dialogue rail. No tail —
  * the bubble simply slides in next to the portrait. Background runs at
- * ~90% opacity so the scene art reads through.
+ * ~90% opacity so the scene art reads through. The reply renders whole and
+ * read-along-highlights with the character's voice (same mechanism as the
+ * scene narration; LLM lines carry their timing in the /api/tts envelope).
  */
 export function DialogueBubble({
   railTopPx,
@@ -34,6 +45,10 @@ export function DialogueBubble({
   action,
   loading,
   onTypingDone,
+  playbackSound = null,
+  alignment = null,
+  expectAudio = false,
+  audioDone,
 }: Props) {
   return (
     <motion.div
@@ -74,13 +89,12 @@ export function DialogueBubble({
               <span className="animate-bounce [animation-delay:240ms]">·</span>
             </span>
           ) : (
-            // Livelier than narration but still an easy read — keeps the
-            // bubble feeling "live" without per-character drag. Tap to skip
-            // straight to the full reply.
-            <Typewriter
+            <ReadAlongText
               text={reply}
-              speed={20}
-              skipOnClick
+              sound={playbackSound}
+              alignment={alignment}
+              expectAudio={expectAudio}
+              audioDone={audioDone}
               onDone={onTypingDone}
             />
           )}

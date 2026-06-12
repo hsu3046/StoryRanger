@@ -4,7 +4,7 @@ import {
   retryAfterSecondsFrom,
   startTtsCooldown,
 } from "./tts-cooldown";
-import { ttsObjectKey } from "./tts-config";
+import { ttsObjectKeys } from "./tts-config";
 
 /**
  * Best-effort cache warmup. While the player listens to scene N, fire
@@ -32,7 +32,7 @@ export async function prefetchNarration(
   let key: string | null = null;
   try {
     if (!text || !voiceId) return;
-    key = await ttsObjectKey(text, voiceId, voiceSpeed);
+    key = (await ttsObjectKeys(text, voiceId, voiceSpeed)).audio;
     if (inFlight.has(key) || done.has(key)) return;
     inFlight.add(key);
 

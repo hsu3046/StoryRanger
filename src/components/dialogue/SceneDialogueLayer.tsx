@@ -14,6 +14,8 @@ import type {
 } from "@/types/story";
 import { canTalkTo } from "@/lib/dialogue-personas";
 import { assetUrl } from "@/lib/asset-paths";
+import type { Howl } from "howler";
+import type { SpeechAlignment } from "@/lib/tts-config";
 import { SpeechAudio } from "../audio/SpeechAudio";
 import { DialogueBubble } from "./DialogueBubble";
 import { DialogueChoiceCards } from "./DialogueChoiceCards";
@@ -133,6 +135,19 @@ export function SceneDialogueLayer({
   // Bumps each time a reply lands → re-keys SpeechAudio so the same character
   // speaking again (even with identical text) replays the voice line.
   const [speakNonce, setSpeakNonce] = useState(0);
+  // The reply's live playback (Howl + character timing) from SpeechAudio —
+  // drives the bubble's read-along highlight. Reset per reply below.
+  const [replyPlayback, setReplyPlayback] = useState<{
+    sound: Howl;
+    alignment: SpeechAlignment | null;
+  } | null>(null);
+  // The reply's audio settled (finished or will never play) — lets the
+  // bubble brighten the remainder instead of waiting forever.
+  const [replyAudioDone, setReplyAudioDone] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- per-reply reset of the read-along state
+    setReplyAudioDone(false);
+  }, [active, speakNonce]);
   // Choices are held back until the reply has finished streaming PLUS a short
   // beat — otherwise the buttons pop in over a half-typed bubble.
   const [choicesReady, setChoicesReady] = useState(false);
@@ -525,6 +540,10 @@ export function SceneDialogueLayer({
           volume={voiceVolume}
           playKey={`${active}:${speakNonce}`}
           cache={false}
+          onSettled={() => setReplyAudioDone(true)}
+          onPlayback={(sound, alignment) =>
+            setReplyPlayback(sound ? { sound, alignment } : null)
+          }
         />
       )}
 
@@ -541,6 +560,17 @@ export function SceneDialogueLayer({
             action={latestReply?.action ?? null}
             loading={loading || !latestReply}
             onTypingDone={handleReplyTyped}
+            playbackSound={replyPlayback?.sound ?? null}
+            alignment={replyPlayback?.alignment ?? null}
+            // Mirrors the SpeechAudio mount above: silent fallback replies
+            // and voiceless characters expect no audio → bubble shows bright.
+            expectAudio={
+              voiceVolume > 0 &&
+              !!latestReply?.reply &&
+              !latestReply.silent &&
+              !!characterMap[active]?.voice
+            }
+            audioDone={replyAudioDone}
           />
         )}
       </AnimatePresence>

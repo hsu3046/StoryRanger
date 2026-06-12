@@ -3,7 +3,7 @@
 import { Howl } from "howler";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchSpeechBlob } from "@/lib/speech-fetch";
+import { fetchSpeechLine } from "@/lib/speech-fetch";
 
 /**
  * Choice read-aloud orchestrator — the pre-reader accessibility layer.
@@ -16,7 +16,7 @@ import { fetchSpeechBlob } from "@/lib/speech-fetch";
  * voice channel is muted there is nothing to listen to, so taps degrade to
  * the classic single-tap select.
  *
- * Playback mirrors SpeechAudio: blob via fetchSpeechBlob (R2 cache → TTS),
+ * Playback mirrors SpeechAudio: bytes via fetchSpeechLine (R2 cache → TTS),
  * Howler Web Audio (html5:false) so it mixes with the BGM on iOS.
  */
 
@@ -111,10 +111,12 @@ export function useChoiceReader({
     async (index: number, gen: number): Promise<void> => {
       const label = labelsRef.current[index];
       if (!label) return;
-      const blob = await fetchSpeechBlob(label, voiceId, voiceSpeed, cache);
-      if (!blob || gen !== genRef.current) return;
+      // Alignment is ignored here — a 2–6 word label brightening word-by-word
+      // would be noise; the button-level highlight is the read-along cue.
+      const line = await fetchSpeechLine(label, voiceId, voiceSpeed, cache);
+      if (!line || gen !== genRef.current) return;
       disposeHowl();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(line.blob);
       urlRef.current = url;
       await new Promise<void>((resolve) => {
         const sound = new Howl({
