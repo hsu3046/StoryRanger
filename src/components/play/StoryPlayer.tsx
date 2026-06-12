@@ -237,6 +237,10 @@ export function StoryPlayer({
    *  Gates the choice read-aloud: the typewriter ending (`narrationDone`)
    *  says nothing about the audio, which usually outlives the typed text. */
   const [narrationAudioDone, setNarrationAudioDone] = useState(false);
+  /** Bumped when the child taps the finished narration text → SpeechAudio
+   *  replays the already-loaded line (free — no refetch). Monotonic across
+   *  scenes; SpeechAudio reacts to the CHANGE, not the value. */
+  const [narrationReplayNonce, setNarrationReplayNonce] = useState(0);
   // The narrationKey whose entrance animation has settled on screen. Gates the
   // scene-reward toast: "Received …" must appear once the DESTINATION scene is
   // actually visible, not the instant the overlay (battle/outcome) clears —
@@ -1511,7 +1515,19 @@ export function StoryPlayer({
                 // narration from covering the whole scene — tightened to
                 // 40dvh on landscape phones, where 60dvh of a 393px-tall
                 // viewport left almost no scene visible.
-                className="max-h-[60dvh] short:max-h-[40dvh] overflow-y-auto pr-2"
+                className={`max-h-[60dvh] short:max-h-[40dvh] overflow-y-auto pr-2${
+                  narrationDone && voiceVolume > 0 ? " cursor-pointer" : ""
+                }`}
+                // Tap-to-replay, mirroring the choice buttons' "tap = hear
+                // it" pattern. While typing, the Typewriter's own click
+                // handler skips the animation and this handler no-ops
+                // (narrationDone false) — one tap never does both. Stops the
+                // choice read-aloud first so narrator + reader don't overlap.
+                onClick={() => {
+                  if (!narrationDone || voiceVolume <= 0) return;
+                  choiceReader.stopAll();
+                  setNarrationReplayNonce((n) => n + 1);
+                }}
               >
                 <CharacterSpeechBox
                   speaker={displayedSpeakerId}
@@ -1709,6 +1725,7 @@ export function StoryPlayer({
           volume={voiceVolume}
           playKey={narrationKey}
           onSettled={() => setNarrationAudioDone(true)}
+          replayNonce={narrationReplayNonce}
         />
       )}
 

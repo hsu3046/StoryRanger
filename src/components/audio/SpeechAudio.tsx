@@ -29,6 +29,15 @@ interface Props {
    * aren't synced — long narration audio outlives the typed text).
    */
   onSettled?: () => void;
+  /**
+   * Bump to replay the CURRENT line from the start (tap-the-narration
+   * "hear it again"). Replays the already-loaded Howl — no refetch, no new
+   * TTS cost — and is ignored while the line is still playing, so a child
+   * hammering the text can't stack or restart mid-word. Distinct from
+   * `playKey`, which identifies the line itself and would re-run the whole
+   * load pipeline.
+   */
+  replayNonce?: number;
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -55,6 +64,7 @@ export function SpeechAudio({
   playKey,
   cache = true,
   onSettled,
+  replayNonce = 0,
 }: Props) {
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
@@ -89,6 +99,20 @@ export function SpeechAudio({
   useEffect(() => {
     soundRef.current?.volume(clamp(volume));
   }, [volume]);
+
+  // Replay-on-demand. Tracks the last nonce in a ref (not a dep-less mount
+  // check) so a remount with a stale nonce (scene re-show after dialogue)
+  // doesn't replay uninvited. Only an already-loaded, currently-idle sound
+  // replays — never a refetch, never an interruption of an ongoing line.
+  const lastReplayRef = useRef(replayNonce);
+  useEffect(() => {
+    if (replayNonce === lastReplayRef.current) return;
+    lastReplayRef.current = replayNonce;
+    const sound = soundRef.current;
+    if (!sound || !enabled || sound.playing()) return;
+    sound.seek(0);
+    sound.play();
+  }, [replayNonce, enabled]);
 
   useEffect(() => {
     let cancelled = false;

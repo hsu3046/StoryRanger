@@ -49,14 +49,19 @@ export function CharacterSpeechBox({
   const isOverlay = variant === "overlay";
 
   if (isOverlay) {
-    // `text-balance` is intentionally OMITTED on the <p> below — it
-    // makes the browser recompute line breaks every time the typewriter
-    // appends a character, which shifts earlier glyphs left/right by a
-    // subpixel and reads as horizontal jitter. Plain `wrap` is stable
-    // across mid-animation content changes.
+    // `text-balance` history: it was removed once because line breaks
+    // recomputed on every typewriter append (subpixel jitter on iOS). That
+    // was under an older Typewriter structure. Today the Typewriter keeps
+    // the FULL text in the inline flow from the first paint (the revealed
+    // part + a transparent remainder as bare siblings in one parent), so
+    // the input to the line breaker is CONSTANT across the whole animation
+    // — balanced break positions can't move while typing. Kerning and
+    // ligatures are also locked (OVERLAY_TEXT_STYLE), removing the other
+    // historical jitter source. Balance is what fixes mid-sentence breaks
+    // like "…the cellar / door, \"Dear!…\"" into evenly weighted lines.
     return (
       <p
-        className="text-fluid-narration leading-snug tracking-wide text-paper whitespace-pre-line font-medium text-center"
+        className="text-fluid-narration leading-snug tracking-wide text-paper whitespace-pre-line text-balance font-medium text-center"
         style={OVERLAY_TEXT_STYLE}
       >
         <Typewriter
