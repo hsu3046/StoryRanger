@@ -1292,16 +1292,8 @@ export function StoryPlayer({
     if (branch) handleChoose(branch);
   }
 
-  const choiceReadAloudReady =
-    hydrated &&
-    narrationDone &&
-    narrationAudioDone &&
-    !dialogueActive &&
-    !showingOutcome &&
-    !pendingEncounter &&
-    !isEnding &&
-    !portraitBlocked;
-
+  // Tap-to-read only (the auto read-aloud sequence was removed by user
+  // decision): the first tap on a choice speaks it, the second confirms.
   const choiceReader = useChoiceReader({
     labels: voiceChoiceLabels,
     // Same narrator voice as the scene so the read-aloud doesn't switch
@@ -1309,8 +1301,6 @@ export function StoryPlayer({
     voiceId: displayedSpeaker?.voice ?? DEFAULT_TTS_VOICE,
     voiceSpeed: displayedSpeaker?.voiceSpeed ?? 1,
     volume: voiceVolume,
-    enabled: choiceReadAloudReady,
-    autoKey: narrationKey,
     onConfirm: confirmVoiceChoice,
   });
 

@@ -74,9 +74,8 @@ export function DialogueChoiceCards({
   const [text, setText] = useState("");
 
   // Voice layer for pre-readers — labels in the EXACT render order below
-  // (suggestions, then branches). No auto-read (`autoKey: null`): the NPC
-  // just spoke, piling 2 more lines on every turn would drag the pace —
-  // tap-to-hear only. `cache: false` because suggestions are LLM one-shots.
+  // (suggestions, then branches). Tap-to-hear only, like everywhere else.
+  // `cache: false` because suggestions are LLM one-shots.
   const cappedSuggestions = suggestions.slice(0, MAX_DIALOGUE_SUGGESTIONS);
   const cappedBranches = branches.slice(0, MAX_DIALOGUE_BRANCHES);
   // Content keys -- the capped arrays are NEW identities every render, so the
@@ -108,8 +107,6 @@ export function DialogueChoiceCards({
     voiceId: DEFAULT_TTS_VOICE,
     voiceSpeed: 1,
     volume: voiceVolume,
-    enabled: false, // no auto sequence in dialogue
-    autoKey: null,
     cache: false,
     onConfirm: confirmVoiceChoice,
   });
