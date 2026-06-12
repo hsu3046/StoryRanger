@@ -46,16 +46,26 @@ interface Props {
    */
   onPlayback?: (sound: Howl | null, alignment: SpeechAlignment | null) => void;
   /**
-   * Bump to STOP the current line ("one voice at a time" — a choice tap /
-   * dialogue opening / mic start silences this narrator). Crucially this
-   * also suppresses a line that is still FETCHING: stopping via the exposed
-   * Howl alone leaves a zombie — the clip lands seconds later (dialogue TTS
-   * generates 1–3 s) and starts speaking over whatever interrupted it.
+   * Bump `nonce` to STOP the line identified by `key` ("one voice at a
+   * time" — a choice tap / dialogue opening / mic start silences this
+   * narrator). Crucially this also suppresses a line that is still
+   * FETCHING: stopping via the exposed Howl alone leaves a zombie — the
+   * clip lands seconds later (dialogue TTS generates 1–3 s) and starts
+   * speaking over whatever interrupted it.
+   *
+   * `key` (the playKey the CALLER saw when it bumped) is what makes the
+   * signal safe: a confirm tap bumps AND changes the scene in one React
+   * batch, so by the time this effect runs, `playKey` is already the NEXT
+   * line's — a bare nonce would suppress the wrong (new) line, silencing
+   * every post-tap scene/outcome narration. Key mismatch → signal is stale
+   * → ignored (the targeted line's in-flight load was already cancelled by
+   * the playKey change itself).
+   *
    * A suppressed line settles (audioDone fires, read-along brightens); a
    * suppressed-before-play line cannot be tap-replayed (no sound exists) —
-   * accepted, the window is sub-seconds and the next line reloads fresh.
+   * accepted, the window is sub-seconds.
    */
-  stopNonce?: number;
+  stopSignal?: { nonce: number; key: string } | null;
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -84,7 +94,7 @@ export function SpeechAudio({
   onSettled,
   replayNonce = 0,
   onPlayback,
-  stopNonce = 0,
+  stopSignal = null,
 }: Props) {
   const [, setError] = useState<string | null>(null);
   const soundRef = useRef<Howl | null>(null);
@@ -130,14 +140,19 @@ export function SpeechAudio({
   // suppressor: the load pipeline checks it around its awaits, so a stop
   // that lands while the clip is still fetching kills the playback BEFORE
   // it starts (a plain sound.stop() can only reach a sound that exists).
+  // The signal's `key` must match OUR playKey — a confirm tap's bump gets
+  // batched with the scene change, so this effect can run when playKey is
+  // already the NEXT line's; matching prevents suppressing that one.
   const stoppedKeyRef = useRef<string | null>(null);
-  const lastStopRef = useRef(stopNonce);
+  const lastStopRef = useRef(stopSignal?.nonce ?? 0);
   useEffect(() => {
-    if (stopNonce === lastStopRef.current) return;
-    lastStopRef.current = stopNonce;
+    const nonce = stopSignal?.nonce ?? 0;
+    if (nonce === lastStopRef.current) return;
+    lastStopRef.current = nonce;
+    if (!stopSignal || stopSignal.key !== playKey) return; // stale target
     stoppedKeyRef.current = playKey;
     soundRef.current?.stop(); // settles via onstop when already playing
-  }, [stopNonce, playKey]);
+  }, [stopSignal, playKey]);
 
   // Replay-on-demand. Tracks the last nonce in a ref (not a dep-less mount
   // check) so a remount with a stale nonce (scene re-show after dialogue)

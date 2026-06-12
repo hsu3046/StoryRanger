@@ -251,13 +251,28 @@ export function StoryPlayer({
   } | null>(null);
   /** "One voice at a time" — stop the narration when another voice begins
    *  (choice read-aloud, dialogue, mic). Routed through SpeechAudio's
-   *  stopNonce so it also suppresses a line that is STILL FETCHING (a
+   *  stopSignal so it also suppresses a line that is STILL FETCHING (a
    *  direct sound.stop() can't reach those — the clip would land seconds
-   *  later and speak over whatever interrupted it). The stop settles the
+   *  later and speak over whatever interrupted it). The signal carries the
+   *  narrationKey CAPTURED AT BUMP TIME: a confirm tap bumps AND changes
+   *  the scene in one React batch, so a bare nonce would reach SpeechAudio
+   *  when playKey is already the NEXT line's and suppress THAT — silencing
+   *  every post-tap scene/outcome narration (+ its tap-to-replay). With the
+   *  key attached, a stale signal is simply ignored. The stop settles the
    *  line: read-along brightens, narrationAudioDone gates fire. */
-  const [narrationStopNonce, setNarrationStopNonce] = useState(0);
+  const [narrationStopSignal, setNarrationStopSignal] = useState<{
+    nonce: number;
+    key: string;
+  } | null>(null);
+  // Synced below (after narrationKey is computed) — handlers/effects read
+  // the key through this ref so stopNarrationVoice stays referentially
+  // stable.
+  const narrationKeyRef = useRef("");
   const stopNarrationVoice = useCallback(() => {
-    setNarrationStopNonce((n) => n + 1);
+    setNarrationStopSignal((s) => ({
+      nonce: (s?.nonce ?? 0) + 1,
+      key: narrationKeyRef.current,
+    }));
   }, []);
   /** Mic is actively recording — gates the narration tap-to-replay (a
    *  replay would speak straight into the child's recording). */
@@ -1276,6 +1291,10 @@ export function StoryPlayer({
       : baseSpeaker;
 
   const narrationKey = `${displayedSceneKey}:${displayedNarration.slice(0, 40)}`;
+  // Mirror for stopNarrationVoice (declared before this point) — a click
+  // handler must stamp its stop signal with the key of the line the player
+  // was looking at, not whatever a later render computes.
+  narrationKeyRef.current = narrationKey;
 
   // Reset the narration-done gates whenever the narration content changes
   // so the next scene's choices re-enter via the typewriter→fade flow (and
@@ -1752,7 +1771,7 @@ export function StoryPlayer({
           playKey={narrationKey}
           onSettled={() => setNarrationAudioDone(true)}
           replayNonce={narrationReplayNonce}
-          stopNonce={narrationStopNonce}
+          stopSignal={narrationStopSignal}
           onPlayback={(sound, alignment) =>
             setNarrationPlayback(sound ? { sound, alignment } : null)
           }
