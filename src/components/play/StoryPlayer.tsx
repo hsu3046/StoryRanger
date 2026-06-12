@@ -807,8 +807,8 @@ export function StoryPlayer({
    *  When the branch defines an `outcome`, we still apply the engine
    *  state immediately (so rewards/medals are realised) but pause UI on
    *  an "outcome page": same scene art, outcome narration, reward chips
-   *  inline. Tap anywhere fires `continueFromOutcome()` and the scene
-   *  transition proceeds. */
+   *  inline. The "Tap to Continue" button fires `continueFromOutcome()`
+   *  and the scene transition proceeds. */
   function commitBranch(branch: Branch, opts: { skipReward: boolean }) {
     // Defence-in-depth behind the visibleBranches filter: a stale closure or
     // a persisted interaction can still hand us a branch whose destination
@@ -1479,14 +1479,14 @@ export function StoryPlayer({
 
       {/* Bottom layout — narration (above), choices row (below). Hidden
           while a dialogue bubble is open so the two UIs don't overlap.
-          During an outcome page the whole region also acts as a tap
-          target → continueFromOutcome(). */}
+          NOT an outcome tap target (it used to be) — advancing goes through
+          the "Tap to Continue" button only, so tapping the outcome
+          narration replays it instead of skipping the page. */}
       <div
         className={`absolute inset-x-0 bottom-0 z-10 flex flex-col items-stretch gap-3 px-safe pb-safe transition-opacity duration-200 sm:px-safe-lg lg:pb-safe-lg lg:gap-4 short:gap-2 short:pb-safe-sm ${
           dialogueActive ? "pointer-events-none opacity-0" : "opacity-100"
-        } ${showingOutcome ? "cursor-pointer" : ""}`}
+        }`}
         aria-hidden={dialogueActive}
-        onClick={showingOutcome ? continueFromOutcome : undefined}
       >
         {/* Narration — cinematic subtitle style. Block centered + text
             centered so left/right margins look identical regardless of
