@@ -49,15 +49,17 @@ export function choiceStateClass(reading?: boolean, armed?: boolean): string {
   return "";
 }
 
-/** "Tap again!" pill shown over an armed tile — the only new UI a pre-reader
- *  needs to learn. Host button must be `relative` (the base class is). */
+/** "Tap again to choose!" pill shown over an armed tile — the only new UI a
+ *  pre-reader needs to learn. "choose" (not "select") — the everyday word
+ *  early learners know, and it names what the game calls these: choices.
+ *  Host button must be `relative` (the base class is). */
 export function TapAgainBadge() {
   return (
     <span
       aria-hidden
       className="pointer-events-none absolute -top-2.5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-pill bg-accent-deep px-2.5 py-0.5 text-xs font-bold text-paper shadow-soft"
     >
-      Tap again!
+      Tap again to choose!
     </span>
   );
 }
