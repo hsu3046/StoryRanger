@@ -2024,7 +2024,11 @@ function AskChip({
           while a wide gap sits empty on the left. */}
       <span className="min-w-0 flex-1 text-center">{label}</span>
       {iconBase && (
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:h-7 short:w-7">
+        // -mr-2 pulls the portrait toward the pill's right edge so its gap
+        // there matches the vertical one: h-20 pill − h-12 avatar = 16px
+        // top/bottom, but px-6 left 24px on the right. (short: py-1.5 ≈ 6px
+        // vertical vs px-3 = 12px → -1.5.)
+        <span className="-mr-2 h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:-mr-1.5 short:h-7 short:w-7">
           <AskAvatar base={iconBase} fallbackBase={iconFallbackBase} alt="" />
         </span>
       )}

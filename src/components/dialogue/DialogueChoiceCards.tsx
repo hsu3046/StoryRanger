@@ -240,7 +240,10 @@ export function DialogueChoiceCards({
                       clip a long label while a wide gap sits empty on the left. */}
                   <span className="min-w-0 flex-1 text-center">{s}</span>
                   {iconBase && (
-                    <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm">
+                    // -mr-2: equalize the right gap with the 16px top/bottom
+                    // one (h-20 pill, 24px px-6 padding) — same fix as the
+                    // AskChip portrait.
+                    <span className="-mr-2 h-12 w-12 shrink-0 overflow-hidden rounded-full bg-paper-deep/40 ring-2 ring-paper/70 shadow-sm short:-mr-1.5">
                       <DialogueAvatar
                         base={iconBase}
                         fallbackBase={iconFallbackBase}
