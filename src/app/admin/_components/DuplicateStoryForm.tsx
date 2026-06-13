@@ -49,7 +49,9 @@ export function DuplicateStoryForm({
         // latin text and clipped under py-1.
         className="inline-flex items-center gap-1.5 rounded-pill bg-paper-deep/70 px-4 py-2 text-base font-medium leading-none text-ink-soft ring-1 ring-ink-soft/15 transition-colors hover:bg-paper-deep"
       >
-        <span aria-hidden>⧉</span> Duplicate…
+        {/* No trailing "…" — the opens-a-form convention reads as TRUNCATED
+            text on this pill (user feedback). */}
+        <span aria-hidden>⧉</span> Duplicate
       </button>
     );
   }
@@ -84,7 +86,7 @@ export function DuplicateStoryForm({
           disabled={pending}
           className="inline-flex items-center rounded-pill bg-accent-deep px-5 py-2 text-base font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {pending ? "Duplicating…" : "Duplicate"}
+          {pending ? "Duplicating" : "Duplicate"}
         </button>
         <button
           type="button"
