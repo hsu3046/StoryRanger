@@ -5,6 +5,7 @@ import { promises as fs } from "node:fs";
 import { contentRepo } from "@/lib/content-repo";
 import { MEDALS } from "@/data/medals";
 import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
+import { storyAssetId } from "@/lib/asset-paths";
 import { StoryGraphEditor } from "@/app/admin/_components/graph/StoryGraphEditor";
 import type { EncounterDefT, StoryT } from "@/data/schemas";
 
@@ -55,30 +56,35 @@ export default async function GraphPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
 
+  // Cloned stories share their source's media — every disk scan below walks
+  // the ASSET id's folders (identical to storyId for non-clones), so the
+  // editor's dropdowns/preview see the shared art, like /play does.
+  const assetId = storyAssetId(loaded.story);
   const [sceneStems, storyBgmKeys, commonBgmKeys, backgroundKeys] =
     await Promise.all([
       // Scenes are story-only; BGM + backgrounds merge the shared/common pool.
-      listStemsAt(IMAGE_EXTS, "stories", storyId, "scenes"),
+      listStemsAt(IMAGE_EXTS, "stories", assetId, "scenes"),
       // BGM kept SPLIT by pool. The per-scene dropdown wants them merged
       // (bgmOptions below), but the preview's StoryPlayer needs story vs common
       // separate — to resolve each track to the right folder AND to fill the
       // battle/puzzle variant pools. Passing them is what makes battle BGM play
       // in the branch preview, matching the live /play page.
-      listStemsAt(AUDIO_EXTS, "stories", storyId, "audio", "bgm"),
+      listStemsAt(AUDIO_EXTS, "stories", assetId, "audio", "bgm"),
       listStemsAt(AUDIO_EXTS, "audio", "bgm"),
       // Battle background stems — this story's /backgrounds folder merged with the
       // shared /public/backgrounds pool. Scanned from disk (no JSON catalog), the
       // same way Scene Image is sourced.
-      listStems(storyId, "backgrounds", "backgrounds", IMAGE_EXTS),
+      listStems(assetId, "backgrounds", "backgrounds", IMAGE_EXTS),
     ]);
   // Merged + sorted for the per-scene BGM dropdown (story overrides common).
   const bgmOptions = [...new Set([...storyBgmKeys, ...commonBgmKeys])].sort();
 
   // Scene image dropdown stores the full path but displays only the
   // filename stem — keeps the data structure unchanged while shortening
-  // the UI label.
+  // the UI label. Paths point at the ASSET folder (clone source for cloned
+  // stories) — picking one stores a path that resolves for the clone too.
   const sceneImages = sceneStems.map((stem) => ({
-    value: `/stories/${storyId}/scenes/${stem}`,
+    value: `/stories/${assetId}/scenes/${stem}`,
     label: stem,
   }));
 
@@ -97,7 +103,7 @@ export default async function GraphPage({
       runtimeStory={loaded.story}
       runtimeMedalsFile={MEDALS}
       runtimeCharactersFile={loaded.characters}
-      mapImage={resolveAssetPath(`/stories/${storyId}/map/map`)}
+      mapImage={resolveAssetPath(`/stories/${assetId}/map/map`)}
     />
   );
 }

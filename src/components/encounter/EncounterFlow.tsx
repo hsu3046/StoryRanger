@@ -44,6 +44,10 @@ interface Props {
    *  farmed. Gates both the grant (onComplete) and the victory-screen list. */
   alreadyCleared?: boolean;
   storyId: string;
+  /** Story id to resolve DERIVED monster-sprite paths against — a cloned
+   *  story passes its clone source here (content lookups keep `storyId`).
+   *  Defaults to `storyId` for every non-clone. */
+  assetStoryId?: string;
   companions: CompanionId[];
   companionMoods: CompanionMoods;
   /** Persistent HP carried in from PlayState. */
@@ -101,6 +105,7 @@ export function EncounterFlow({
   encounter,
   alreadyCleared = false,
   storyId,
+  assetStoryId = storyId,
   companions,
   companionMoods,
   partyHp,
@@ -160,11 +165,18 @@ export function EncounterFlow({
       </div>
     );
   } else if (phase === "alert") {
-    body = <EncounterAlertSplash monsterIds={monsterIds} storyId={storyId} />;
+    body = (
+      <EncounterAlertSplash
+        monsterIds={monsterIds}
+        storyId={storyId}
+        assetStoryId={assetStoryId}
+      />
+    );
   } else {
     body = (
       <BattleScreen
         storyId={storyId}
+        assetStoryId={assetStoryId}
         age={age}
         challengeType={encounter.challengeType ?? "mixed"}
         recordWrongChallenge={recordWrongChallenge}
@@ -243,9 +255,12 @@ export function EncounterFlow({
 function EncounterAlertSplash({
   monsterIds,
   storyId,
+  assetStoryId = storyId,
 }: {
   monsterIds: string[];
   storyId: string;
+  /** Derived sprite-path story id (clone source) — content stays storyId. */
+  assetStoryId?: string;
 }) {
   const primary = monsterIds[0];
   const catalog = monstersFor(storyId);
@@ -320,7 +335,7 @@ function EncounterAlertSplash({
           {/* eslint-disable-next-line @next/next/no-img-element -- ext fallback */}
           <img
             src={assetUrl(
-              `${catalog[primary]?.image ?? `/stories/${storyId}/monsters/${primary}`}.webp`,
+              `${catalog[primary]?.image ?? `/stories/${assetStoryId}/monsters/${primary}`}.webp`,
             )}
             onError={(e) => {
               const el = e.currentTarget;

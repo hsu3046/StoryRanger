@@ -49,6 +49,10 @@ import type {
 interface Props {
   setup: SetupArgs;
   storyId: string;
+  /** Story id for DERIVED monster-sprite paths — a cloned story passes its
+   *  clone source (content lookups — monsters/items — keep `storyId`).
+   *  Defaults to `storyId` for every non-clone. */
+  assetStoryId?: string;
   characterImageBase: (id: SpeakerId | CompanionId) => string;
   /** The story's protagonist id — the battle "hero" attacker maps to this
    *  speaker for its sprite / name (was hardcoded "dorothy"). */
@@ -108,6 +112,7 @@ const HERO_POSITIONS: Record<number, StagePosition[]> = {
 export function BattleScreen({
   setup,
   storyId,
+  assetStoryId = storyId,
   characterImageBase,
   heroId,
   characters,
@@ -514,7 +519,7 @@ export function BattleScreen({
     monsterId: m.monsterId,
     base:
       monsters[m.monsterId]?.image ??
-      `/stories/${storyId}/monsters/${m.monsterId}`,
+      `/stories/${assetStoryId}/monsters/${m.monsterId}`,
     position: m.position,
     flip: false,
     defeated: m.defeated,
@@ -580,7 +585,7 @@ export function BattleScreen({
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-ink">
       <ComposedScene
-        storyId={storyId}
+        storyId={assetStoryId}
         bg={setup.bg}
         characters={heroLayers}
         monsters={monsterLayers}
@@ -666,7 +671,7 @@ export function BattleScreen({
               defeated={m.defeated}
               portraitBase={
                 monsters[m.monsterId]?.image ??
-                `/stories/${storyId}/monsters/${m.monsterId}`
+                `/stories/${assetStoryId}/monsters/${m.monsterId}`
               }
             />
           ))}

@@ -135,6 +135,16 @@ export const SceneSchema = z.object({
 
 export const StorySchema = z.object({
   id: z.string(),
+  /** Asset indirection for CLONED stories: derived asset paths (character
+   *  sprites, dialogue portraits, BGM folder, map, monster sprites) resolve
+   *  against THIS story's `public/stories/<assetStoryId>/` instead of our
+   *  own id — a clone ships zero copied media and shares the source story's
+   *  art. Divergence happens through STORED paths: regenerating a scene
+   *  image / setting a character `image` override writes into the clone's
+   *  own folder and updates the stored path. Absent (every non-clone) →
+   *  assets resolve under the story's own id. NOTE: deleting a source
+   *  story's assets breaks its clones. */
+  assetStoryId: z.string().optional(),
   title: z.string(),
   /** Optional subtitle / tagline — shown under the title on the home
    *  card and cover screens. Existing stories without this field are
