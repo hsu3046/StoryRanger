@@ -3,6 +3,7 @@ import Link from "next/link";
 import { contentRepo } from "@/lib/content-repo";
 import { listMedals } from "@/data/medals";
 import { DuplicateStoryForm } from "./_components/DuplicateStoryForm";
+import { PublishPanel } from "./_components/PublishPanel";
 
 export default function AdminDashboard() {
   const repo = contentRepo();
@@ -29,6 +30,7 @@ export default function AdminDashboard() {
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <section className="flex flex-col gap-3">
+          <PublishPanel />
           {storyIds.map((sid) => {
             const story = repo.getStory(sid)?.story;
             const sceneCount = story ? Object.keys(story.scenes).length : 0;
