@@ -3,6 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 
 import { contentRepo, scanMonsterReferences } from "@/lib/content-repo";
+import { storyAssetId } from "@/lib/asset-paths";
 import { MonstersEditor } from "@/app/admin/_components/MonstersEditor";
 import { resolveAssetWithCommon } from "@/app/admin/_lib/resolveAsset";
 
@@ -42,9 +43,12 @@ export default async function MonstersPage({
   const monsters = repo.listMonsters(storyId);
   const items = repo.listItems(storyId);
 
+  // Duplicated stories share their source's media — scans + derived display
+  // bases walk the ASSET id's folder (identical for non-duplicates).
+  const assetId = storyAssetId(loaded.story);
   const assetMap: Record<string, string | null> = {};
   for (const m of monsters) {
-    const base = m.image ?? monsterImageBase(storyId, m.id);
+    const base = m.image ?? monsterImageBase(assetId, m.id);
     // Story-first, then the shared/common pool.
     assetMap[m.id] = resolveAssetWithCommon(base);
   }
@@ -53,13 +57,13 @@ export default async function MonstersPage({
   // (`public/monsters`). Common-only stems are labelled so the author can tell
   // them apart; a story stem of the same name takes precedence (listed first).
   const [storyStems, commonStems] = await Promise.all([
-    listMonsterImageStems("stories", storyId, "monsters"),
+    listMonsterImageStems("stories", assetId, "monsters"),
     listMonsterImageStems("monsters"),
   ]);
   const storySet = new Set(storyStems);
   const imageOptions = [
     ...storyStems.map((stem) => ({
-      value: `/stories/${storyId}/monsters/${stem}`,
+      value: `/stories/${assetId}/monsters/${stem}`,
       label: stem,
     })),
     ...commonStems
@@ -70,6 +74,7 @@ export default async function MonstersPage({
   return (
     <MonstersEditor
       storyId={storyId}
+      assetStoryId={assetId}
       storyTitle={loaded.story.title}
       initial={monsters}
       itemCatalog={items}

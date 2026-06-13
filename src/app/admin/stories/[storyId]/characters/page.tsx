@@ -6,6 +6,7 @@ import { contentRepo, scanCharacterReferences } from "@/lib/content-repo";
 import { CharactersEditor } from "@/app/admin/_components/CharactersEditor";
 import { resolveAssetPath } from "@/app/admin/_lib/resolveAsset";
 import { characterAssetSlug } from "@/lib/narrative";
+import { storyAssetId } from "@/lib/asset-paths";
 
 const IMAGE_EXTS = new Set([".webp", ".png", ".jpeg", ".jpg"]);
 
@@ -45,6 +46,9 @@ export default async function CharactersPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
   const characters = loaded.characters.characters;
+  // Duplicated stories share their source's media — scans + derived display
+  // bases walk the ASSET id's folder (identical for non-duplicates).
+  const assetId = storyAssetId(loaded.story);
 
   // Server-side pre-resolve each portrait so the browser never flickers
   // through onError fallback. `null` → no file on disk; render placeholder
@@ -54,7 +58,7 @@ export default async function CharactersPage({
   for (const c of characters) {
     const base =
       c.image ??
-      `/stories/${storyId}/characters/${characterAssetSlug(c.id, heroId)}`;
+      `/stories/${assetId}/characters/${characterAssetSlug(c.id, heroId)}`;
     assetMap[c.id] = resolveAssetPath(base);
   }
 
@@ -62,14 +66,15 @@ export default async function CharactersPage({
   // battle stance — each scanned from its own folder.
   const [imageOptions, dialogueImageOptions, battleImageOptions] =
     await Promise.all([
-      listImageOptions(storyId, ["characters"]),
-      listImageOptions(storyId, ["dialogue"]),
-      listImageOptions(storyId, ["characters", "battle"]),
+      listImageOptions(assetId, ["characters"]),
+      listImageOptions(assetId, ["dialogue"]),
+      listImageOptions(assetId, ["characters", "battle"]),
     ]);
 
   return (
     <CharactersEditor
       storyId={storyId}
+      assetStoryId={assetId}
       storyTitle={loaded.story.title}
       initial={characters}
       assetMap={assetMap}

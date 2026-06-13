@@ -149,6 +149,11 @@ import { ScenePreviewModal } from "./ScenePreviewModal";
 
 interface Props {
   storyId: string;
+  /** Story id for DERIVED asset display paths (sprites, portraits, monster
+   *  thumbs, BGM preview) — a duplicated story passes its duplicate source.
+   *  Content lookups + saves + generation targets keep `storyId`. Defaults
+   *  to `storyId` for every non-duplicate. */
+  assetStoryId?: string;
   initialStory: StoryT;
   initialEncounters: EncounterDefT[];
   /** For encounter authoring: monster + item catalogs used in dropdowns. */
@@ -196,6 +201,7 @@ type Selection =
 // so callers don't have to think about it.
 function StoryGraphEditorInner({
   storyId,
+  assetStoryId = storyId,
   initialStory,
   initialEncounters,
   monsters,
@@ -373,19 +379,19 @@ function StoryGraphEditorInner({
   const spriteBaseById = useMemo(() => {
     const map: Record<string, string> = {};
     for (const c of runtimeCharactersFile.characters) {
-      map[c.id] = dialogueFallbackBase(storyId, c);
+      map[c.id] = dialogueFallbackBase(assetStoryId, c);
     }
     return map;
-  }, [runtimeCharactersFile, storyId]);
+  }, [runtimeCharactersFile, assetStoryId]);
   // Primary dialogue-portrait base per id (honors `dialogueImage`). Paired
   // with spriteBaseById as the fallback when no head-shot file exists.
   const dialogueBaseById = useMemo(() => {
     const map: Record<string, string> = {};
     for (const c of runtimeCharactersFile.characters) {
-      map[c.id] = dialoguePortraitBase(storyId, c);
+      map[c.id] = dialoguePortraitBase(assetStoryId, c);
     }
     return map;
-  }, [runtimeCharactersFile, storyId]);
+  }, [runtimeCharactersFile, assetStoryId]);
   // Scenes that are the target of at least one branch — used to gate the Start
   // flag the same way `isTerminalScene` gates Ending (mirror image: no incoming
   // ↔ no outgoing).
@@ -414,6 +420,7 @@ function StoryGraphEditorInner({
         // endings.
         isEnding: !!scene.ending && isTerminalScene(scene, story.scenes),
         storyId,
+        assetStoryId,
         heroId,
         spriteBaseById,
         dialogueBaseById,
@@ -424,6 +431,7 @@ function StoryGraphEditorInner({
     story.scenes,
     story.startScene,
     storyId,
+    assetStoryId,
     heroId,
     incomingTargets,
     spriteBaseById,
@@ -472,6 +480,7 @@ function StoryGraphEditorInner({
           parallelCount: arr.length,
           encounters: encInfo ?? [],
           storyId,
+          assetStoryId,
           joiningCompanions: (b.addsCompanions ?? []).map((id) => ({
             id,
             dialogueBase: dialogueBaseById[id],
@@ -516,6 +525,7 @@ function StoryGraphEditorInner({
     encounterInfoByBranch,
     selection,
     storyId,
+    assetStoryId,
     spriteBaseById,
     dialogueBaseById,
     edgeOffsets,
@@ -1189,6 +1199,7 @@ function StoryGraphEditorInner({
               {selection?.kind === "scene" && selectedScene && (
                 <SceneInspector
                   storyId={storyId}
+                  assetStoryId={assetStoryId}
                   storyLanguage={story.language}
                   storyTitle={story.title}
                   storyPremise={story.subtitle ?? ""}
@@ -1233,6 +1244,7 @@ function StoryGraphEditorInner({
                 selectedBranch && (
                   <BranchInspector
                     storyId={storyId}
+                    assetStoryId={assetStoryId}
                     storyLanguage={story.language}
                     storyTitle={story.title}
                     storyPremise={story.subtitle ?? ""}
@@ -1317,6 +1329,7 @@ export function StoryGraphEditor(props: Props) {
 
 function SceneInspector({
   storyId,
+  assetStoryId = storyId,
   storyLanguage,
   storyTitle,
   storyPremise,
@@ -1339,6 +1352,8 @@ function SceneInspector({
   onSetStart,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   /** Story language code + title + premise — passed to the narration AI so
    *  it writes in the story's language and tone. */
   storyLanguage: string;
@@ -1455,7 +1470,7 @@ function SceneInspector({
         <BgmSelectWithPreview
           value={scene.bgm}
           options={bgmOptions}
-          storyId={storyId}
+          storyId={assetStoryId}
           placeholder="(no BGM tracks found on disk)"
           onChange={(v) => onChange((s) => ({ ...s, bgm: v }))}
         />
@@ -1501,6 +1516,7 @@ function SceneInspector({
 
       <DialogueCharactersEditor
         storyId={storyId}
+        assetStoryId={assetStoryId}
         characters={characters}
         scene={scene}
         onChange={onChange}
@@ -1596,6 +1612,7 @@ function SceneInspector({
 
       <SceneAsksEditor
         storyId={storyId}
+        assetStoryId={assetStoryId}
         characters={characters}
         scene={scene}
         onChange={onChange}
@@ -1662,6 +1679,7 @@ function SceneInspector({
 
 function EncounterCard({
   storyId,
+  assetStoryId = storyId,
   encounter,
   monsters,
   backgroundKeys,
@@ -1670,6 +1688,8 @@ function EncounterCard({
   onDelete,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   encounter: EncounterDefT;
   monsters: MonsterStatsT[];
   backgroundKeys: string[];
@@ -1747,7 +1767,7 @@ function EncounterCard({
                 Falls back to the shared/common image for common-only keys. */}
             {encounter.intro.bg && (
               <AssetThumb
-                base={`/stories/${storyId}/backgrounds/${encounter.intro.bg}`}
+                base={`/stories/${assetStoryId}/backgrounds/${encounter.intro.bg}`}
                 fallbackBase={`/backgrounds/${encounter.intro.bg}`}
                 alt={encounter.intro.bg}
                 className="mt-1.5 h-20 w-full"
@@ -1803,7 +1823,7 @@ function EncounterCard({
                     title={`Click to add. Currently × ${monsterCount}.`}
                   >
                     <AssetThumb
-                      base={`/stories/${storyId}/monsters/${m.id}`}
+                      base={`/stories/${assetStoryId}/monsters/${m.id}`}
                       alt={m.name}
                       className="h-5 w-5"
                       shape="circle"
@@ -1930,6 +1950,7 @@ function withCondition(
 
 function BranchInspector({
   storyId,
+  assetStoryId = storyId,
   storyLanguage,
   storyTitle,
   storyPremise,
@@ -1951,6 +1972,8 @@ function BranchInspector({
   onPreview,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   /** Story language code + title + premise — passed to the outcome AI so it
    *  writes in the story's language and tone. */
   storyLanguage: string;
@@ -2143,8 +2166,8 @@ function BranchInspector({
                 }`}
               >
                 <AssetThumb
-                  base={dialoguePortraitBase(storyId, c)}
-                  fallbackBase={dialogueFallbackBase(storyId, c)}
+                  base={dialoguePortraitBase(assetStoryId, c)}
+                  fallbackBase={dialogueFallbackBase(assetStoryId, c)}
                   alt={name}
                   className="h-5 w-5"
                   shape="circle"
@@ -2234,8 +2257,8 @@ function BranchInspector({
                     }`}
                   >
                     <AssetThumb
-                      base={dialoguePortraitBase(storyId, c)}
-                      fallbackBase={dialogueFallbackBase(storyId, c)}
+                      base={dialoguePortraitBase(assetStoryId, c)}
+                      fallbackBase={dialogueFallbackBase(assetStoryId, c)}
                       alt={name}
                       className="h-5 w-5"
                       shape="circle"
@@ -2378,6 +2401,7 @@ function BranchInspector({
               <EncounterCard
                 key={enc.id}
                 storyId={storyId}
+                assetStoryId={assetStoryId}
                 encounter={enc}
                 monsters={monsters}
                 backgroundKeys={backgroundKeys}
@@ -2834,11 +2858,14 @@ function RewardEditor({
  */
 function DialogueCharactersEditor({
   storyId,
+  assetStoryId = storyId,
   characters,
   scene,
   onChange,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   characters: CharactersFile["characters"];
   scene: SceneT;
   onChange: (mut: (s: SceneT) => SceneT) => void;
@@ -2876,8 +2903,8 @@ function DialogueCharactersEditor({
               }`}
             >
               <AssetThumb
-                base={dialoguePortraitBase(storyId, c)}
-                fallbackBase={dialogueFallbackBase(storyId, c)}
+                base={dialoguePortraitBase(assetStoryId, c)}
+                fallbackBase={dialogueFallbackBase(assetStoryId, c)}
                 alt={name}
                 className="h-5 w-5"
                 shape="circle"
@@ -2936,12 +2963,15 @@ function withUnlock(
 function AskRow({
   ask,
   storyId,
+  assetStoryId = storyId,
   askable,
   onUpdate,
   onRemove,
 }: {
   ask: SceneAskT;
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   askable: CharactersFile["characters"];
   onUpdate: (mut: (a: SceneAskT) => SceneAskT) => void;
   onRemove: () => void;
@@ -2958,8 +2988,8 @@ function AskRow({
         >
           {answerer && (
             <AssetThumb
-              base={dialoguePortraitBase(storyId, answerer)}
-              fallbackBase={dialogueFallbackBase(storyId, answerer)}
+              base={dialoguePortraitBase(assetStoryId, answerer)}
+              fallbackBase={dialogueFallbackBase(assetStoryId, answerer)}
               alt={answerer.name}
               className="h-5 w-5 shrink-0"
               shape="circle"
@@ -3026,8 +3056,8 @@ function AskRow({
                     }`}
                   >
                     <AssetThumb
-                      base={dialoguePortraitBase(storyId, c)}
-                      fallbackBase={dialogueFallbackBase(storyId, c)}
+                      base={dialoguePortraitBase(assetStoryId, c)}
+                      fallbackBase={dialogueFallbackBase(assetStoryId, c)}
                       alt={c.name}
                       className="h-5 w-5"
                       shape="circle"
@@ -3069,11 +3099,14 @@ function AskRow({
 
 function SceneAsksEditor({
   storyId,
+  assetStoryId = storyId,
   characters,
   scene,
   onChange,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   characters: CharactersFile["characters"];
   scene: SceneT;
   onChange: (mut: (s: SceneT) => SceneT) => void;
@@ -3094,6 +3127,7 @@ function SceneAsksEditor({
           key={ask.id}
           ask={ask}
           storyId={storyId}
+          assetStoryId={assetStoryId}
           askable={askable}
           onUpdate={(mut) => setAsks(asks.map((a, j) => (j === i ? mut(a) : a)))}
           onRemove={() => setAsks(asks.filter((_, j) => j !== i))}

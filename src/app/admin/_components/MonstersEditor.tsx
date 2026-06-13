@@ -23,6 +23,8 @@ import { ItemChipPicker } from "./ItemChipPicker";
 const SIZES = ["tiny", "small", "medium", "large", "huge"] as const;
 interface Props {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   storyTitle?: string;
   initial: MonsterStatsT[];
   itemCatalog: ItemDefT[];
@@ -42,6 +44,7 @@ function monsterImageBase(storyId: string, monsterId: string): string {
 
 export function MonstersEditor({
   storyId,
+  assetStoryId = storyId,
   storyTitle,
   initial,
   itemCatalog,
@@ -278,7 +281,7 @@ export function MonstersEditor({
                   >
                     <td className="px-3 py-2">
                       <AssetThumb
-                        base={m.image ?? monsterImageBase(storyId, m.id)}
+                        base={m.image ?? monsterImageBase(assetStoryId, m.id)}
                         resolvedSrc={assetMap?.[m.id] ?? undefined}
                         alt={m.name}
                         className="h-12 w-12 p-1"
@@ -323,6 +326,7 @@ export function MonstersEditor({
           <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-ink-soft/10 bg-paper p-4">
             <MonsterForm
               storyId={storyId}
+              assetStoryId={assetStoryId}
               monster={selected}
               isNew={!initial.some((m) => m.id === selected.id)}
               itemCatalog={itemCatalog}
@@ -342,6 +346,7 @@ export function MonstersEditor({
 
 function MonsterForm({
   storyId,
+  assetStoryId = storyId,
   monster,
   isNew,
   itemCatalog,
@@ -353,6 +358,8 @@ function MonsterForm({
   onClose,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   monster: MonsterStatsT;
   isNew: boolean;
   itemCatalog: ItemDefT[];
@@ -372,7 +379,7 @@ function MonsterForm({
   );
   const selectedDropIds = [...dropChances.keys()];
   const dropItemById = new Map(itemCatalog.map((it) => [it.id, it]));
-  const defaultImageBase = `/stories/${storyId}/monsters/${monster.id}`;
+  const defaultImageBase = `/stories/${assetStoryId}/monsters/${monster.id}`;
   const currentImagePath = monster.image ?? defaultImageBase;
 
   // Toggle a drop on/off. Adding stores a plain string (100% — keeps the

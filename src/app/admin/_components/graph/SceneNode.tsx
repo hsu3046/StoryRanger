@@ -16,6 +16,8 @@ export interface SceneNodeData {
   isEnding: boolean;
   /** Story id — needed to resolve dialogue portrait paths. */
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   /** The story's protagonist id — its dialogue portrait lives at `hero.*`. */
   heroId: SpeakerId;
   /** Primary dialogue-portrait base per character id (honors `dialogueImage`,
@@ -48,6 +50,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
     isStart,
     isEnding,
     storyId,
+    assetStoryId = storyId,
     heroId,
     dialogueBaseById,
     spriteBaseById,
@@ -159,7 +162,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps) 
               {dialogueChars.map((id) => (
                 <AssetThumb
                   key={id}
-                  base={dialogueBaseById[id] ?? dialoguePortrait(storyId, id, heroId)}
+                  base={dialogueBaseById[id] ?? dialoguePortrait(assetStoryId, id, heroId)}
                   fallbackBase={spriteBaseById[id]}
                   alt={id}
                   className="h-5 w-5"

@@ -91,6 +91,7 @@ export default async function GraphPage({
   return (
     <StoryGraphEditor
       storyId={storyId}
+      assetStoryId={assetId}
       initialStory={loaded.story as StoryT}
       initialEncounters={repo.listEncounters(storyId) as EncounterDefT[]}
       monsters={repo.listMonsters(storyId)}
