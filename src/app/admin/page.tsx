@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { contentRepo } from "@/lib/content-repo";
 import { listMedals } from "@/data/medals";
+import { DuplicateStoryForm } from "./_components/DuplicateStoryForm";
 
 export default function AdminDashboard() {
   const repo = contentRepo();
@@ -69,6 +70,10 @@ export default function AdminDashboard() {
                   <DashLink href={`/admin/stories/${sid}/items`}>
                     Items →
                   </DashLink>
+                  <DuplicateStoryForm
+                    sourceId={sid}
+                    sourceTitle={story?.title ?? sid}
+                  />
                 </div>
               </div>
             );

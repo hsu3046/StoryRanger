@@ -43,6 +43,8 @@ function characterImageBase(
 
 interface Props {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   storyTitle?: string;
   initial: CharacterT[];
   /** Map from character.id → resolved asset path (or null). Server-side
@@ -64,6 +66,7 @@ interface Props {
 
 export function CharactersEditor({
   storyId,
+  assetStoryId = storyId,
   storyTitle,
   initial,
   assetMap,
@@ -319,7 +322,7 @@ export function CharactersEditor({
                   >
                     <td className="px-4 py-3 align-middle">
                       <AssetThumb
-                        base={c.image ?? characterImageBase(storyId, c.id, heroId)}
+                        base={c.image ?? characterImageBase(assetStoryId, c.id, heroId)}
                         resolvedSrc={assetMap[c.id] ?? null}
                         alt={c.name}
                         className="h-12 w-12 p-1"
@@ -363,6 +366,7 @@ export function CharactersEditor({
           <aside className="flex w-96 shrink-0 flex-col overflow-y-auto border-l border-ink-soft/10 bg-paper p-4">
             <CharacterForm
               storyId={storyId}
+              assetStoryId={assetStoryId}
               character={selected}
               isNew={!initial.some((c) => c.id === selected.id)}
               imageOptions={imageOptions}
@@ -451,6 +455,7 @@ function ImageOverrideField({
 
 function CharacterForm({
   storyId,
+  assetStoryId = storyId,
   character,
   isNew,
   imageOptions,
@@ -464,6 +469,8 @@ function CharacterForm({
   onClose,
 }: {
   storyId: string;
+  /** Derived asset DISPLAY id (duplicate source for duplicated stories). */
+  assetStoryId?: string;
   character: CharacterT;
   isNew: boolean;
   imageOptions: { value: string; label: string }[];
@@ -484,9 +491,9 @@ function CharacterForm({
   // (override ?? convention); picking the convention clears the override so
   // we never store redundant data.
   const slug = character.isHero ? "hero" : character.id;
-  const defaultImageBase = `/stories/${storyId}/characters/${slug}`;
-  const defaultDialogueBase = `/stories/${storyId}/dialogue/${slug}`;
-  const defaultBattleBase = `/stories/${storyId}/characters/battle/${slug}`;
+  const defaultImageBase = `/stories/${assetStoryId}/characters/${slug}`;
+  const defaultDialogueBase = `/stories/${assetStoryId}/dialogue/${slug}`;
+  const defaultBattleBase = `/stories/${assetStoryId}/characters/battle/${slug}`;
   const currentImagePath = character.image ?? defaultImageBase;
   const currentDialoguePath = character.dialogueImage ?? defaultDialogueBase;
   const currentBattlePath = character.battleImage ?? defaultBattleBase;

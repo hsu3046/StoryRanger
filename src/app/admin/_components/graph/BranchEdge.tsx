@@ -127,6 +127,9 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
   const joiningCompanions = d?.joiningCompanions ?? [];
   const leavingCompanions = d?.leavingCompanions ?? [];
   const storyId = d?.storyId;
+  // Derived asset DISPLAY id — duplicated stories point this at their
+  // duplicate source; content lookups (monstersFor) keep storyId.
+  const assetStoryId = d?.assetStoryId ?? storyId;
   // Battle + puzzle indicators are rendered as bare icons (no background
   // pill) so they read as graphic markers, not labels. Both use the same
   // glyphs as the admin sidebar's Encounters / Puzzle items so authors
@@ -223,7 +226,7 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                     <AssetThumb
                       base={
                         c.dialogueBase ??
-                        `/stories/${storyId}/dialogue/${c.id}`
+                        `/stories/${assetStoryId}/dialogue/${c.id}`
                       }
                       fallbackBase={c.spriteBase}
                       alt={c.id}
@@ -245,7 +248,7 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                     <AssetThumb
                       base={
                         c.dialogueBase ??
-                        `/stories/${storyId}/dialogue/${c.id}`
+                        `/stories/${assetStoryId}/dialogue/${c.id}`
                       }
                       fallbackBase={c.spriteBase}
                       alt={c.id}
@@ -271,7 +274,7 @@ export const BranchEdge = memo(function BranchEdge(props: EdgeProps) {
                     {enc.monsters.slice(0, 4).map(({ id: mid, count }) => {
                       const base =
                         monstersFor(storyId)[mid]?.image ??
-                        `/stories/${storyId}/monsters/${mid}`;
+                        `/stories/${assetStoryId}/monsters/${mid}`;
                       return (
                       <span key={mid} className="flex items-center gap-0.5">
                         <AssetThumb

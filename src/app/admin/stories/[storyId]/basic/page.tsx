@@ -3,6 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 
 import { contentRepo } from "@/lib/content-repo";
+import { storyAssetId } from "@/lib/asset-paths";
 import { StoryBasicEditor } from "@/app/admin/_components/StoryBasicEditor";
 import type { StoryT } from "@/data/schemas";
 
@@ -39,7 +40,9 @@ export default async function StoryBasicPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
 
-  const coverOptions = (await listCoverCandidates(storyId)).map((path) => ({
+  // Duplicated stories share their source's media — offer the SOURCE
+  // folder's covers (stored verbatim, so the path resolves for the dup too).
+  const coverOptions = (await listCoverCandidates(storyAssetId(loaded.story))).map((path) => ({
     value: path,
     // Display only the filename — same convention as the Scene image
     // picker in the graph editor.

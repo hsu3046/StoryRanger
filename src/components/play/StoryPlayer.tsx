@@ -32,7 +32,7 @@ import {
   takeBranch,
 } from "@/lib/story-engine";
 import { checkMedals } from "@/lib/medals-engine";
-import { assetUrl, sceneImageWebpUrl } from "@/lib/asset-paths";
+import { assetUrl, sceneImageWebpUrl, storyAssetId } from "@/lib/asset-paths";
 import { ChallengeGate } from "../challenge/ChallengeGate";
 import { usePlayStateSync } from "@/lib/usePlayStateSync";
 import {
@@ -668,16 +668,20 @@ export function StoryPlayer({
   // A BGM key may live in the story's own folder OR the shared/common pool.
   // Story overrides common: resolve by passing story.id when the story has the
   // file, else undefined (→ audio-engine uses the common `/audio/bgm/<key>`).
+  // Derived asset paths (sprites/portraits/BGM/monsters) resolve against
+  // the duplicate SOURCE's folder for duplicated stories — content (scenes/items/
+  // play state) keeps using story.id. See storyAssetId.
+  const assetStoryId = storyAssetId(story);
   const playResolvedBgm = useCallback(
     (key: string) => {
       const audio = getAudio();
       if (commonBgmKeys.includes(key) && !bgmKeys.includes(key)) {
         audio.playBgm(key); // common-only
       } else {
-        audio.playBgm(key, story.id); // story (or default attempt)
+        audio.playBgm(key, assetStoryId); // story (or default attempt)
       }
     },
-    [bgmKeys, commonBgmKeys, story.id],
+    [bgmKeys, commonBgmKeys, assetStoryId],
   );
   // Battle / challenge BGM variant pools — every file named `battle`,
   // `battle_1`, … (and likewise `challenge*`), from EITHER the story or common
@@ -1684,10 +1688,10 @@ export function StoryPlayer({
                 );
                 const iconBase =
                   ch?.dialogueImage ??
-                  dialoguePortraitPath(story.id, ask.characterId, heroId);
+                  dialoguePortraitPath(assetStoryId, ask.characterId, heroId);
                 const iconFallbackBase = ch
-                  ? characterSpriteBase(story.id, ch, heroId)
-                  : characterImagePath(story.id, ask.characterId, heroId);
+                  ? characterSpriteBase(assetStoryId, ch, heroId)
+                  : characterImagePath(assetStoryId, ask.characterId, heroId);
                 return tile(
                   ask.id,
                   i,
@@ -1807,7 +1811,7 @@ export function StoryPlayer({
             const ch = characters.characters.find((c) => c.id === id);
             return (
               ch?.dialogueImage ??
-              dialoguePortraitPath(story.id, id as SpeakerId | CompanionId, heroId)
+              dialoguePortraitPath(assetStoryId, id as SpeakerId | CompanionId, heroId)
             );
           }}
           // No dedicated dialogue head-shot yet (e.g. a newly added character)
@@ -1815,8 +1819,8 @@ export function StoryPlayer({
           portraitFallbackBase={(id) => {
             const ch = characters.characters.find((c) => c.id === id);
             return ch
-              ? characterSpriteBase(story.id, ch, heroId)
-              : characterImagePath(story.id, id as SpeakerId, heroId);
+              ? characterSpriteBase(assetStoryId, ch, heroId)
+              : characterImagePath(assetStoryId, id as SpeakerId, heroId);
           }}
           mood={(id) => state.companionMoods?.[id as CompanionId] ?? 5}
           hasGifted={(id) => (state.giftedCharacters ?? []).includes(id)}
@@ -1856,6 +1860,7 @@ export function StoryPlayer({
               pendingEncounter.id,
             )}
             storyId={story.id}
+            assetStoryId={assetStoryId}
             age={state.hero.age}
             recordWrongChallenge={
               !previewMode && slot === "play"
@@ -1874,12 +1879,12 @@ export function StoryPlayer({
               // id-based convention for that folder.
               const ch = characters.characters.find((c) => c.id === id);
               if (mode === "default" && ch) {
-                return characterSpriteBase(story.id, ch, heroId);
+                return characterSpriteBase(assetStoryId, ch, heroId);
               }
               if (mode === "battle" && ch?.battleImage) {
                 return ch.battleImage;
               }
-              return characterImagePath(story.id, id, heroId, mode);
+              return characterImagePath(assetStoryId, id, heroId, mode);
             }}
             heroId={heroId}
             characters={characters.characters}

@@ -5,7 +5,7 @@ import { getStory } from "@/lib/stories";
 import { getSessionUser, ensureProfile } from "@/lib/supabase/queries";
 import { MEDALS } from "@/data/medals";
 import { StoryPlayer } from "@/components/play/StoryPlayer";
-import { sceneImageWebpUrl } from "@/lib/asset-paths";
+import { sceneImageWebpUrl, storyAssetId } from "@/lib/asset-paths";
 
 interface Props {
   params: Promise<{ storyId: string }>;
@@ -62,10 +62,13 @@ export default async function PlayPage({ params }: Props) {
   // client-side migration + sync depend on it). Tolerates Supabase being unset.
   const user = await getSessionUser().catch(() => null);
   if (user) await ensureProfile(user).catch(() => null);
+  // Duplicates share their source story's media — scan/resolve the ASSET id's
+  // folder, not our own (identical for every non-duplicate).
+  const assetId = storyAssetId(loaded.story);
   const [bgmKeys, commonBgmKeys, mapImage] = await Promise.all([
-    listBgmKeysAt("stories", storyId, "audio", "bgm"),
+    listBgmKeysAt("stories", assetId, "audio", "bgm"),
     listBgmKeysAt("audio", "bgm"),
-    resolveMapImage(storyId),
+    resolveMapImage(assetId),
   ]);
   // Preload the start scene's image into the streamed HTML so the browser
   // fetches it in parallel with the JS bundle (high priority) — it's warm

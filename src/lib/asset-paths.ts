@@ -13,6 +13,22 @@
  */
 
 /**
+ * The story id to build DERIVED asset paths from (character sprites,
+ * dialogue portraits, BGM folder, map, monster sprite fallbacks). A duplicated
+ * story sets `assetStoryId` to its duplicate source and ships zero copied media
+ * — every derived path resolves into the source's folder. STORED paths
+ * (scene.image, coverImage, character/monster `image` overrides) are not
+ * affected: they carry their own story segment, which is exactly how a
+ * duplicate diverges asset-by-asset later.
+ */
+export function storyAssetId(story: {
+  id: string;
+  assetStoryId?: string;
+}): string {
+  return story.assetStoryId?.trim() || story.id;
+}
+
+/**
  * The common/shared equivalent of a story-scoped asset path, or `null` if the
  * path isn't story-scoped (already common, or an unrelated path).
  *
