@@ -14,6 +14,7 @@ import {
   STORY_ID_RE,
   ensureDev,
   errorMessage,
+  publicStoryDir,
   storyDir,
   storyPath,
   writeJson,
@@ -76,26 +77,56 @@ export async function duplicateStoryAction(input: {
       return { ok: false, error: `"${newId}" already exists.` };
     }
 
-    // scenes.json — the only file that changes: new id/title, and the asset
-    // indirection. Chain-flattening matters: duplicating a DUPLICATE keeps pointing
-    // at the ORIGINAL media owner, so deleting an intermediate duplicate can
-    // never strand grandchildren.
-    const source = StorySchema.parse(
-      JSON.parse(await fs.readFile(storyPath(sourceId, "scenes.json"), "utf-8")),
+    const sourceRaw = await fs.readFile(
+      storyPath(sourceId, "scenes.json"),
+      "utf-8",
     );
+    const source = StorySchema.parse(JSON.parse(sourceRaw));
+
+    // Duplicating a DUPLICATE (Codex P2): the intermediate may have DIVERGED
+    // assets — stored paths under its own `/stories/<sourceId>/…` (a
+    // regenerated scene image, a character override). Copying those paths
+    // verbatim would leave the grandchild depending on the intermediate's
+    // folder, contradicting the chain-flattening promise ("intermediates are
+    // deletable"). So: rewrite those paths to OUR folder + copy the
+    // intermediate's public folder (it holds ONLY its diverged media — the
+    // zero-copy design keeps it small). Original-owner paths pass through
+    // untouched. Duplicating an ORIGINAL never copies (its folder is the
+    // full asset set; assetStoryId covers it).
+    const sourceIsDuplicate = !!source.assetStoryId;
+    const rewriteDivergedPaths = (raw: string): string =>
+      sourceIsDuplicate
+        ? raw.replaceAll(`/stories/${sourceId}/`, `/stories/${newId}/`)
+        : raw;
+    if (sourceIsDuplicate) {
+      const srcPublic = publicStoryDir(sourceId);
+      const hasPublic = await fs.access(srcPublic).then(
+        () => true,
+        () => false,
+      );
+      if (hasPublic) {
+        await fs.cp(srcPublic, publicStoryDir(newId), { recursive: true });
+      }
+    }
+
+    // scenes.json — the only file that changes shape: new id/title + the
+    // asset indirection. Chain-flattening: the new duplicate points at the
+    // ORIGINAL media owner (with the intermediate's divergence propagated
+    // above), so deleting an intermediate can never strand grandchildren.
     const duplicated = {
-      ...source,
+      ...StorySchema.parse(JSON.parse(rewriteDivergedPaths(sourceRaw))),
       id: newId,
       title: input.newTitle?.trim() || `${source.title} (Copy)`,
       assetStoryId: source.assetStoryId ?? sourceId,
     };
     await writeJson(StorySchema, storyPath(newId, "scenes.json"), duplicated);
 
-    // The other four copy verbatim (validated on the way through).
-    await copyValidated(CharactersFileSchema, sourceId, newId, "characters.json");
-    await copyValidated(MonstersFileSchema, sourceId, newId, "monsters.json");
-    await copyValidated(ItemsFileSchema, sourceId, newId, "items.json");
-    await copyValidated(EncountersFileSchema, sourceId, newId, "encounters.json");
+    // The other four copy verbatim (validated on the way through; diverged
+    // intermediate paths rewritten the same way).
+    await copyValidated(CharactersFileSchema, sourceId, newId, "characters.json", rewriteDivergedPaths);
+    await copyValidated(MonstersFileSchema, sourceId, newId, "monsters.json", rewriteDivergedPaths);
+    await copyValidated(ItemsFileSchema, sourceId, newId, "items.json", rewriteDivergedPaths);
+    await copyValidated(EncountersFileSchema, sourceId, newId, "encounters.json", rewriteDivergedPaths);
 
     await fs.writeFile(storyPath(newId, "index.ts"), storyIndexSource(), "utf-8");
     await regenerateRegistry();
@@ -108,15 +139,17 @@ export async function duplicateStoryAction(input: {
   }
 }
 
-/** Read a source content file, validate, and write it under the duplicate. */
+/** Read a source content file, validate, and write it under the duplicate.
+ *  `rewrite` runs on the RAW text first (diverged-path propagation). */
 async function copyValidated<T>(
   schema: Parameters<typeof writeJson<T>>[0],
   sourceId: string,
   newId: string,
   filename: string,
+  rewrite: (raw: string) => string = (raw) => raw,
 ): Promise<void> {
   const data = JSON.parse(
-    await fs.readFile(storyPath(sourceId, filename), "utf-8"),
+    rewrite(await fs.readFile(storyPath(sourceId, filename), "utf-8")),
   );
   await writeJson(schema, storyPath(newId, filename), data);
 }
