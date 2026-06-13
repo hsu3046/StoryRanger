@@ -14,12 +14,12 @@
 
 /**
  * The story id to build DERIVED asset paths from (character sprites,
- * dialogue portraits, BGM folder, map, monster sprite fallbacks). A cloned
- * story sets `assetStoryId` to its clone source and ships zero copied media
+ * dialogue portraits, BGM folder, map, monster sprite fallbacks). A duplicated
+ * story sets `assetStoryId` to its duplicate source and ships zero copied media
  * — every derived path resolves into the source's folder. STORED paths
  * (scene.image, coverImage, character/monster `image` overrides) are not
  * affected: they carry their own story segment, which is exactly how a
- * clone diverges asset-by-asset later.
+ * duplicate diverges asset-by-asset later.
  */
 export function storyAssetId(story: {
   id: string;

@@ -44,9 +44,9 @@ interface Props {
    *  farmed. Gates both the grant (onComplete) and the victory-screen list. */
   alreadyCleared?: boolean;
   storyId: string;
-  /** Story id to resolve DERIVED monster-sprite paths against — a cloned
-   *  story passes its clone source here (content lookups keep `storyId`).
-   *  Defaults to `storyId` for every non-clone. */
+  /** Story id to resolve DERIVED monster-sprite paths against — a duplicated
+   *  story passes its duplicate source here (content lookups keep `storyId`).
+   *  Defaults to `storyId` for every non-duplicate. */
   assetStoryId?: string;
   companions: CompanionId[];
   companionMoods: CompanionMoods;
@@ -259,7 +259,7 @@ function EncounterAlertSplash({
 }: {
   monsterIds: string[];
   storyId: string;
-  /** Derived sprite-path story id (clone source) — content stays storyId. */
+  /** Derived sprite-path story id (duplicate source) — content stays storyId. */
   assetStoryId?: string;
 }) {
   const primary = monsterIds[0];

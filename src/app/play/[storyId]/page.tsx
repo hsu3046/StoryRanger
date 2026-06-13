@@ -62,8 +62,8 @@ export default async function PlayPage({ params }: Props) {
   // client-side migration + sync depend on it). Tolerates Supabase being unset.
   const user = await getSessionUser().catch(() => null);
   if (user) await ensureProfile(user).catch(() => null);
-  // Clones share their source story's media — scan/resolve the ASSET id's
-  // folder, not our own (identical for every non-clone).
+  // Duplicates share their source story's media — scan/resolve the ASSET id's
+  // folder, not our own (identical for every non-duplicate).
   const assetId = storyAssetId(loaded.story);
   const [bgmKeys, commonBgmKeys, mapImage] = await Promise.all([
     listBgmKeysAt("stories", assetId, "audio", "bgm"),

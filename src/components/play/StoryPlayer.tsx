@@ -669,7 +669,7 @@ export function StoryPlayer({
   // Story overrides common: resolve by passing story.id when the story has the
   // file, else undefined (→ audio-engine uses the common `/audio/bgm/<key>`).
   // Derived asset paths (sprites/portraits/BGM/monsters) resolve against
-  // the clone SOURCE's folder for cloned stories — content (scenes/items/
+  // the duplicate SOURCE's folder for duplicated stories — content (scenes/items/
   // play state) keeps using story.id. See storyAssetId.
   const assetStoryId = storyAssetId(story);
   const playResolvedBgm = useCallback(

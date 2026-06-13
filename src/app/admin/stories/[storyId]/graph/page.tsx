@@ -56,8 +56,8 @@ export default async function GraphPage({
   const loaded = repo.getStory(storyId);
   if (!loaded) notFound();
 
-  // Cloned stories share their source's media — every disk scan below walks
-  // the ASSET id's folders (identical to storyId for non-clones), so the
+  // Duplicated stories share their source's media — every disk scan below walks
+  // the ASSET id's folders (identical to storyId for non-duplicates), so the
   // editor's dropdowns/preview see the shared art, like /play does.
   const assetId = storyAssetId(loaded.story);
   const [sceneStems, storyBgmKeys, commonBgmKeys, backgroundKeys] =
@@ -81,8 +81,8 @@ export default async function GraphPage({
 
   // Scene image dropdown stores the full path but displays only the
   // filename stem — keeps the data structure unchanged while shortening
-  // the UI label. Paths point at the ASSET folder (clone source for cloned
-  // stories) — picking one stores a path that resolves for the clone too.
+  // the UI label. Paths point at the ASSET folder (duplicate source for duplicated
+  // stories) — picking one stores a path that resolves for the duplicate too.
   const sceneImages = sceneStems.map((stem) => ({
     value: `/stories/${assetId}/scenes/${stem}`,
     label: stem,

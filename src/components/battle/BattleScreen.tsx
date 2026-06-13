@@ -49,9 +49,9 @@ import type {
 interface Props {
   setup: SetupArgs;
   storyId: string;
-  /** Story id for DERIVED monster-sprite paths — a cloned story passes its
-   *  clone source (content lookups — monsters/items — keep `storyId`).
-   *  Defaults to `storyId` for every non-clone. */
+  /** Story id for DERIVED monster-sprite paths — a duplicated story passes its
+   *  duplicate source (content lookups — monsters/items — keep `storyId`).
+   *  Defaults to `storyId` for every non-duplicate. */
   assetStoryId?: string;
   characterImageBase: (id: SpeakerId | CompanionId) => string;
   /** The story's protagonist id — the battle "hero" attacker maps to this

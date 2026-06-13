@@ -24,19 +24,19 @@ import {
 } from "../_lib/regenerateRegistry";
 
 /**
- * Clone a committed story — the "re-author for a different age / extend into
+ * Duplicate a committed story — the "re-author for a different age / extend into
  * a new story" workflow. Copies the five content JSONs (a few KB) and NOT a
- * single asset byte: the clone's `assetStoryId` points derived asset paths
+ * single asset byte: the duplicate's `assetStoryId` points derived asset paths
  * (sprites/portraits/BGM/map/monsters) at the SOURCE story's media, and the
  * stored paths inside the copied JSONs (scene.image, coverImage, `image`
  * overrides) already carry the source's folder. Divergence is per-asset:
- * regenerating a scene image for the clone writes into the clone's own
+ * regenerating a scene image for the duplicate writes into the duplicate's own
  * folder and updates that one stored path.
  *
  * Dev-only, like every admin content write. Drafts (draft.*.json) are NOT
- * copied — a clone starts as a committed, playable story.
+ * copied — a duplicate starts as a committed, playable story.
  */
-export async function cloneStoryAction(input: {
+export async function duplicateStoryAction(input: {
   sourceId: string;
   /** Free-form new id; empty → `<sourceId>-copy`, deduped with -2, -3… */
   newId?: string;
@@ -51,12 +51,12 @@ export async function cloneStoryAction(input: {
     if (!STORY_ID_RE.test(sourceId)) {
       return { ok: false, error: `Invalid source id: ${sourceId}` };
     }
-    // Only committed stories clone — a half-finished draft has no scenes.json.
+    // Only committed stories duplicate — a half-finished draft has no scenes.json.
     await fs.access(storyPath(sourceId, "index.ts")).catch(() => {
       throw new Error(`"${sourceId}" is not a committed story.`);
     });
 
-    const newId = (input.newId?.trim() || (await defaultCloneId(sourceId)))
+    const newId = (input.newId?.trim() || (await defaultDuplicateId(sourceId)))
       .toLowerCase();
     if (!STORY_ID_RE.test(newId)) {
       return {
@@ -77,19 +77,19 @@ export async function cloneStoryAction(input: {
     }
 
     // scenes.json — the only file that changes: new id/title, and the asset
-    // indirection. Chain-flattening matters: cloning a CLONE keeps pointing
-    // at the ORIGINAL media owner, so deleting an intermediate clone can
+    // indirection. Chain-flattening matters: duplicating a DUPLICATE keeps pointing
+    // at the ORIGINAL media owner, so deleting an intermediate duplicate can
     // never strand grandchildren.
     const source = StorySchema.parse(
       JSON.parse(await fs.readFile(storyPath(sourceId, "scenes.json"), "utf-8")),
     );
-    const cloned = {
+    const duplicated = {
       ...source,
       id: newId,
       title: input.newTitle?.trim() || `${source.title} (Copy)`,
       assetStoryId: source.assetStoryId ?? sourceId,
     };
-    await writeJson(StorySchema, storyPath(newId, "scenes.json"), cloned);
+    await writeJson(StorySchema, storyPath(newId, "scenes.json"), duplicated);
 
     // The other four copy verbatim (validated on the way through).
     await copyValidated(CharactersFileSchema, sourceId, newId, "characters.json");
@@ -108,7 +108,7 @@ export async function cloneStoryAction(input: {
   }
 }
 
-/** Read a source content file, validate, and write it under the clone. */
+/** Read a source content file, validate, and write it under the duplicate. */
 async function copyValidated<T>(
   schema: Parameters<typeof writeJson<T>>[0],
   sourceId: string,
@@ -122,7 +122,7 @@ async function copyValidated<T>(
 }
 
 /** `<sourceId>-copy`, then `-copy2`, `-copy3`… until free. */
-async function defaultCloneId(sourceId: string): Promise<string> {
+async function defaultDuplicateId(sourceId: string): Promise<string> {
   for (let n = 1; n < 100; n++) {
     const candidate = n === 1 ? `${sourceId}-copy` : `${sourceId}-copy${n}`;
     const taken = await fs.access(storyDir(candidate)).then(
@@ -131,5 +131,5 @@ async function defaultCloneId(sourceId: string): Promise<string> {
     );
     if (!taken) return candidate;
   }
-  throw new Error("Could not find a free clone id (100 tries).");
+  throw new Error("Could not find a free duplicate id (100 tries).");
 }

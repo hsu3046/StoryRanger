@@ -126,8 +126,8 @@ export interface Scene {
 
 export interface Story {
   id: string;
-  /** Clone asset indirection — derived asset paths resolve against
-   *  `public/stories/<assetStoryId>/` (the CLONE SOURCE's folder) instead
+  /** Duplicate asset indirection — derived asset paths resolve against
+   *  `public/stories/<assetStoryId>/` (the DUPLICATE SOURCE's folder) instead
    *  of this story's own id. See StorySchema for the full contract. */
   assetStoryId?: string;
   title: string;
